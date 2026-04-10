@@ -15,6 +15,18 @@ export default function(pi: ExtensionAPI) {
         type: "boolean",
         default: false
     });
+    
+    // Register connect flags
+    pi.registerFlag("c", {
+        description: "Auto-connect to WhatsApp on startup",
+        type: "boolean",
+        default: false
+    });
+    pi.registerFlag("connect", {
+        description: "Auto-connect to WhatsApp on startup",
+        type: "boolean",
+        default: false
+    });
 
     const sessionManager = new SessionManager();
     const whatsappService = new WhatsAppService(sessionManager);
@@ -23,8 +35,8 @@ export default function(pi: ExtensionAPI) {
     // Initial status setup
     pi.on("session_start", async (_event, ctx) => {
         // Check verbose mode
-        const verboseShort = pi.getFlag("v") as boolean;
-        const verboseLong = pi.getFlag("verbose") as boolean;
+        const verboseShort = pi.getFlag("-v") as boolean;
+        const verboseLong = pi.getFlag("--verbose") as boolean;
         const isVerbose = verboseShort || verboseLong;
         
         whatsappService.setVerboseMode(isVerbose);
@@ -52,8 +64,39 @@ export default function(pi: ExtensionAPI) {
 
         // Auto-connect removed to avoid socket conflicts
         if (await sessionManager.isRegistered()) {
-            // We just ensure state is loaded, but do NOT call whatsappService.start()
-            await sessionManager.setStatus('disconnected');
+            const connectShort = pi.getFlag("-c") as boolean;
+            const connectLong = pi.getFlag("--connect") as boolean;
+            const shouldConnect = connectShort || connectLong;
+
+            if (shouldConnect) {
+                ctx.ui.setStatus('whatsapp', '|  WhatsApp: Auto-connecting...');
+                
+                // Retry logic (max 3 attempts, 3s delay)
+                let attempts = 0;
+                const maxAttempts = 4; // Initial + 3 retries
+                
+                const tryConnect = async () => {
+                    attempts++;
+                    try {
+                        await whatsappService.start();
+                    } catch (error) {
+                        if (attempts < maxAttempts) {
+                            ctx.ui.notify(`WhatsApp: Connection attempt ${attempts} failed. Retrying...`, 'warning');
+                            setTimeout(tryConnect, 3000);
+                        } else {
+                            ctx.ui.notify('WhatsApp: Auto-connect failed after multiple attempts.', 'error');
+                            ctx.ui.setStatus('whatsapp', '|  WhatsApp: Connection Failed');
+                        }
+                    }
+                };
+
+                await tryConnect();
+            } else {
+                // We just ensure state is loaded, but do NOT call whatsappService.start()
+                await sessionManager.setStatus('disconnected');
+            }
+        } else if (pi.getFlag("-c") || pi.getFlag("--connect")) {
+            ctx.ui.notify('WhatsApp: Auto-connect skipped. Manual login required.', 'info');
         }
     });
 
