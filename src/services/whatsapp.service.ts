@@ -70,7 +70,7 @@ export class WhatsAppService {
                     return;
                 }
 
-                if (statusCode === DisconnectReason.connectionReplace) {
+                if (statusCode === DisconnectReason.connectionReplaced) {
                     console.error('Connection replaced - another instance connected');
                     this.onStatusUpdate?.('WhatsApp: Conflict (Another Instance)');
                     return;

@@ -67,7 +67,7 @@ export class MenuHandler {
             const num = await ctx.ui.input('Enter number (e.g. +5511999999999):');
             if (num && validatePhoneNumber(num)) {
                 await this.sessionManager.addNumber(num);
-                ctx.ui.notify(`Added ${num}`, 'success');
+                ctx.ui.notify(`Added ${num}`, 'info');
             } else {
                 ctx.ui.notify('Invalid number format', 'error');
             }
