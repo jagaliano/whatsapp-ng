@@ -25,6 +25,7 @@ export class SessionManager {
     public async ensureInitialized() {
         try {
             await mkdir(this.baseDir, { recursive: true });
+            await mkdir(this.authDir, { recursive: true });
             await this.loadConfig();
         } catch (error) {}
     }
