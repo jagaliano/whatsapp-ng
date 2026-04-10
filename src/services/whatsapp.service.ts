@@ -111,11 +111,11 @@ export class WhatsAppService {
         this.socket.ev.on('messages.upsert', (m: any) => this.handleIncomingMessages(m));
     }
 
-    public handleIncomingMessages(m: any) {
+    public async handleIncomingMessages(m: any) {
         if (this.sessionManager.getStatus() !== 'connected') return;
         const msg = m.messages[0];
         if (!msg || !msg.key.remoteJid) return;
-        
+
         // Ignore messages sent by Pi (marked with π)
         const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
         if (text.endsWith('π')) return;
@@ -124,8 +124,16 @@ export class WhatsAppService {
         const sender = msg.key.remoteJid.split('@')[0];
         const fullNumber = '+' + sender; 
         
+        if (this.sessionManager.isBlocked(fullNumber)) {
+            console.log(`Ignoring message from ${fullNumber} (explicitly blocked)`);
+            return;
+        }
+
         if (!this.sessionManager.isAllowed(fullNumber)) {
             console.log(`Ignoring message from ${fullNumber} (not in allow list)`);
+            // Track this number as ignored so user can allow it later
+            const pushName = msg.pushName || undefined;
+            await this.sessionManager.trackIgnoredNumber(fullNumber, pushName);
             return;
         }
 

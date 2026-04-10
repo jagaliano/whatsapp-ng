@@ -6,6 +6,11 @@ import { SessionStatus } from '../models/whatsapp.types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+export interface Contact {
+    number: string;
+    name?: string;
+}
+
 export class SessionManager {
     // Data is stored in a fixed folder inside the extension project
     private readonly baseDir = join(__dirname, '..', '..', '.pi-data');
@@ -13,7 +18,9 @@ export class SessionManager {
     private readonly configPath = join(this.baseDir, 'config.json');
 
     private status: SessionStatus = 'logged-out';
-    private allowList: string[] = [];
+    private allowList: Contact[] = [];
+    private blockList: Contact[] = [];
+    private ignoredNumbers: Contact[] = [];
 
     public async ensureInitialized() {
         try {
@@ -26,7 +33,16 @@ export class SessionManager {
         try {
             const data = await readFile(this.configPath, 'utf-8');
             const config = JSON.parse(data);
-            this.allowList = config.allowList || [];
+            // Migrate old string arrays to Contact objects
+            this.allowList = (config.allowList || []).map((item: any) => 
+                typeof item === 'string' ? { number: item } : item
+            );
+            this.blockList = (config.blockList || []).map((item: any) => 
+                typeof item === 'string' ? { number: item } : item
+            );
+            this.ignoredNumbers = (config.ignoredNumbers || []).map((item: any) => 
+                typeof item === 'string' ? { number: item } : item
+            );
             this.status = config.status || 'logged-out';
         } catch (error) {
             // File not found is fine
@@ -37,6 +53,8 @@ export class SessionManager {
         try {
             const config = {
                 allowList: this.allowList,
+                blockList: this.blockList,
+                ignoredNumbers: this.ignoredNumbers,
                 status: this.status
             };
             await writeFile(this.configPath, JSON.stringify(config, null, 2));
@@ -45,24 +63,72 @@ export class SessionManager {
         }
     }
 
-    getAllowList(): string[] {
+    getAllowList(): Contact[] {
         return this.allowList;
     }
 
-    async addNumber(number: string) {
-        if (!this.allowList.includes(number)) {
-            this.allowList.push(number);
+    getBlockList(): Contact[] {
+        return this.blockList;
+    }
+
+    getIgnoredNumbers(): Contact[] {
+        return this.ignoredNumbers;
+    }
+
+    async addNumber(number: string, name?: string) {
+        if (!this.allowList.find(c => c.number === number)) {
+            this.allowList.push({ number, name });
+            // Remove from blockList and ignoredNumbers if it was there
+            this.blockList = this.blockList.filter(c => c.number !== number);
+            this.ignoredNumbers = this.ignoredNumbers.filter(c => c.number !== number);
             await this.saveConfig();
         }
     }
 
     async removeNumber(number: string) {
-        this.allowList = this.allowList.filter(n => n !== number);
+        this.allowList = this.allowList.filter(c => c.number !== number);
+        await this.saveConfig();
+    }
+
+    async blockNumber(number: string, name?: string) {
+        if (!this.blockList.find(c => c.number === number)) {
+            this.blockList.push({ number, name });
+            // Remove from allowList if it was there
+            this.allowList = this.allowList.filter(c => c.number !== number);
+            await this.saveConfig();
+        }
+    }
+
+    async unblockNumber(number: string) {
+        this.blockList = this.blockList.filter(c => c.number !== number);
+        await this.saveConfig();
+    }
+
+    async unblockAndAllow(number: string) {
+        const blocked = this.blockList.find(c => c.number === number);
+        this.blockList = this.blockList.filter(c => c.number !== number);
+        if (!this.allowList.find(c => c.number === number)) {
+            this.allowList.push({ number, name: blocked?.name });
+        }
         await this.saveConfig();
     }
 
     isAllowed(number: string): boolean {
-        return this.allowList.includes(number);
+        return this.allowList.some(c => c.number === number);
+    }
+
+    isBlocked(number: string): boolean {
+        return this.blockList.some(c => c.number === number);
+    }
+
+    async trackIgnoredNumber(number: string, name?: string) {
+        // Only track if not already in allow list, block list, or ignored list
+        if (!this.allowList.find(c => c.number === number) &&
+            !this.blockList.find(c => c.number === number) &&
+            !this.ignoredNumbers.find(c => c.number === number)) {
+            this.ignoredNumbers.push({ number, name });
+            await this.saveConfig();
+        }
     }
 
     public async isRegistered(): Promise<boolean> {

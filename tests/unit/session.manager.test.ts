@@ -35,4 +35,52 @@ describe('SessionManager', () => {
         }
         expect(exists).toBe(false);
     });
+
+    it('should handle block list and mutual exclusivity', async () => {
+        const num = '+1234567890';
+        await sessionManager.blockNumber(num);
+        expect(sessionManager.isBlocked(num)).toBe(true);
+        expect(sessionManager.isAllowed(num)).toBe(false);
+
+        await sessionManager.addNumber(num);
+        expect(sessionManager.isAllowed(num)).toBe(true);
+        expect(sessionManager.isBlocked(num)).toBe(false);
+
+        await sessionManager.blockNumber(num);
+        expect(sessionManager.isBlocked(num)).toBe(true);
+        expect(sessionManager.isAllowed(num)).toBe(false);
+    });
+
+    it('should atomically unblock and allow', async () => {
+        const num = '+9876543210';
+        await sessionManager.blockNumber(num);
+        expect(sessionManager.isBlocked(num)).toBe(true);
+
+        await sessionManager.unblockAndAllow(num);
+        expect(sessionManager.isAllowed(num)).toBe(true);
+        expect(sessionManager.isBlocked(num)).toBe(false);
+    });
+
+    it('should store and retrieve contact names', async () => {
+        const num = '+1234567890';
+        const name = 'John Doe';
+        
+        await sessionManager.addNumber(num, name);
+        const allowList = sessionManager.getAllowList();
+        
+        expect(allowList).toHaveLength(1);
+        expect(allowList[0].number).toBe(num);
+        expect(allowList[0].name).toBe(name);
+    });
+
+    it('should preserve name when unblocking and allowing', async () => {
+        const num = '+5511999999999';
+        const name = 'Jane Smith';
+        
+        await sessionManager.blockNumber(num, name);
+        await sessionManager.unblockAndAllow(num);
+        
+        const allowList = sessionManager.getAllowList();
+        expect(allowList[0].name).toBe(name);
+    });
 });
