@@ -62,8 +62,26 @@ pi -e whatsapp-pi.ts --verbose
 ## Commands
 
 - `/whatsapp` - Open the WhatsApp management menu
-  - **Allow Numbers**: Manage contacts that can interact with Pi
-  - **Blocked Numbers**: View ignored numbers (not in allow list) and add them to allow list
+
+### Main Menu Options
+- **Connect WhatsApp** - Start WhatsApp connection (shows QR code for first-time setup)
+- **Disconnect WhatsApp** - Stop WhatsApp connection
+- **Logoff (Delete Session)** - Remove all credentials and session data
+- **Reset Conversation** - Clear all conversation history
+- **Allowed Numbers** - Manage contacts that can interact with Pi
+- **Blocked Numbers** - View ignored numbers and manage them
+
+### Allowed Numbers Management
+- **Add Number** - Add a new contact to the allow list (format: +5511999999999)
+- **Remove [Number]** - Remove a specific contact from the allow list
+- **Clear All** - Remove all allowed numbers
+- **Back** - Return to main menu
+
+### Blocked Numbers Management
+- **View List** - See all numbers that have been ignored (not in allow list)
+- **Allow** - Move a blocked number to the allowed list
+- **Delete** - Remove a number from the blocked list
+- **Back** - Return to main menu
 
 ## Project Structure
 
