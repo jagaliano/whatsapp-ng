@@ -13,7 +13,6 @@ coverage/
 Thumbs.db
 
 # IDE
-.vscode/
 .idea/
 
 # Pi Extension Data

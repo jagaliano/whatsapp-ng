@@ -60,11 +60,11 @@ export default function (pi: ExtensionAPI) {
         }
 
         // Check whatsapp flag
-        const isWhatsappPiOff = process.argv.includes("--whatsapp-pi-off");
+        const isWhatsappPiOn = process.argv.includes("--whatsapp-pi-online");
 
         // Auto-connect removed to avoid socket conflicts
         if (await sessionManager.isRegistered()) {
-            const shouldConnect = !isWhatsappPiOff;
+            const shouldConnect = isWhatsappPiOn;
 
             if (shouldConnect) {
                 ctx.ui.setStatus('whatsapp', '|  WhatsApp: Auto-connecting...');
