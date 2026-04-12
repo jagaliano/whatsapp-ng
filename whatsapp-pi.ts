@@ -237,7 +237,7 @@ export default function (pi: ExtensionAPI) {
         if (imageBuffer && imageMimeType) {
             pi.sendUserMessage([
                 { type: "text", text: `Mensagem de ${pushName} (+${sender}): ${text}` },
-                { type: "image", source: { type: "base64", mediaType: imageMimeType as any, data: imageBuffer.toString('base64') } }
+                { type: "image", data: imageBuffer.toString('base64'), mimeType: imageMimeType }
             ], { deliverAs: "followUp" });
         } else {
             pi.sendUserMessage(`Mensagem de ${pushName} (+${sender}): ${text}`, { deliverAs: "followUp" });
