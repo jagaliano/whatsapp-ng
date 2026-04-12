@@ -5,14 +5,14 @@
 
 ## Summary
 
-Implement a `--connect` (alias `-c`) CLI flag that allows the WhatsApp extension to automatically establish a connection at startup, bypassing the manual TUI menu. The flag will override any saved "disconnected" status and will include a retry mechanism for transient network failures.
+Implement a `--whatsapp` (alias `-w`) CLI flag that allows the WhatsApp extension to automatically establish a connection at startup, bypassing the manual TUI menu. The flag will override any saved "disconnected" status and will include a retry mechanism for transient network failures.
 
 ## Technical Context
 
 **Language/Version**: TypeScript 5.x / Node.js 20+
 **Primary Dependencies**: `pi-agent-sdk`
 **Storage**: Memory-based flag detection; depends on existing `.pi-data/` auth state.
-**Testing**: Manual verification using `pi -e ./whatsapp-pi.ts --connect`
+**Testing**: Manual verification using `pi -e ./whatsapp-pi.ts --whatsapp`
 **Target Platform**: Pi Code Agent CLI
 **Project Type**: Pi Code Agent Extension
 **Performance Goals**: <100ms for flag detection and connection trigger.

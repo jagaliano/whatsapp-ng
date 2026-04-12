@@ -18,13 +18,13 @@ export default function(pi: ExtensionAPI) {
         default: false
     });
     
-    // Register connect flags
-    pi.registerFlag("c", {
+    // Register whatsapp flags
+    pi.registerFlag("w", {
         description: "Auto-connect to WhatsApp on startup",
         type: "boolean",
         default: false
     });
-    pi.registerFlag("connect", {
+    pi.registerFlag("whatsapp", {
         description: "Auto-connect to WhatsApp on startup",
         type: "boolean",
         default: false
@@ -67,8 +67,8 @@ export default function(pi: ExtensionAPI) {
             }
         }
 
-        // Check connect flag
-        const isConnectFlagSet = pi.getFlag("c") === true || pi.getFlag("connect") === true || process.argv.includes("-c") || process.argv.includes("--connect");
+        // Check whatsapp flag
+        const isConnectFlagSet = pi.getFlag("w") === true || pi.getFlag("whatsapp") === true || process.argv.includes("-w") || process.argv.includes("--whatsapp");
         
         // Auto-connect removed to avoid socket conflicts
         if (await sessionManager.isRegistered()) {

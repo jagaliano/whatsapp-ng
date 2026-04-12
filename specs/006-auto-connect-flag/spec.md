@@ -8,8 +8,8 @@
 ## Clarifications
 
 ### Session 2026-04-10
-- Q: Should we explicitly support both the long form (`--connect`) and the short form (`-c`) for this feature? → A: Support both `--connect` and `-c`
-- Q: If the saved status is `disconnected` but the user launches with the `--connect` flag, which one should take precedence? → A: CLI Flag overrides saved status (connects)
+- Q: Should we explicitly support both the long form (`--whatsapp`) and the short form (`-w`) for this feature? → A: Support both `--whatsapp` and `-w`
+- Q: If the saved status is `disconnected` but the user launches with the `--whatsapp` flag, which one should take precedence? → A: CLI Flag overrides saved status (connects)
 - Q: How should the system inform the user that auto-connect was skipped due to missing credentials? → A: Show a non-blocking TUI notification
 - Q: How should the system behave if the initial auto-connection attempt fails? → A: Retry automatically (max 3 times)
 
@@ -17,16 +17,16 @@
 
 ### User Story 1 - Auto-Connect via Flag (Priority: P1)
 
-As a Software Engineer using the WhatsApp extension, I want to skip the manual menu steps by adding a `--connect` flag to the launch command so that the integration is ready for use immediately upon starting Pi.
+As a Software Engineer using the WhatsApp extension, I want to skip the manual menu steps by adding a `--whatsapp` flag to the launch command so that the integration is ready for use immediately upon starting Pi.
 
 **Why this priority**: High. Improves developer productivity and enables smoother workflow integration.
 
-**Independent Test**: Run `pi -e ./whatsapp-pi.ts --connect` and verify that the "WhatsApp: Connected" status appears in the Pi footer without any manual interaction.
+**Independent Test**: Run `pi -e ./whatsapp-pi.ts --whatsapp` and verify that the "WhatsApp: Connected" status appears in the Pi footer without any manual interaction.
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid registered WhatsApp session exists, **When** the extension is loaded with the `--connect` flag, **Then** the WhatsApp socket connection is established automatically, overriding any previously saved "disconnected" status.
-2. **Given** no active session exists, **When** the extension is loaded with the `--connect` flag, **Then** the system notifies the user via a non-blocking notification that a manual login is required and remains disconnected.
+1. **Given** a valid registered WhatsApp session exists, **When** the extension is loaded with the `--whatsapp` flag, **Then** the WhatsApp socket connection is established automatically, overriding any previously saved "disconnected" status.
+2. **Given** no active session exists, **When** the extension is loaded with the `--whatsapp` flag, **Then** the system notifies the user via a non-blocking notification that a manual login is required and remains disconnected.
 
 ---
 
@@ -36,11 +36,11 @@ As a security-conscious user, I want the extension to remain disconnected by def
 
 **Why this priority**: Medium. Maintains user control and prevents unintended resource usage.
 
-**Independent Test**: Run `pi -e ./whatsapp-pi.ts` (without `--connect`) and verify that the status remains "WhatsApp: Disconnected" until changed via the menu.
+**Independent Test**: Run `pi -e ./whatsapp-pi.ts` (without `--whatsapp`) and verify that the status remains "WhatsApp: Disconnected" until changed via the menu.
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid session exists, **When** the extension is loaded without the `--connect` flag, **Then** the status is set to "Disconnected" and no socket is opened.
+1. **Given** a valid session exists, **When** the extension is loaded without the `--whatsapp` flag, **Then** the status is set to "Disconnected" and no socket is opened.
 
 ### Edge Cases
 
@@ -51,7 +51,7 @@ As a security-conscious user, I want the extension to remain disconnected by def
 
 ### Functional Requirements
 
-- **FR-001**: System MUST register a `--connect` (alias `-c`) flag using the `pi.registerFlag` API.
+- **FR-001**: System MUST register a `--whatsapp` (alias `-w`) flag using the `pi.registerFlag` API.
 - **FR-002**: System MUST detect the presence of the flag during the `session_start` event and prioritize it over the saved `config.json` status.
 - **FR-003**: System MUST verify the existence of local credentials (`creds.json`) before attempting auto-connection.
 - **FR-004**: System MUST trigger the `whatsappService.start()` method if both the flag is present and credentials exist.
@@ -67,12 +67,12 @@ As a security-conscious user, I want the extension to remain disconnected by def
 ### Measurable Outcomes
 
 - **SC-001**: Auto-connection sequence begins within 100ms of extension activation.
-- **SC-002**: Flag detection is 100% accurate for both `--connect` and `-c` variants.
+- **SC-002**: Flag detection is 100% accurate for both `--whatsapp` and `-w` variants.
 - **SC-003**: The extension successfully avoids triggering a QR code display during an auto-connect failure.
 - **SC-004**: System successfully retries up to 3 times on transient network failures during startup.
 
 ## Assumptions
 
 - The user has previously successfully paired their device using the manual `/whatsapp` menu.
-- The `pi` harness correctly passes the `--connect` flag to the extension's flag registry.
-- Terminal output verbosity still respects the `-v` flag if combined with `--connect`.
+- The `pi` harness correctly passes the `--whatsapp` flag to the extension's flag registry.
+- Terminal output verbosity still respects the `-v` flag if combined with `--whatsapp`.

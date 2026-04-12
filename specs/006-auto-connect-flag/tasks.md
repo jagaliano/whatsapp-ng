@@ -24,14 +24,14 @@
 
 ## Phase 2: User Story 1 & 2 - Auto-Connect Toggle (Priority: P1) 🎯 MVP
 
-**Goal**: As a user, I want to use the `--connect` flag to automatically start the WhatsApp service if credentials exist.
+**Goal**: As a user, I want to use the `--whatsapp` flag to automatically start the WhatsApp service if credentials exist.
 
-**Independent Test**: Run `pi -e ./whatsapp-pi.ts --connect` with an existing session and verify auto-connection; then run without it and verify it stays disconnected.
+**Independent Test**: Run `pi -e ./whatsapp-pi.ts --whatsapp` with an existing session and verify auto-connection; then run without it and verify it stays disconnected.
 
-- [X] T002 Register the `connect` and `c` flags using `pi.registerFlag` in `whatsapp-pi.ts`.
-- [X] T003 Implement the `connect` flag detection logic within the `session_start` event in `whatsapp-pi.ts`.
+- [X] T002 Register the `whatsapp` and `w` flags using `pi.registerFlag` in `whatsapp-pi.ts`.
+- [X] T003 Implement the `whatsapp` flag detection logic within the `session_start` event in `whatsapp-pi.ts`.
 - [X] T004 Implement logic to check `sessionManager.isRegistered()` before triggering auto-connect in `whatsapp-pi.ts`.
-- [X] T005 Implement user notification (`ctx.ui.notify`) if `--connect` is used but no session is registered.
+- [X] T005 Implement user notification (`ctx.ui.notify`) if `--whatsapp` is used but no session is registered.
 - [X] T006 [US1] Implement an asynchronous retry loop (max 3 attempts with 3s delay) for `whatsappService.start()` within the auto-connect sequence in `whatsapp-pi.ts`.
 - [X] T007 [US1] Ensure `whatsappService.start()` is triggered only if the flag is present and the session is registered.
 - [X] T008 [US2] Ensure the manual default behavior is preserved (no connection if flag is absent) by verifying conditional logic.

@@ -1,7 +1,7 @@
 # Research: Auto-Connect CLI Flag
 
 ## Decision: Flag Implementation
-- **Selected**: Register both `--connect` and `-c` explicitly using `pi.registerFlag`.
+- **Selected**: Register both `--whatsapp` and `-w` explicitly using `pi.registerFlag`.
 - **Rationale**: While Pi might not support internal aliases for flags, registering both names ensures the user can use either variant as specified in the clarifications.
 
 ## Decision: Auto-Connect Logic Location
