@@ -33,9 +33,7 @@ pi
 
 To automatically connect to WhatsApp on startup (if you are already authenticated):
 ```bash
-pi -w
-# or
-pi --whatsapp
+pi --whatsapp-pi-online
 ```
 
 3. Use the menu to connect WhatsApp and manage allowed/blocked numbers
@@ -58,8 +56,6 @@ pi -e whatsapp-pi.ts
 
 For verbose mode (shows Baileys trace logs for debugging):
 ```bash
-pi -e whatsapp-pi.ts -v
-# or
 pi -e whatsapp-pi.ts --verbose
 ```
 

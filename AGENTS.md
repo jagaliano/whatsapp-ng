@@ -1,4 +1,4 @@
-﻿# whatsapp-pi Development Guidelines
+# whatsapp-pi Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-04-10
 
@@ -12,7 +12,7 @@ Auto-generated from all feature plans. Last updated: 2026-04-10
 - TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys`, `pi-agent-sdk`, `pino` (005-verbose-mode-support)
 - Memory-based configuration (005-verbose-mode-support)
 - TypeScript 5.x / Node.js 20+ + `pi-agent-sdk` (006-auto-connect-flag)
-- Memory-based flag detection; depends on existing `.pi-data/` auth state. (006-auto-connect-flag)
+- Memory-based flag detection (`--whatsapp-pi-online`, `--verbose`); depends on existing `.pi-data/` auth state. (006-auto-connect-flag)
 - TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys` (007-image-recognition)
 - Forwarding images as base64 to Pi (007-image-recognition)
 
@@ -34,8 +34,8 @@ npm test; npm run lint
 TypeScript 5.x / Node.js 20+: Follow standard conventions
 
 ## Recent Changes
+- 006-auto-connect-flag: Implemented `--whatsapp-pi-online` flag for automatic connection on startup if authenticated.
 - 007-image-recognition: Implemented image downloading and forwarding to Pi for vision analysis.
-- 006-auto-connect-flag: Added TypeScript 5.x / Node.js 20+ + `pi-agent-sdk`
 - 006-auto-connect-flag: Added TypeScript 5.x / Node.js 20+ + `pi-agent-sdk`
 - 005-verbose-mode-support: Added TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys`, `pi-agent-sdk`, `pino`
 
