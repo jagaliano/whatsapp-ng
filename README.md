@@ -18,13 +18,21 @@ Pi is a powerful agentic AI coding assistant that operates in your terminal. Thi
   - View ignored numbers (not in allow list) and add them when needed
 - **Reliable Messaging**: Queue-based message sending with retry logic
 - **TUI Integration**: Menu-driven interface for managing connections and contacts
+- **Media Support**: 
+  - **Vision Analysis**: Automatically forwards WhatsApp images to Pi for analysis.
+  - **Document Handling**: Downloads and stores documents (PDF, text) for agent access.
 
 ## Prerequisites
 
-To enable audio features, you need to install OpenAI Whisper:
+To enable audio transcription features:
 ```bash
 python -m pip install -U openai-whisper
 ```
+
+To enable PDF reading capabilities (required for the agent to process documents):
+- **Linux**: `sudo apt-get install poppler-utils`
+- **macOS**: `brew install poppler`
+- **Windows**: Install `poppler` (e.g., via Scoop) and add to PATH.
 
 ## Quick Start
 
@@ -108,6 +116,10 @@ See `specs/` directory for detailed feature documentation:
 - `002-manual-whatsapp-connection/` - Connection management
 - `003-whatsapp-messaging-refactor/` - Reliable messaging
 - `004-blocked-numbers-management/` - Block list feature
+- `005-verbose-mode-support/` - Logging and tracing
+- `006-auto-connect-flag/` - Automatic connection support
+- `007-image-recognition/` - Vision analysis integration
+- `008-document-message-support/` - Document handling and storage
 
 ## Development
 
@@ -125,6 +137,5 @@ npm test
 - **Document Message Support**: 
   - WhatsApp documents (PDFs, text files, etc.) are downloaded and saved to `./.pi-data/whatsapp/documents/`.
   - The Pi agent receives a notification with the file path and metadata.
-  - **Prerequisite**: Install `pdftotext` (part of `poppler-utils`) to allow the agent to read PDF content via the `bash` tool.
 - **Verbose Mode**: Enhanced logging for the WhatsApp connection lifecycle and message processing. Use `--verbose` to see Baileys trace logs.
 - **Storage Management**: All persistent data (auth state, documents, config) is centralized in the `.pi-data/` directory.
