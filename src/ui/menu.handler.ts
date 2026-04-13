@@ -64,7 +64,7 @@ export class MenuHandler {
 
     private async manageAllowList(ctx: ExtensionCommandContext) {
         const list = this.sessionManager.getAllowList();
-        // Exibe o nome se existir, senão apenas o número
+        // Display the name if it exists, otherwise just the number
         let options = [...list.map(c => `Remove ${c.name ? c.name + ' (' + c.number + ')' : c.number}`), 'Add Number'];
         if (list.length > 0) {
             options.push('Clear All');
@@ -90,7 +90,7 @@ export class MenuHandler {
             }
             await this.manageAllowList(ctx);
         } else if (choice?.startsWith('Remove ')) {
-            // Extrai o número entre parênteses ou o que sobrar depois de "Remove "
+            // Extract the number between parentheses or what's left after "Remove "
             let num = choice.replace('Remove ', '');
             if (num.includes('(')) {
                 const match = num.match(/\((.*?)\)/);

@@ -17,7 +17,12 @@ describe('WhatsAppService Filtering', () => {
         
         await sessionManager.setStatus('disconnected');
         // Simulate message
-        whatsappService.handleIncomingMessages({ messages: [{ key: { remoteJid: '123@s.net' } }] });
+        whatsappService.handleIncomingMessages({ 
+            messages: [{ 
+                key: { remoteJid: '123@s.net' },
+                message: { conversation: 'Hello' }
+            }] 
+        });
         
         expect(callback).not.toHaveBeenCalled();
     });
@@ -31,28 +36,55 @@ describe('WhatsAppService Filtering', () => {
 
         // Allowed
         whatsappService.handleIncomingMessages({ 
-            messages: [{ key: { remoteJid: '1234567890@s.whatsapp.net' } }] 
+            messages: [{ 
+                key: { remoteJid: '1234567890@s.whatsapp.net' },
+                message: { conversation: 'Hello' }
+            }] 
         });
         expect(callback).toHaveBeenCalledTimes(1);
 
         // Not Allowed
         whatsappService.handleIncomingMessages({ 
-            messages: [{ key: { remoteJid: '0987654321@s.whatsapp.net' } }] 
+            messages: [{ 
+                key: { remoteJid: '0987654321@s.whatsapp.net' },
+                message: { conversation: 'Hello' }
+            }] 
         });
         expect(callback).toHaveBeenCalledTimes(1); // Still 1
     });
 
-    it('should ignore messages sent by the bot (fromMe)', () => {
+    it('should accept messages sent by me fromMe without pi symbol "π" at last letter', () => {
         const callback = vi.fn();
         whatsappService.setMessageCallback(callback);
         
         sessionManager.setStatus('connected');
         sessionManager.addNumber('+1234567890');
 
-        // fromMe: true
-        whatsappService.handleIncomingMessages({ 
-            messages: [{ key: { remoteJid: '1234567890@s.whatsapp.net', fromMe: true } }] 
+        // fromMe is true and does NOT end with π
+        whatsappService.handleIncomingMessages({    
+            messages: [{ 
+                key: { remoteJid: '1234567890@s.whatsapp.net', fromMe: true },
+                message: { conversation: 'Testing Pi' }
+            }] 
+        });
+        expect(callback).toHaveBeenCalledTimes(1);
+    });
+
+    it('should ignore messages sent by yourself using my own number ("fromMe" with pi symbol "π" at last letter)', () => {
+        const callback = vi.fn();
+        whatsappService.setMessageCallback(callback);
+        
+        sessionManager.setStatus('connected');
+        sessionManager.addNumber('+1234567890');
+
+        // fromMe is true and ends with π
+        whatsappService.handleIncomingMessages({    
+            messages: [{ 
+                key: { remoteJid: '1234567890@s.whatsapp.net', fromMe: true },
+                message: { conversation: 'Testing Pi π' }
+            }] 
         });
         expect(callback).not.toHaveBeenCalled();
     });
+
 });

@@ -17,6 +17,7 @@ Auto-generated from all feature plans. Last updated: 2026-04-13
 - Forwarding images as base64 to Pi (007-image-recognition)
 - TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys`, `pi-agent-sdk` (Extension API) (008-document-message-support)
 - Local filesystem persistent storage in `.pi-data/whatsapp/documents/` (008-document-message-support)
+- N/A (String constants) (009-localize-system-messages)
 
 - TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys`, `qrcode-terminal`, `pi-agent-sdk` (assumed name for Pi extension API) (001-whatsapp-tui-integration)
 
@@ -36,9 +37,9 @@ npm test; npm run lint
 TypeScript 5.x / Node.js 20+: Follow standard conventions
 
 ## Recent Changes
+- 009-localize-system-messages: Added TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys`, `pi-agent-sdk`, `pino`
 - 008-document-message-support: Added TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys`, `pi-agent-sdk` (Extension API)
 - 006-auto-connect-flag: Implemented `--whatsapp-pi-online` flag for automatic connection on startup if authenticated.
-- 007-image-recognition: Implemented image downloading and forwarding to Pi for vision analysis.
 
 
 <!-- MANUAL ADDITIONS START -->

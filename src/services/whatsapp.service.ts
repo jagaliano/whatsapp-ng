@@ -41,7 +41,7 @@ export class WhatsAppService {
 
     async start() {
         if (this.isReconnecting) return;
-        this.onStatusUpdate?.('| WhatsApp: Connecting...');
+        this.onStatusUpdate?.('WhatsApp: Connecting...');
 
         const { state, saveCreds } = await this.sessionManager.getAuthState();
         const { version } = await fetchLatestBaileysVersion();
@@ -76,7 +76,7 @@ export class WhatsAppService {
             if (qr) {
                 this.sessionManager.setStatus('pairing');
                 this.onQRCode?.(qr);
-                this.onStatusUpdate?.('| WhatsApp: Pairing...');
+                this.onStatusUpdate?.('WhatsApp: Pairing...');
             }
 
             if (connection === 'close') {
@@ -96,26 +96,26 @@ export class WhatsAppService {
                     console.error(`Session invalid or logged out [${statusCode}] - clearing session and forcing re-auth`);
                     await this.sessionManager.clearSession();
                     this.sessionManager.setStatus('logged-out');
-                    this.onStatusUpdate?.('| WhatsApp: Logged out');
+                    this.onStatusUpdate?.('WhatsApp: Logged out');
                     return;
                 }
 
                 if (statusCode === DisconnectReason.connectionReplaced) {
                     console.error('Connection replaced - another instance connected');
-                    this.onStatusUpdate?.('| WhatsApp: Conflict (Another Instance)');
+                    this.onStatusUpdate?.('WhatsApp: Conflict (Another Instance)');
                     return;
                 }
                 
                 if (shouldReconnect && !this.isReconnecting) {
                     this.isReconnecting = true;
-                    this.onStatusUpdate?.('| WhatsApp: Reconnecting...');
+                    this.onStatusUpdate?.('WhatsApp: Reconnecting...');
                     setTimeout(() => {
                         this.isReconnecting = false;
                         this.start();
                     }, 3000);
                 } else if (!shouldReconnect) {
                     this.sessionManager.setStatus('logged-out');
-                    this.onStatusUpdate?.('| WhatsApp: Disconnected');
+                    this.onStatusUpdate?.('WhatsApp: Disconnected');
                 }
             } else if (connection === 'open') {
                 if (this.verboseMode) {
@@ -123,7 +123,7 @@ export class WhatsAppService {
                 }
                 this.isReconnecting = false;
                 this.sessionManager.setStatus('connected');
-                this.onStatusUpdate?.('| WhatsApp: Connected');
+                this.onStatusUpdate?.('WhatsApp: Connected');
             }
         });
 
@@ -245,6 +245,6 @@ export class WhatsAppService {
             this.isReconnecting = false;
         }
         await this.sessionManager.setStatus('disconnected');
-        this.onStatusUpdate?.('| WhatsApp: Disconnected');
+        this.onStatusUpdate?.('WhatsApp: Disconnected');
     }
 }

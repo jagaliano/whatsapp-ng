@@ -45,10 +45,10 @@ export class AudioService {
                 return text.trim();
             }
 
-            return '[Transcrição vazia]';
+            return '[Empty transcription]';
         } catch (error) {
             console.error('[AudioService] Transcription error:', error);
-            return `[Erro na transcrição: ${error instanceof Error ? error.message : String(error)}]`;
+            return `[Transcription error: ${error instanceof Error ? error.message : String(error)}]`;
         }
     }
 }
