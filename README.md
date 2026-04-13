@@ -116,7 +116,15 @@ Run tests:
 npm test
 ```
 
-Lint:
-```bash
-npm run lint
-```
+## Implementation Notes
+
+### Recent Feature Updates (2026-04)
+
+- **Auto-Connect Support**: Use the `--whatsapp-pi-online` flag to automatically connect to WhatsApp on startup if you have a valid active session.
+- **Vision Analysis**: Images sent via WhatsApp are automatically downloaded and forwarded to the Pi agent as base64, enabling vision-based interactions.
+- **Document Message Support**: 
+  - WhatsApp documents (PDFs, text files, etc.) are downloaded and saved to `./.pi-data/whatsapp/documents/`.
+  - The Pi agent receives a notification with the file path and metadata.
+  - **Prerequisite**: Install `pdftotext` (part of `poppler-utils`) to allow the agent to read PDF content via the `bash` tool.
+- **Verbose Mode**: Enhanced logging for the WhatsApp connection lifecycle and message processing. Use `--verbose` to see Baileys trace logs.
+- **Storage Management**: All persistent data (auth state, documents, config) is centralized in the `.pi-data/` directory.
