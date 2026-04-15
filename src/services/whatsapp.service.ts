@@ -84,6 +84,7 @@ export class WhatsAppService {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, logger),
             },
+            syncFullHistory: false,
             logger,
         });
 
@@ -107,17 +108,25 @@ export class WhatsAppService {
                 const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
                 const shouldTreatAsLoggedOut =
                     errorMessage.includes('bad-request') ||
+                    errorMessage.includes('Bad MAC') ||
                     statusCode === 400 ||
                     statusCode === 401 ||
                     statusCode === DisconnectReason.loggedOut ||
                     statusCode === DisconnectReason.badSession;
-                
+
                 console.error(`Connection closed [${statusCode}]. Reconnecting: ${shouldReconnect}`);
-                
+
                 if (shouldTreatAsLoggedOut) {
                     console.error(`Session invalid or logged out [${statusCode}] - preserving auth state and requiring re-auth`);
+                    if (errorMessage.includes('Bad MAC')) {
+                        console.error('[WhatsApp-Pi] Bad MAC error detected. Your session keys are corrupted.');
+                        console.error('[WhatsApp-Pi] Run /whatsapp-logout to clear auth state, then reconnect with /whatsapp-connect');
+                        this.onStatusUpdate?.('| WhatsApp: Session Error (Bad MAC)');
+                    }
                     this.sessionManager.setStatus('logged-out');
-                    this.onStatusUpdate?.('| WhatsApp: Logged out');
+                    if (!errorMessage.includes('Bad MAC')) {
+                        this.onStatusUpdate?.('| WhatsApp: Logged out');
+                    }
                     return;
                 }
 
