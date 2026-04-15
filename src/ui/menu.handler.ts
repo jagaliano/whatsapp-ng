@@ -17,19 +17,22 @@ export class MenuHandler {
         const registered = await this.sessionManager.isRegistered();
         const options: string[] = [];
 
+        options.push('Recents');
+
         if (status === 'connected') {
+            options.push('Allowed Numbers');
+            options.push('Blocked Numbers');
             options.push('Disconnect WhatsApp');
         } else {
             options.push('Connect / Reconnect WhatsApp');
+            options.push('Allowed Numbers');
+            options.push('Blocked Numbers');
         }
 
         if (registered) {
             options.push('Logoff (Delete Session)');
         }
 
-        options.push('Allowed Numbers');
-        options.push('Blocked Numbers');
-        options.push('Recents');
         options.push('Back');
 
         const choice = await ctx.ui.select(`WhatsApp (Status: ${status})`, options);
@@ -332,21 +335,22 @@ export class MenuHandler {
     private async sendMessageToAllowedNumber(ctx: ExtensionCommandContext, contact: Contact) {
         const displayName = contact.name ? `${contact.name} (${contact.number})` : contact.number;
         for (let attempt = 0; attempt < 2; attempt++) {
-            const text = await ctx.ui.input(`Send a message to ${displayName}:`);
-            const trimmed = text?.trim() || '';
+            const inputText = (await ctx.ui.input(`Send a message to ${displayName}:`))?.trim() || '';
 
-            if (!trimmed) {
+            if (!inputText) {
                 ctx.ui.notify('Please enter a message before sending.', 'error');
                 continue;
             }
 
-            const result = await this.whatsappService.sendMenuMessage(this.toJid(contact.number), trimmed);
+            const inputTextWithPiSuffix = inputText + ' π';
+
+            const result = await this.whatsappService.sendMenuMessage(this.toJid(contact.number), inputTextWithPiSuffix);
             if (result.success) {
                 await this.recentsService.recordMessage({
                     messageId: result.messageId ?? `${Date.now()}`,
                     senderNumber: contact.number,
                     senderName: contact.name,
-                    text: trimmed,
+                    text: inputTextWithPiSuffix,
                     direction: 'outgoing',
                     timestamp: Date.now()
                 });
