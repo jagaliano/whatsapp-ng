@@ -120,7 +120,7 @@ export class WhatsAppService {
             if (qr) {
                 this.sessionManager.setStatus('pairing');
                 this.onQRCode?.(qr);
-                this.onStatusUpdate?.('| WhatsApp: type /whatsapp...');
+                this.onStatusUpdate?.('| WhatsApp: type /whatsapp to connect');
             }
 
             if (connection === 'close') {
