@@ -6,6 +6,8 @@ import * as qrcode from 'qrcode-terminal';
 import type { ExtensionCommandContext } from '@mariozechner/pi-coding-agent';
 
 export class MenuHandler {
+    private readonly printedAllowedNumbers: string[] = [];
+
     constructor(
         private readonly whatsappService: WhatsAppService,
         private readonly sessionManager: SessionManager,
@@ -107,7 +109,7 @@ export class MenuHandler {
 
     private async manageAllowedContact(ctx: ExtensionCommandContext, contact: Contact) {
         const displayName = this.formatAllowedContactOption(contact);
-        const options = ['Send Message', 'History', 'Print Number'];
+        const options = ['Send Message', 'Print Number', 'History'];
         if (contact.name) {
             options.push('Remove Alias');
         } else {
@@ -130,7 +132,7 @@ export class MenuHandler {
         }
 
         if (choice === 'Print Number') {
-            ctx.ui.notify(contact.number, 'info');
+            this.printAllowedNumber(ctx, contact.number);
             await this.manageAllowedContact(ctx, contact);
             return;
         }
@@ -169,6 +171,11 @@ export class MenuHandler {
         }
 
         await this.manageAllowList(ctx);
+    }
+
+    private printAllowedNumber(ctx: ExtensionCommandContext, number: string) {
+        this.printedAllowedNumbers.push(number);
+        ctx.ui.notify(this.printedAllowedNumbers.join('\n'), 'info');
     }
 
     private async manageBlockList(ctx: ExtensionCommandContext) {

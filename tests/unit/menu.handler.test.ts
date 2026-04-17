@@ -176,11 +176,24 @@ describe('MenuHandler', () => {
         });
     });
 
-    it('prints an allowed contact number to the TUI info console', async () => {
+    it('prints allowed contact numbers to the TUI info console on separate lines', async () => {
         const { whatsappService, sessionManager, recentsService } = createServices();
-        sessionManager.getAllowList.mockReturnValue([{ number: '+5511999998888', name: 'Ana' }]);
+        sessionManager.getAllowList.mockReturnValue([
+            { number: '+5511999998888', name: 'Ana' },
+            { number: '+553291297719', name: 'Dani' }
+        ]);
         const ctx = createContext({
-            selects: ['Allowed Numbers', 'Ana (+5511999998888)', 'Print Number', 'Back', 'Back', 'Back']
+            selects: [
+                'Allowed Numbers',
+                'Ana (+5511999998888)',
+                'Print Number',
+                'Back',
+                'Dani (+553291297719)',
+                'Print Number',
+                'Back',
+                'Back',
+                'Back'
+            ]
         });
         const handler = new MenuHandler(whatsappService as any, sessionManager as any, recentsService as any);
 
@@ -188,13 +201,14 @@ describe('MenuHandler', () => {
 
         expect(ctx.ui.select).toHaveBeenCalledWith('Allowed Number • Ana (+5511999998888)', [
             'Send Message',
-            'History',
             'Print Number',
+            'History',
             'Remove Alias',
             'Remove Number',
             'Back'
         ]);
         expect(ctx.ui.notify).toHaveBeenCalledWith('+5511999998888', 'info');
+        expect(ctx.ui.notify).toHaveBeenCalledWith('+5511999998888\n+553291297719', 'info');
     });
 
     it('moves a blocked number to the allowed list using the displayed alias option', async () => {
