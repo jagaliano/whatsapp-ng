@@ -182,6 +182,9 @@ export default function (pi: ExtensionAPI) {
         }
     });
 
+    // Track whether send_wa_message tool already sent a reply this turn
+    let toolSentToJid: string | null = null;
+
     // Handle incoming messages by injecting them as user prompts
     whatsappService.setMessageCallback(async (m) => {
         const msg = m.messages?.[0];
@@ -198,6 +201,9 @@ export default function (pi: ExtensionAPI) {
             whatsappService.markRead(remoteJid, msg.key.id, msg.key.fromMe);
             whatsappService.sendPresence(remoteJid, 'composing');
         }
+
+        // Reset tool-sent flag for this new incoming message
+        toolSentToJid = null;
 
         const resolved = extractIncomingText(msg.message);
         if (resolved.kind === 'system') {
@@ -292,6 +298,8 @@ export default function (pi: ExtensionAPI) {
             const result = await whatsappService.sendMessage(resolvedJid, params.message);
 
             if (result.success) {
+                // Mark that tool already sent to this JID — prevents message_end from re-sending
+                toolSentToJid = resolvedJid;
                 const isGroupJid = resolvedJid.endsWith('@g.us');
                 const senderNumber = isGroupJid ? resolvedJid : `+${resolvedJid.split('@')[0]}`;
                 await recentsService.recordMessage({
@@ -323,6 +331,9 @@ export default function (pi: ExtensionAPI) {
             };
         }
     });
+
+    // Suppress automatic message_end reply when tool already sent
+    // This is checked by the message_end handler below
 
     // Register commands
     pi.registerCommand("whatsapp", {
@@ -356,6 +367,12 @@ export default function (pi: ExtensionAPI) {
         if (message.role === "assistant") {
             const lastJid = whatsappService.getLastRemoteJid();
             const text = message.content.filter(c => c.type === "text").map(c => c.text).join("\n");
+
+            // Skip if send_wa_message tool already sent a reply to this JID
+            if (toolSentToJid === lastJid) {
+                toolSentToJid = null;
+                return;
+            }
 
             if (lastJid && text) {
                 try {
