@@ -7,7 +7,9 @@ export class WhatsAppPiLogger {
 
     constructor(private verbose = false) {
         const logDir = join(homedir(), '.pi', 'whatsapp-pi');
-        try { mkdirSync(logDir, { recursive: true }); } catch {}
+        try { mkdirSync(logDir, { recursive: true }); } catch {
+            // File logging is best-effort.
+        }
         this.logFile = join(logDir, 'whatsapp-pi.log');
     }
 
@@ -19,7 +21,9 @@ export class WhatsAppPiLogger {
         const timestamp = new Date().toISOString();
         const extra = args.length ? ' ' + args.map(a => String(a)).join(' ') : '';
         const line = `[${timestamp}] [${level}] ${message}${extra}\n`;
-        try { appendFileSync(this.logFile, line); } catch {}
+        try { appendFileSync(this.logFile, line); } catch {
+            // File logging is best-effort.
+        }
     }
 
     info(message: string, ...args: unknown[]) {

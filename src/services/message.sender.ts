@@ -7,7 +7,9 @@ import { homedir } from 'os';
 
 const LOG_FILE = join(homedir(), '.pi', 'whatsapp-pi', 'whatsapp-pi.log');
 function fileLog(msg: string) {
-    try { appendFileSync(LOG_FILE, `[${new Date().toISOString()}] [MessageSender] ${msg}\n`); } catch {}
+    try { appendFileSync(LOG_FILE, `[${new Date().toISOString()}] [MessageSender] ${msg}\n`); } catch {
+        // File logging is best-effort.
+    }
 }
 
 export class MessageSender {
@@ -97,14 +99,15 @@ export class MessageSender {
 
                 // 5. Backoff before retry
                 if (attempts < maxRetries) {
-                    // "No sessions" in groups needs much longer waits —
-                    // Baileys syncs sender-keys in the background between retries
-                    const isNoSessions = errorMsg.includes('No sessions');
-                    const baseBackoff = (isGroup && isNoSessions) ? 5000 : 1000;
-                    const backoff = Math.pow(2, attempts) * baseBackoff;
-                    fileLog(`Retrying in ${backoff / 1000}s...`);
-                    console.log(t('message.sender.retrying', { backoff }));
-                    await this.sleep(backoff);
+                    const message = error instanceof Error ? error.message : String(error);
+                    const isNoSessions = message.includes('No sessions');
+                    const backoff = isGroup && !isNoSessions ? 5000 : 1000;
+                    const delay = Math.pow(2, attempts) * backoff;
+
+                    if (this.whatsappService.isVerbose()) {
+                        console.log(t('message.sender.retrying', { backoff: delay }));
+                    }
+                    await this.sleep(delay);
                 }
             }
         }

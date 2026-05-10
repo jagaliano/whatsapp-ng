@@ -71,8 +71,8 @@ describe('SessionManager', () => {
         const configPath = join(dataDir, 'config.json');
         await writeFile(configPath, [
             '{',
-            '  "allowList": [{ "number": "+1234567890", "name": "Ana" }],',
-            '  "blockList": [],',
+            '  "allowList": [{ "number": "+1234567890", "name": "Ana" }, { "number": "120363012345@g.us", "name": "Team" }],',
+            '  "allowedGroups": [],',
             '  "ignoredNumbers": [],',
             '  "status": "connected",',
             '  "hasAuthState": false,',
@@ -84,34 +84,24 @@ describe('SessionManager', () => {
         await sessionManager.ensureInitialized();
 
         expect(sessionManager.getAllowList()).toEqual([{ number: '+1234567890', name: 'Ana' }]);
+        expect(sessionManager.getAllowedGroups()).toEqual([{ number: '120363012345@g.us', name: 'Team' }]);
         expect(sessionManager.getStatus()).toBe('disconnected');
         const rewrittenConfig = await readFile(configPath, 'utf-8');
         expect(() => JSON.parse(rewrittenConfig)).not.toThrow();
     });
 
-    it('should handle block list and mutual exclusivity', async () => {
-        const num = '+1234567890';
-        await sessionManager.blockNumber(num);
-        expect(sessionManager.isBlocked(num)).toBe(true);
-        expect(sessionManager.isAllowed(num)).toBe(false);
+    it('should manage allowed groups separately from allowed numbers', async () => {
+        const groupJid = '120363012345@g.us';
+        await sessionManager.addAllowedGroup(groupJid, 'Team');
 
-        await sessionManager.addNumber(num);
-        expect(sessionManager.isAllowed(num)).toBe(true);
-        expect(sessionManager.isBlocked(num)).toBe(false);
+        expect(sessionManager.isAllowedGroup(groupJid)).toBe(true);
+        expect(sessionManager.isConversationAllowed(groupJid)).toBe(true);
+        expect(sessionManager.isAllowed(groupJid)).toBe(false);
+        expect(sessionManager.getAllowList()).toEqual([]);
+        expect(sessionManager.getAllowedGroups()).toEqual([{ number: groupJid, name: 'Team' }]);
 
-        await sessionManager.blockNumber(num);
-        expect(sessionManager.isBlocked(num)).toBe(true);
-        expect(sessionManager.isAllowed(num)).toBe(false);
-    });
-
-    it('should atomically unblock and allow', async () => {
-        const num = '+9876543210';
-        await sessionManager.blockNumber(num);
-        expect(sessionManager.isBlocked(num)).toBe(true);
-
-        await sessionManager.unblockAndAllow(num);
-        expect(sessionManager.isAllowed(num)).toBe(true);
-        expect(sessionManager.isBlocked(num)).toBe(false);
+        await sessionManager.removeAllowedGroup(groupJid);
+        expect(sessionManager.isAllowedGroup(groupJid)).toBe(false);
     });
 
     it('should store and retrieve contact names', async () => {
@@ -141,14 +131,18 @@ describe('SessionManager', () => {
         expect(allowList[0].name).toBeUndefined();
     });
 
-    it('should preserve name when unblocking and allowing', async () => {
-        const num = '+5511999999999';
-        const name = 'Jane Smith';
-        
-        await sessionManager.blockNumber(num, name);
-        await sessionManager.unblockAndAllow(num);
-        
-        const allowList = sessionManager.getAllowList();
-        expect(allowList[0].name).toBe(name);
+    it('should add and remove an alias for an existing allowed group', async () => {
+        const groupJid = '120363012345@g.us';
+        const alias = 'Team Chat';
+
+        await sessionManager.addAllowedGroup(groupJid);
+        await sessionManager.setAllowedGroupAlias(groupJid, alias);
+
+        let allowedGroups = sessionManager.getAllowedGroups();
+        expect(allowedGroups[0].name).toBe(alias);
+
+        await sessionManager.removeAllowedGroupAlias(groupJid);
+        allowedGroups = sessionManager.getAllowedGroups();
+        expect(allowedGroups[0].name).toBeUndefined();
     });
 });

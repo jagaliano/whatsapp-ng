@@ -103,7 +103,7 @@ export class RecentsService {
                 lastMessageTime: latestMessage.timestamp,
                 lastMessageDirection: latestMessage.direction,
                 messageCount: messages.length,
-                isAllowed: this.sessionManager.isAllowed(senderNumber)
+                isAllowed: this.sessionManager.isConversationAllowed(senderNumber)
             });
         }
 
@@ -185,7 +185,7 @@ export class RecentsService {
             lastMessageTime: normalizedTimestamp,
             lastMessageDirection: input.direction,
             messageCount: this.store.messagesBySender[senderNumber].length,
-            isAllowed: this.sessionManager.isAllowed(senderNumber)
+            isAllowed: this.sessionManager.isConversationAllowed(senderNumber)
         };
 
         this.store.conversations = this.sortConversationsByLatestMessage([

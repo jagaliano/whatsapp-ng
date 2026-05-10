@@ -73,7 +73,7 @@ describe('MessageSender', () => {
         await vi.advanceTimersByTimeAsync(2000);
         await resultPromise;
 
-        expect(console.log).toHaveBeenCalledWith('[MessageSender] Retrying in 2s...');
+        expect(console.log).toHaveBeenCalledWith('[MessageSender] Retrying in 2000ms...');
         vi.useRealTimers();
     });
 });

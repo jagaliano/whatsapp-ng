@@ -33,7 +33,6 @@ export class MessageDetailView {
     }
 
     render(width: number): string[] {
-        const title = this.props.title.trim() || t('message.detail.defaultTitle');
         const bodyText = this.props.text.length > 0 ? this.props.text : t('message.detail.noReadableText');
 
         const availableWidth = Math.max(20, width - 4);

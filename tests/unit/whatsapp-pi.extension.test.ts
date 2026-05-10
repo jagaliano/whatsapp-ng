@@ -7,8 +7,10 @@ const mocks = vi.hoisted(() => {
         isRegistered: vi.fn().mockResolvedValue(false),
         setStatus: vi.fn().mockResolvedValue(undefined),
         addNumber: vi.fn().mockResolvedValue(undefined),
+        addAllowedGroup: vi.fn().mockResolvedValue(undefined),
         getStatus: vi.fn().mockReturnValue('connected'),
         getAllowList: vi.fn().mockReturnValue([{ number: '+5511999998888', name: 'Ana' }]),
+        getAllowedGroups: vi.fn().mockReturnValue([]),
         setGroupJidForAuth: vi.fn()
     });
 
@@ -62,7 +64,9 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('../../src/services/session.manager.js', () => ({
-    SessionManager: vi.fn(() => mocks.sessionManager)
+    SessionManager: Object.assign(vi.fn(() => mocks.sessionManager), {
+        isGroupJid: (jid: string) => jid.endsWith('@g.us')
+    })
 }));
 
 vi.mock('../../src/services/whatsapp.service.js', () => ({

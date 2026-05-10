@@ -17,6 +17,9 @@ Pi is a powerful agentic AI coding assistant that operates in your terminal. Thi
   - Add contacts with optional names for easy identification
   - View ignored numbers (not in allow list) and add them when needed
   - Manage aliases and print allowed numbers from the menu
+- **Allowed Groups**: Control which WhatsApp groups can interact with Pi
+  - Add group JIDs with optional aliases
+  - Only groups in Allowed Groups are processed by the agent
 - **Recents & History**: Browse recent conversations, inspect full message history, and reply from message detail view
 - **Reliable Messaging**: Queue-based message sending with retry logic
 - **TUI Integration**: Menu-driven interface for managing connections, contacts, and recent chats
@@ -55,7 +58,7 @@ After connecting WhatsApp once from the menu and scanning the QR code, you can s
 pi --whatsapp-pi-online
 ```
 
-3. Use the menu to connect WhatsApp and manage allowed/blocked numbers
+3. Use the menu to connect WhatsApp and manage allowed numbers and groups
 
 ## Development / Testing
 
@@ -93,25 +96,24 @@ pi -e whatsapp-pi.ts --whatsapp-pi-online
 - **Logoff (Delete Session)** - Remove all credentials and session data
 - **Recents** - Open recent conversations, view history, and reply
 - **Allowed Numbers** - Manage contacts that can interact with Pi
-- **Blocked Numbers** - View ignored numbers and manage them
+- **Allowed Groups** - Manage WhatsApp groups that can interact with Pi
 
 ### Allowed Numbers Management
 - **Add Number** - Add a new contact to the allow list (format: +5511999999999)
 - **Select a contact** - Open a submenu with **History**, **Send Message**, **Print Number**, alias actions, **Remove Number**, and **Back**
 - **Back** - Return to main menu
 
+### Allowed Groups Management
+- **Add Group** - Add a WhatsApp group JID to the allowed groups list (format: 120363012345@g.us)
+- **Select a group** - Open a submenu with **History**, **Send Message**, **Print Group JID**, alias actions, **Remove Group**, and **Back**
+- **Back** - Return to main menu
+
 ### Recents Management
 - **History** - Open full message history for that conversation
 - **Send Message** - Send a new message without Pi suffix
 - **Reply** - Open message detail, then press `R` to reply
-- **Allow Number** - Move a recent sender into the allow list
+- **Allow Number / Allow Group** - Move a recent sender into the appropriate allow list
 - **Remove Alias** - Clear saved alias for that sender
-- **Back** - Return to main menu
-
-### Blocked Numbers Management
-- **View List** - See all numbers that have been ignored (not in allow list)
-- **Allow** - Move a blocked number to the allowed list
-- **Delete** - Remove a number from the blocked list
 - **Back** - Return to main menu
 
 ## Project Structure
@@ -138,7 +140,7 @@ npm test
 ### Recent Feature Updates (2026-05)
 
 - **Auto-Connect Support**: Use the `--whatsapp-pi-online` flag to connect on startup when credentials already exist.
-- **Group-Only Mode**: Use `--whatsapp-group <jid>` to bind Pi to a single WhatsApp group.
+- **Group-Only Mode**: Use `--whatsapp-group <jid>` to bind Pi to a single WhatsApp group. The group must also be present in Allowed Groups.
 - **Recents Store**: Recent conversations and message history are persisted in `~/.pi/whatsapp-pi/recents/recents.json`.
 - **Message Detail / Reply**: Open a message from history to inspect full content and reply with `R`.
 - **Media Support**: Images are forwarded for vision analysis, audio is transcribed with Whisper, and documents are saved under `./.pi-data/whatsapp/documents/`.

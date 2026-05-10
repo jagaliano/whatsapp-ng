@@ -15,6 +15,7 @@ interface HistoryOptionEntry {
 
 export class MenuHandler {
     private readonly printedAllowedNumbers: string[] = [];
+    private readonly printedAllowedGroups: string[] = [];
 
     constructor(
         private readonly whatsappService: WhatsAppService,
@@ -28,7 +29,7 @@ export class MenuHandler {
         const title = t('menu.whatsapp.title', { status });
         const recentsLabel = t('menu.root.recents');
         const allowedNumbersLabel = t('menu.root.allowedNumbers');
-        const blockedNumbersLabel = t('menu.root.blockedNumbers');
+        const allowedGroupsLabel = t('menu.root.allowedGroups');
         const disconnectWhatsAppLabel = t('menu.root.disconnectWhatsApp');
         const connectWhatsAppLabel = t('menu.root.connectWhatsApp');
         const logoffDeleteSessionLabel = t('menu.root.logoffDeleteSession');
@@ -38,7 +39,7 @@ export class MenuHandler {
         if (status === 'connected') {
             options.push(recentsLabel);
             options.push(allowedNumbersLabel);
-            options.push(blockedNumbersLabel);
+            options.push(allowedGroupsLabel);
             options.push(disconnectWhatsAppLabel);
         } else {
             options.push(connectWhatsAppLabel);
@@ -72,18 +73,19 @@ export class MenuHandler {
                 await this.whatsappService.stop();
                 ctx.ui.notify(t('menu.root.agentDisconnected'), 'warning');
                 break;
-            case logoffDeleteSessionLabel:
+            case logoffDeleteSessionLabel: {
                 const confirmLogoff = await ctx.ui.confirm(t('menu.root.logoffTitle'), t('menu.root.logoffConfirmMessage'));
                 if (confirmLogoff) {
                     await this.whatsappService.logout();
                     ctx.ui.notify(t('menu.root.loggedOffAndDeleted'), 'info');
                 }
                 break;
+            }
             case allowedNumbersLabel:
                 await this.manageAllowList(ctx);
                 break;
-            case blockedNumbersLabel:
-                await this.manageBlockList(ctx);
+            case allowedGroupsLabel:
+                await this.manageAllowedGroups(ctx);
                 break;
             case recentsLabel:
                 await this.manageRecents(ctx);
@@ -212,51 +214,125 @@ export class MenuHandler {
         ctx.ui.notify(this.printedAllowedNumbers.join('\n'), 'info');
     }
 
-    private async manageBlockList(ctx: ExtensionCommandContext) {
-        const list = [...this.sessionManager.getBlockList()].reverse();
-        const title = t('menu.blocked.title');
-        const backLabel = t('menu.blocked.back');
+    private async manageAllowedGroups(ctx: ExtensionCommandContext) {
+        const list = this.sortContactsAlphabetically(this.sessionManager.getAllowedGroups());
+        const title = t('menu.allowedGroups.title');
+        const addGroupLabel = t('menu.allowedGroups.addGroup');
+        const backLabel = t('menu.root.back');
+        const options = [...list.map(group => this.formatAllowedGroupOption(group)), addGroupLabel, backLabel];
 
-        if (list.length === 0) {
-            ctx.ui.notify(t('menu.blocked.empty'), 'info');
+        const choice = await ctx.ui.select(title, options);
+
+        if (choice === addGroupLabel) {
+            const groupJid = await ctx.ui.input(t('menu.allowedGroups.enterGroup'));
+            if (groupJid && SessionManager.isGroupJid(groupJid)) {
+                await this.sessionManager.addAllowedGroup(groupJid);
+                ctx.ui.notify(t('menu.allowedGroups.addedToAllowList', { groupJid }), 'info');
+            } else {
+                ctx.ui.notify(t('menu.allowedGroups.invalidGroup'), 'error');
+            }
+            await this.manageAllowedGroups(ctx);
+            return;
+        }
+
+        if (choice === backLabel || !choice) {
             await this.handleCommand(ctx);
             return;
         }
 
-        const options = [...list.map(c => c.name ? `${c.name} (${c.number})` : c.number), backLabel];
-        const choice = await ctx.ui.select(title, options);
-
-        if (choice && choice !== backLabel) {
-            await this.manageBlockedNumber(ctx, this.parseContactNumberOption(choice));
-        } else {
-            await this.handleCommand(ctx);
+        const selectedGroup = list.find(group => this.formatAllowedGroupOption(group) === choice);
+        if (!selectedGroup) {
+            await this.manageAllowedGroups(ctx);
+            return;
         }
+
+        await this.manageAllowedGroup(ctx, selectedGroup);
     }
 
-    private async manageBlockedNumber(ctx: ExtensionCommandContext, number: string) {
-        const title = t('menu.blocked.manageTitle', { number });
-        const allowLabel = t('menu.blocked.allow');
-        const deleteLabel = t('menu.blocked.delete');
-        const backLabel = t('menu.blocked.back');
-        const action = await ctx.ui.select(title, [allowLabel, deleteLabel, backLabel]);
-
-        if (action === allowLabel) {
-            const ok = await ctx.ui.confirm(t('menu.blocked.allowConfirmTitle'), t('menu.blocked.allowConfirmMessage', { number }));
-            if (ok) {
-                await this.sessionManager.unblockAndAllow(number);
-                ctx.ui.notify(t('menu.blocked.allowed', { number }), 'info');
-            }
-            await this.manageBlockList(ctx);
-        } else if (action === deleteLabel) {
-            const ok = await ctx.ui.confirm(t('menu.blocked.deleteConfirmTitle'), t('menu.blocked.deleteConfirmMessage', { number }));
-            if (ok) {
-                await this.sessionManager.unblockNumber(number);
-                ctx.ui.notify(t('menu.blocked.deleted', { number }), 'info');
-            }
-            await this.manageBlockList(ctx);
+    private async manageAllowedGroup(ctx: ExtensionCommandContext, group: Contact) {
+        const displayName = this.formatAllowedGroupOption(group);
+        const title = t('menu.allowedGroups.group.title', { displayName });
+        const historyLabel = t('menu.allowedGroups.group.history');
+        const sendMessageLabel = t('menu.allowedGroups.group.sendMessage');
+        const printGroupLabel = t('menu.allowedGroups.group.printGroup');
+        const removeAliasLabel = t('menu.allowedGroups.group.removeAlias');
+        const addAliasLabel = t('menu.allowedGroups.group.addAlias');
+        const removeGroupLabel = t('menu.allowedGroups.group.removeGroup');
+        const backLabel = t('menu.allowedGroups.group.back');
+        const options = [historyLabel, sendMessageLabel, printGroupLabel];
+        if (group.name) {
+            options.push(removeAliasLabel);
         } else {
-            await this.manageBlockList(ctx);
+            options.push(addAliasLabel);
         }
+        options.push(removeGroupLabel, backLabel);
+
+        const choice = await ctx.ui.select(title, options);
+
+        if (choice === sendMessageLabel) {
+            await this.sendMessageToAllowedGroup(ctx, group);
+            await this.manageAllowedGroup(ctx, group);
+            return;
+        }
+
+        if (choice === historyLabel) {
+            await this.showConversationHistoryForNumber(ctx, group.number, displayName);
+            await this.manageAllowedGroup(ctx, group);
+            return;
+        }
+
+        if (choice === printGroupLabel) {
+            this.printAllowedGroup(ctx, group.number);
+            await this.manageAllowedGroup(ctx, group);
+            return;
+        }
+
+        if (choice === addAliasLabel) {
+            const alias = await ctx.ui.input(t('menu.allowedGroups.enterAlias', { groupJid: group.number }));
+            const trimmedAlias = alias?.trim() || '';
+
+            if (!trimmedAlias) {
+                ctx.ui.notify(t('menu.allowedGroups.pleaseEnterAlias'), 'error');
+                await this.manageAllowedGroup(ctx, group);
+                return;
+            }
+
+            await this.sessionManager.setAllowedGroupAlias(group.number, trimmedAlias);
+            ctx.ui.notify(t('menu.allowedGroups.aliasAdded', { groupJid: group.number }), 'info');
+            await this.manageAllowedGroup(ctx, { ...group, name: trimmedAlias });
+            return;
+        }
+
+        if (choice === removeAliasLabel) {
+            await this.sessionManager.removeAllowedGroupAlias(group.number);
+            ctx.ui.notify(t('menu.allowedGroups.aliasRemoved', { groupJid: group.number }), 'info');
+            await this.manageAllowedGroup(ctx, { ...group, name: undefined });
+            return;
+        }
+
+        if (choice === removeGroupLabel) {
+            const ok = await ctx.ui.confirm(t('menu.allowedGroups.removeConfirmTitle'), t('menu.allowedGroups.removeConfirmMessage', { displayName }));
+            if (ok) {
+                await this.sessionManager.removeAllowedGroup(group.number);
+                ctx.ui.notify(t('menu.allowedGroups.removed', { displayName }), 'info');
+            }
+            await this.manageAllowedGroups(ctx);
+            return;
+        }
+
+        await this.manageAllowedGroups(ctx);
+    }
+
+    private printAllowedGroup(ctx: ExtensionCommandContext, groupJid: string) {
+        this.printedAllowedGroups.push(groupJid);
+        const output = this.printedAllowedGroups
+            .map((entry) => `  • ${entry}`)
+            .join('\n');
+        console.log([
+            t('menu.allowedGroups.printAllowedGroupsTitle'),
+            output
+        ].join('\n'));
+        ctx.ui.notify(this.printedAllowedGroups.join('\n'), 'info');
     }
 
     private async manageRecents(ctx: ExtensionCommandContext) {
@@ -295,17 +371,22 @@ export class MenuHandler {
 
     private async manageRecentConversation(ctx: ExtensionCommandContext, conversation: RecentConversationSummary) {
         const displayName = this.getConversationDisplayName(conversation);
-        const allowedContact = this.sessionManager.getAllowedContact(conversation.senderNumber);
+        const isGroup = SessionManager.isGroupJid(conversation.senderNumber);
+        const allowedContact = isGroup
+            ? this.sessionManager.getAllowedGroup(conversation.senderNumber)
+            : this.sessionManager.getAllowedContact(conversation.senderNumber);
         const title = t('menu.recents.contact.title', { displayName });
         const historyLabel = t('menu.recents.contact.history');
-        const allowNumberLabel = t('menu.recents.contact.allowNumber');
+        const allowConversationLabel = isGroup
+            ? t('menu.recents.contact.allowGroup')
+            : t('menu.recents.contact.allowNumber');
         const sendMessageLabel = t('menu.recents.contact.sendMessage');
         const removeAliasLabel = t('menu.recents.contact.removeAlias');
         const backLabel = t('menu.recents.contact.back');
         const options: string[] = [historyLabel];
 
         if (!allowedContact) {
-            options.push(allowNumberLabel);
+            options.push(allowConversationLabel);
         }
 
         options.push(sendMessageLabel);
@@ -318,9 +399,12 @@ export class MenuHandler {
 
         const choice = await ctx.ui.select(title, options);
 
-        if (choice === allowNumberLabel) {
-            if (this.sessionManager.isAllowed(conversation.senderNumber)) {
+        if (choice === allowConversationLabel) {
+            if (this.sessionManager.isConversationAllowed(conversation.senderNumber)) {
                 ctx.ui.notify(t('menu.recents.alreadyAllowed', { number: conversation.senderNumber }), 'info');
+            } else if (isGroup) {
+                await this.sessionManager.addAllowedGroup(conversation.senderNumber, conversation.senderName);
+                ctx.ui.notify(t('menu.recents.addedGroupToAllowList', { groupJid: conversation.senderNumber }), 'info');
             } else {
                 await this.sessionManager.addNumber(conversation.senderNumber, conversation.senderName);
                 ctx.ui.notify(t('menu.recents.addedToAllowList', { number: conversation.senderNumber }), 'info');
@@ -330,7 +414,11 @@ export class MenuHandler {
         }
 
         if (choice === removeAliasLabel) {
-            await this.sessionManager.removeAllowedContactAlias(conversation.senderNumber);
+            if (isGroup) {
+                await this.sessionManager.removeAllowedGroupAlias(conversation.senderNumber);
+            } else {
+                await this.sessionManager.removeAllowedContactAlias(conversation.senderNumber);
+            }
             ctx.ui.notify(t('menu.recents.aliasRemoved', { number: conversation.senderNumber }), 'info');
             await this.manageRecentConversation(ctx, {
                 ...conversation,
@@ -368,6 +456,15 @@ export class MenuHandler {
             displayName: this.formatAllowedContactOption(contact),
             senderNumber: contact.number,
             senderName: contact.name,
+            appendPiSuffix: true
+        });
+    }
+
+    private async sendMessageToAllowedGroup(ctx: ExtensionCommandContext, group: Contact) {
+        await this.sendPromptedMenuMessage(ctx, {
+            displayName: this.formatAllowedGroupOption(group),
+            senderNumber: group.number,
+            senderName: group.name,
             appendPiSuffix: true
         });
     }
@@ -490,10 +587,13 @@ export class MenuHandler {
     }
 
     private formatAllowedContactOption(contact: Contact): string {
-        const isGroup = SessionManager.isGroupJid(contact.number);
-        const prefix = isGroup ? '[Group] ' : '';
-        return contact.name ? `${prefix}${contact.name} (${contact.number})` : `${prefix}${contact.number}`;
+        return contact.name ? `${contact.name} (${contact.number})` : contact.number;
     }
+
+    private formatAllowedGroupOption(group: Contact): string {
+        return group.name ? `${group.name} (${group.number})` : group.number;
+    }
+
 
     private sortContactsAlphabetically(contacts: Contact[]): Contact[] {
         return [...contacts].sort((left, right) => {
@@ -547,9 +647,11 @@ export class MenuHandler {
     }
 
     private getConversationDisplayName(conversation: RecentConversationSummary): string {
-        const allowedContact = this.sessionManager.getAllowedContact(conversation.senderNumber);
-        const displayName = allowedContact?.name || conversation.senderName;
         const isGroup = SessionManager.isGroupJid(conversation.senderNumber);
+        const allowedContact = isGroup
+            ? this.sessionManager.getAllowedGroup(conversation.senderNumber)
+            : this.sessionManager.getAllowedContact(conversation.senderNumber);
+        const displayName = allowedContact?.name || conversation.senderName;
         const prefix = isGroup ? '[Group] ' : '';
         return displayName ? `${prefix}${displayName} (${conversation.senderNumber})` : `${prefix}${conversation.senderNumber}`;
     }

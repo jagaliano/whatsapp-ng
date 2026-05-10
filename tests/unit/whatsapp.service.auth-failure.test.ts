@@ -57,8 +57,8 @@ const createSessionManager = () => ({
     getStatus: vi.fn().mockReturnValue('connected'),
     setStatus: vi.fn().mockResolvedValue(undefined),
     deleteAuthState: vi.fn().mockResolvedValue(undefined),
-    isBlocked: vi.fn().mockReturnValue(false),
-    isAllowed: vi.fn().mockReturnValue(true)
+    isAllowed: vi.fn().mockReturnValue(true),
+    isConversationAllowed: vi.fn().mockReturnValue(true)
 });
 
 describe('WhatsAppService auth failure handling', () => {

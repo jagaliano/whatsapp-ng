@@ -16,7 +16,9 @@ import { homedir } from 'os';
 
 const LOG_FILE = join(homedir(), '.pi', 'whatsapp-pi', 'whatsapp-pi.log');
 function fileLog(msg: string) {
-    try { appendFileSync(LOG_FILE, `[${new Date().toISOString()}] [WhatsApp-Pi] ${msg}\n`); } catch {}
+    try { appendFileSync(LOG_FILE, `[${new Date().toISOString()}] [WhatsApp-Pi] ${msg}\n`); } catch {
+        // File logging is best-effort.
+    }
 }
 
 export interface WhatsAppStartOptions {
@@ -394,7 +396,7 @@ export class WhatsAppService {
             this.reconnectAttempts = 0;
             await this.sessionManager.setStatus('disconnected');
             if (!isBadMac) {
-                this.onStatusUpdate?.(t('service.whatsapp.loggedOut'));
+                this.onStatusUpdate?.(t('service.whatsapp.disconnected'));
             }
             return;
         }
@@ -478,7 +480,7 @@ export class WhatsAppService {
         const isGroup = remoteJid.endsWith('@g.us');
 
         if (this.boundGroupJid) {
-            // Group-only mode: reject everything except the bound group
+            // Group-only mode narrows the source before allow-list checks run.
             if (remoteJid !== this.boundGroupJid) return;
         }
 
@@ -510,6 +512,9 @@ export class WhatsAppService {
                 await this.sessionManager.trackIgnoredNumber(senderJid, pushName);
                 return;
             }
+            const pushName = message.pushName || undefined;
+            await this.sessionManager.trackIgnoredNumber(senderJid, pushName);
+            return;
         }
 
         this.lastRemoteJid = remoteJid;

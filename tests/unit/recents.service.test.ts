@@ -19,12 +19,12 @@ vi.mock('fs/promises', () => ({
 
 describe('RecentsService', () => {
     const sessionManager = {
-        isAllowed: vi.fn()
+        isConversationAllowed: vi.fn()
     };
 
     beforeEach(() => {
         vi.clearAllMocks();
-        sessionManager.isAllowed.mockImplementation((number: string) => number === '+5511999998888');
+        sessionManager.isConversationAllowed.mockImplementation((number: string) => number === '+5511999998888');
         fsMocks.readFile.mockRejectedValue(new Error('not found'));
         vi.spyOn(Date, 'now').mockReturnValue(1234567890);
     });

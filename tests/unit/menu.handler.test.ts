@@ -61,13 +61,18 @@ const createServices = () => {
         removeNumber: vi.fn().mockResolvedValue(undefined),
         setAllowedContactAlias: vi.fn().mockResolvedValue(undefined),
         removeAllowedContactAlias: vi.fn().mockResolvedValue(undefined),
-        getBlockList: vi.fn().mockReturnValue([]),
+        getAllowedGroups: vi.fn().mockReturnValue([]),
+        getAllowedGroup: vi.fn().mockReturnValue(undefined),
+        addAllowedGroup: vi.fn().mockResolvedValue(undefined),
+        removeAllowedGroup: vi.fn().mockResolvedValue(undefined),
+        setAllowedGroupAlias: vi.fn().mockResolvedValue(undefined),
+        removeAllowedGroupAlias: vi.fn().mockResolvedValue(undefined),
         getIgnoredNumbers: vi.fn().mockReturnValue([]),
-        unblockNumber: vi.fn().mockResolvedValue(undefined),
-        unblockAndAllow: vi.fn().mockResolvedValue(undefined),
         removeIgnoredNumber: vi.fn().mockResolvedValue(undefined),
         getAllowedContact: vi.fn().mockReturnValue(undefined),
-        isAllowed: vi.fn().mockReturnValue(false)
+        isAllowed: vi.fn().mockReturnValue(false),
+        isAllowedGroup: vi.fn().mockReturnValue(false),
+        isConversationAllowed: vi.fn().mockReturnValue(false)
     };
 
     const recentsService = {
@@ -229,19 +234,28 @@ describe('MenuHandler', () => {
         expect(logSpy).toHaveBeenCalledWith('[WhatsApp-Pi] Allowed numbers\n  • +5511999998888\n  • +553291297719');
     });
 
-    it('moves a blocked number to the allowed list using the displayed alias option', async () => {
+    it('sorts allowed groups and adds a valid group JID', async () => {
         const { whatsappService, sessionManager, recentsService } = createServices();
-        sessionManager.getBlockList.mockReturnValue([{ number: '+5511999998888', name: 'Ana' }]);
+        sessionManager.getAllowedGroups.mockReturnValue([
+            { number: '120363222@g.us', name: 'Zeta' },
+            { number: '120363111@g.us', name: 'Alpha' }
+        ]);
         const ctx = createContext({
-            selects: ['Blocked Numbers', 'Ana (+5511999998888)', 'Allow', 'Back', 'Back'],
-            confirms: [true]
+            selects: ['Allowed Groups', 'Add Group', 'Back', 'Back'],
+            inputs: ['120363999@g.us']
         });
         const handler = new MenuHandler(whatsappService as any, sessionManager as any, recentsService as any);
 
         await handler.handleCommand(ctx as any);
 
-        expect(sessionManager.unblockAndAllow).toHaveBeenCalledWith('+5511999998888');
-        expect(ctx.ui.notify).toHaveBeenCalledWith('+5511999998888 moved to Allowed List', 'info');
+        expect(ctx.ui.select).toHaveBeenCalledWith('Allowed Groups', [
+            'Alpha (120363111@g.us)',
+            'Zeta (120363222@g.us)',
+            'Add Group',
+            'Back'
+        ]);
+        expect(sessionManager.addAllowedGroup).toHaveBeenCalledWith('120363999@g.us');
+        expect(ctx.ui.notify).toHaveBeenCalledWith('Added 120363999@g.us to the allowed groups list', 'info');
     });
 
     it('sends a message from recents without adding an extra Pi suffix', async () => {

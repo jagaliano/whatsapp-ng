@@ -100,6 +100,7 @@ describe('WhatsAppService Filtering', () => {
             whatsappService.setMessageCallback(callback);
             await sessionManager.setStatus('connected');
             whatsappService.setGroupBinding('120363012345@g.us');
+            await sessionManager.addAllowedGroup('120363012345@g.us');
 
             await whatsappService.handleIncomingMessages({
                 messages: [{
@@ -116,6 +117,7 @@ describe('WhatsAppService Filtering', () => {
             whatsappService.setMessageCallback(callback);
             await sessionManager.setStatus('connected');
             whatsappService.setGroupBinding('120363012345@g.us');
+            await sessionManager.addAllowedGroup('120363012345@g.us');
 
             await whatsappService.handleIncomingMessages({
                 messages: [{
@@ -132,6 +134,7 @@ describe('WhatsAppService Filtering', () => {
             whatsappService.setMessageCallback(callback);
             await sessionManager.setStatus('connected');
             whatsappService.setGroupBinding('120363012345@g.us');
+            await sessionManager.addAllowedGroup('120363012345@g.us');
 
             await whatsappService.handleIncomingMessages({
                 messages: [{
@@ -160,12 +163,11 @@ describe('WhatsAppService Filtering', () => {
             expect(callback).not.toHaveBeenCalled();
         });
 
-        it('should process group messages when group JID is in allow list (no binding)', async () => {
+        it('should process group messages when group JID is in allowed groups (no binding)', async () => {
             const callback = vi.fn();
             whatsappService.setMessageCallback(callback);
             await sessionManager.setStatus('connected');
-            // Add the group JID to the allow list
-            await sessionManager.addNumber('120363012345@g.us');
+            await sessionManager.addAllowedGroup('120363012345@g.us');
 
             await whatsappService.handleIncomingMessages({
                 messages: [{
@@ -182,6 +184,7 @@ describe('WhatsAppService Filtering', () => {
             whatsappService.setMessageCallback(callback);
             await sessionManager.setStatus('connected');
             whatsappService.setGroupBinding('120363012345@g.us');
+            await sessionManager.addAllowedGroup('120363012345@g.us');
 
             await whatsappService.handleIncomingMessages({
                 messages: [{
@@ -193,12 +196,11 @@ describe('WhatsAppService Filtering', () => {
             expect(whatsappService.getLastRemoteJid()).toBe('120363012345@g.us');
         });
 
-        it('should skip allow/block list checks in group-only mode', async () => {
+        it('should require the bound group to be in allowed groups', async () => {
             const callback = vi.fn();
             whatsappService.setMessageCallback(callback);
             await sessionManager.setStatus('connected');
             whatsappService.setGroupBinding('120363012345@g.us');
-            // Do NOT add any numbers to allow list
 
             await whatsappService.handleIncomingMessages({
                 messages: [{
@@ -207,7 +209,16 @@ describe('WhatsAppService Filtering', () => {
                     pushName: 'Ana'
                 }]
             });
-            // Should still process because group binding bypasses allow list
+            expect(callback).not.toHaveBeenCalled();
+
+            await sessionManager.addAllowedGroup('120363012345@g.us');
+            await whatsappService.handleIncomingMessages({
+                messages: [{
+                    key: { remoteJid: '120363012345@g.us', participant: '5511999998888@s.whatsapp.net' },
+                    message: { conversation: 'Hello from group' },
+                    pushName: 'Ana'
+                }]
+            });
             expect(callback).toHaveBeenCalledTimes(1);
         });
     });

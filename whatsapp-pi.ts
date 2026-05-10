@@ -137,7 +137,18 @@ export default function (pi: ExtensionAPI) {
                 for (const n of data.allowList) {
                     const num = typeof n === "string" ? n : n.number;
                     const name = typeof n === "string" ? undefined : n.name;
-                    await sessionManager.addNumber(num, name);
+                    if (SessionManager.isGroupJid(num)) {
+                        await sessionManager.addAllowedGroup(num, name);
+                    } else {
+                        await sessionManager.addNumber(num, name);
+                    }
+                }
+            }
+            if (Array.isArray(data.allowedGroups)) {
+                for (const g of data.allowedGroups) {
+                    const groupJid = typeof g === "string" ? g : g.number;
+                    const name = typeof g === "string" ? undefined : g.name;
+                    await sessionManager.addAllowedGroup(groupJid, name);
                 }
             }
         }
@@ -348,7 +359,8 @@ export default function (pi: ExtensionAPI) {
             // Persist state after changes
             pi.appendEntry("whatsapp-state", {
                 status: sessionManager.getStatus(),
-                allowList: sessionManager.getAllowList()
+                allowList: sessionManager.getAllowList(),
+                allowedGroups: sessionManager.getAllowedGroups()
             });
         }
     });
@@ -392,7 +404,7 @@ export default function (pi: ExtensionAPI) {
                     } else {
                         ctx.ui.notify(t("notify.replyFailed"), 'error');
                     }
-                } catch (error) {
+                } catch {
                     ctx.ui.notify(t("notify.replyFailed"), 'error');
                 }
             }

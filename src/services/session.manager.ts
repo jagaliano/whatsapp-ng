@@ -31,7 +31,7 @@ export class SessionManager {
 
     private status: SessionStatus = 'logged-out';
     private allowList: Contact[] = [];
-    private blockList: Contact[] = [];
+    private allowedGroups: Contact[] = [];
     private ignoredNumbers: Contact[] = [];
     private hasAuthState = false;
     private openaiKey: string = '';
@@ -78,8 +78,11 @@ export class SessionManager {
                 return null;
             };
 
-            this.allowList = (config.allowList || []).map(cleanContact).filter(Boolean) as Contact[];
-            this.blockList = (config.blockList || []).map(cleanContact).filter(Boolean) as Contact[];
+            const loadedAllowList = (config.allowList || []).map(cleanContact).filter(Boolean) as Contact[];
+            const loadedAllowedGroups = (config.allowedGroups || []).map(cleanContact).filter(Boolean) as Contact[];
+            const migratedGroups = loadedAllowList.filter(c => SessionManager.isGroupJid(c.number));
+            this.allowList = loadedAllowList.filter(c => !SessionManager.isGroupJid(c.number));
+            this.allowedGroups = this.mergeContacts(loadedAllowedGroups, migratedGroups);
             this.ignoredNumbers = (config.ignoredNumbers || []).map(cleanContact).filter(Boolean) as Contact[];
             this.status = config.status || 'logged-out';
             this.hasAuthState = Boolean(config.hasAuthState);
@@ -153,7 +156,7 @@ export class SessionManager {
             this.hasAuthState = this.hasAuthState || await this.hasCredentialsFile();
             const config = {
                 allowList: this.allowList,
-                blockList: this.blockList,
+                allowedGroups: this.allowedGroups,
                 ignoredNumbers: this.ignoredNumbers,
                 status: this.status,
                 hasAuthState: this.hasAuthState,
@@ -177,8 +180,12 @@ export class SessionManager {
         return this.allowList.find(c => c.number === number);
     }
 
-    getBlockList(): Contact[] {
-        return this.blockList;
+    getAllowedGroups(): Contact[] {
+        return this.allowedGroups;
+    }
+
+    getAllowedGroup(groupJid: string): Contact | undefined {
+        return this.allowedGroups.find(c => c.number === groupJid);
     }
 
     getIgnoredNumbers(): Contact[] {
@@ -204,9 +211,11 @@ export class SessionManager {
 
         const existing = this.allowList.find(c => c.number === cleanNumber);
         if (!existing) {
+            if (SessionManager.isGroupJid(cleanNumber)) {
+                await this.addAllowedGroup(cleanNumber, name);
+                return;
+            }
             this.allowList.push({ number: cleanNumber, name });
-            // Remove from blockList and ignoredNumbers if it was there
-            this.blockList = this.blockList.filter(c => c.number !== cleanNumber);
             this.ignoredNumbers = this.ignoredNumbers.filter(c => c.number !== cleanNumber);
             await this.saveConfig();
             return;
@@ -220,6 +229,31 @@ export class SessionManager {
 
     async removeNumber(number: string) {
         this.allowList = this.allowList.filter(c => c.number !== number);
+        await this.saveConfig();
+    }
+
+    async addAllowedGroup(groupJid: string, name?: string) {
+        if (!SessionManager.isGroupJid(groupJid)) {
+            console.warn(t('session.manager.invalidNumber'), groupJid);
+            return;
+        }
+
+        const existing = this.allowedGroups.find(c => c.number === groupJid);
+        if (!existing) {
+            this.allowedGroups.push({ number: groupJid, name });
+            this.ignoredNumbers = this.ignoredNumbers.filter(c => c.number !== groupJid);
+            await this.saveConfig();
+            return;
+        }
+
+        if (name && !existing.name) {
+            existing.name = name;
+            await this.saveConfig();
+        }
+    }
+
+    async removeAllowedGroup(groupJid: string) {
+        this.allowedGroups = this.allowedGroups.filter(c => c.number !== groupJid);
         await this.saveConfig();
     }
 
@@ -248,26 +282,28 @@ export class SessionManager {
         await this.saveConfig();
     }
 
-    async blockNumber(number: string, name?: string) {
-        if (!this.blockList.find(c => c.number === number)) {
-            this.blockList.push({ number, name });
-            // Remove from allowList if it was there
-            this.allowList = this.allowList.filter(c => c.number !== number);
-            await this.saveConfig();
+    async setAllowedGroupAlias(groupJid: string, alias: string) {
+        const trimmedAlias = alias.trim();
+        if (!trimmedAlias) {
+            return;
         }
-    }
 
-    async unblockNumber(number: string) {
-        this.blockList = this.blockList.filter(c => c.number !== number);
+        const group = this.getAllowedGroup(groupJid);
+        if (!group) {
+            return;
+        }
+
+        group.name = trimmedAlias;
         await this.saveConfig();
     }
 
-    async unblockAndAllow(number: string) {
-        const blocked = this.blockList.find(c => c.number === number);
-        this.blockList = this.blockList.filter(c => c.number !== number);
-        if (!this.allowList.find(c => c.number === number)) {
-            this.allowList.push({ number, name: blocked?.name });
+    async removeAllowedGroupAlias(groupJid: string) {
+        const group = this.getAllowedGroup(groupJid);
+        if (!group || !group.name) {
+            return;
         }
+
+        delete group.name;
         await this.saveConfig();
     }
 
@@ -275,18 +311,36 @@ export class SessionManager {
         return this.allowList.some(c => c.number === number);
     }
 
-    isBlocked(number: string): boolean {
-        return this.blockList.some(c => c.number === number);
+    isAllowedGroup(groupJid: string): boolean {
+        return this.allowedGroups.some(c => c.number === groupJid);
+    }
+
+    isConversationAllowed(sender: string): boolean {
+        return SessionManager.isGroupJid(sender)
+            ? this.isAllowedGroup(sender)
+            : this.isAllowed(sender);
     }
 
     async trackIgnoredNumber(number: string, name?: string) {
-        // Only track if not already in allow list, block list, or ignored list
-        if (!this.allowList.find(c => c.number === number) &&
-            !this.blockList.find(c => c.number === number) &&
+        // Only track if not already allowed or ignored.
+        if (!this.isConversationAllowed(number) &&
             !this.ignoredNumbers.find(c => c.number === number)) {
             this.ignoredNumbers.push({ number, name });
             await this.saveConfig();
         }
+    }
+
+    private mergeContacts(primary: Contact[], secondary: Contact[]): Contact[] {
+        const merged = [...primary];
+        for (const contact of secondary) {
+            const existing = merged.find(c => c.number === contact.number);
+            if (!existing) {
+                merged.push(contact);
+            } else if (!existing.name && contact.name) {
+                existing.name = contact.name;
+            }
+        }
+        return merged;
     }
 
     public async isRegistered(): Promise<boolean> {
