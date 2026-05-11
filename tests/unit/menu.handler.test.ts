@@ -67,6 +67,8 @@ const createServices = () => {
         removeAllowedGroup: vi.fn().mockResolvedValue(undefined),
         setAllowedGroupAlias: vi.fn().mockResolvedValue(undefined),
         removeAllowedGroupAlias: vi.fn().mockResolvedValue(undefined),
+        getAllowedGroupReactionMode: vi.fn().mockReturnValue('active'),
+        setAllowedGroupReactionMode: vi.fn().mockResolvedValue(undefined),
         getIgnoredNumbers: vi.fn().mockReturnValue([]),
         removeIgnoredNumber: vi.fn().mockResolvedValue(undefined),
         getAllowedContact: vi.fn().mockReturnValue(undefined),
@@ -256,6 +258,41 @@ describe('MenuHandler', () => {
         ]);
         expect(sessionManager.addAllowedGroup).toHaveBeenCalledWith('120363999@g.us');
         expect(ctx.ui.notify).toHaveBeenCalledWith('Added 120363999@g.us to the allowed groups list', 'info');
+    });
+
+    it('changes allowed group reaction mode from the group menu', async () => {
+        const { whatsappService, sessionManager, recentsService } = createServices();
+        sessionManager.getAllowedGroups.mockReturnValue([
+            { number: '120363222@g.us', name: 'Zeta' },
+            { number: '120363111@g.us', name: 'Alpha' }
+        ]);
+        sessionManager.getAllowedGroupReactionMode.mockReturnValue('active');
+        const ctx = createContext({
+            selects: [
+                'Allowed Groups',
+                'Alpha (120363111@g.us)',
+                'Reaction Mode',
+                'Passive',
+                'Back',
+                'Back',
+                'Back'
+            ]
+        });
+        const handler = new MenuHandler(whatsappService as any, sessionManager as any, recentsService as any);
+
+        await handler.handleCommand(ctx as any);
+
+        expect(ctx.ui.select).toHaveBeenCalledWith('Allowed Group • Alpha (120363111@g.us)', [
+            'History',
+            'Send Message',
+            'Print Group JID',
+            'Reaction Mode',
+            'Remove Alias',
+            'Remove Group',
+            'Back'
+        ]);
+        expect(sessionManager.setAllowedGroupReactionMode).toHaveBeenCalledWith('120363111@g.us', 'passive');
+        expect(ctx.ui.notify).toHaveBeenCalledWith('Reaction mode set to Passive for Alpha (120363111@g.us)', 'info');
     });
 
     it('sends a message from recents without adding an extra Pi suffix', async () => {

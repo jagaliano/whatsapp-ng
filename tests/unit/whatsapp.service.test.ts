@@ -221,6 +221,43 @@ describe('WhatsAppService Filtering', () => {
             });
             expect(callback).toHaveBeenCalledTimes(1);
         });
+
+        it('should ignore untagged passive group messages and respond to @ mentions', async () => {
+            const callback = vi.fn();
+            whatsappService.setMessageCallback(callback);
+            await sessionManager.setStatus('connected');
+            await sessionManager.addAllowedGroup('120363012345@g.us');
+            await sessionManager.setAllowedGroupReactionMode('120363012345@g.us', 'passive');
+            (whatsappService as any).socket = {
+                user: { lid: 'bot@lid' },
+                groupMetadata: vi.fn().mockResolvedValue({ id: '120363012345@g.us', subject: 'Team', participants: [] })
+            };
+
+            await whatsappService.handleIncomingMessages({
+                messages: [{
+                    key: { remoteJid: '120363012345@g.us', participant: '5511999998888@s.whatsapp.net' },
+                    message: { conversation: 'Hello from group' },
+                    pushName: 'Ana'
+                }]
+            });
+            expect(callback).not.toHaveBeenCalled();
+
+            await whatsappService.handleIncomingMessages({
+                messages: [{
+                    key: { remoteJid: '120363012345@g.us', participant: '5511999998888@s.whatsapp.net' },
+                    message: {
+                        extendedTextMessage: {
+                            text: '@bot hello',
+                            contextInfo: {
+                                mentionedJid: ['bot@s.whatsapp.net']
+                            }
+                        }
+                    },
+                    pushName: 'Ana'
+                }]
+            });
+            expect(callback).toHaveBeenCalledTimes(1);
+        });
     });
 
 });

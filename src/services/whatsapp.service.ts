@@ -42,9 +42,16 @@ interface IncomingMessageKey {
     participant?: string;
 }
 
+interface IncomingMessageContextInfo {
+    mentionedJid?: string[];
+}
+
 interface IncomingMessageContent {
     conversation?: string;
-    extendedTextMessage?: { text?: string };
+    extendedTextMessage?: {
+        text?: string;
+        contextInfo?: IncomingMessageContextInfo;
+    };
 }
 
 interface IncomingMessageLike {
@@ -59,6 +66,7 @@ interface MessagesUpsertEvent {
 }
 
 interface WhatsAppSocketLike {
+    user?: { id?: string; lid?: string };
     ev: {
         on(event: 'connection.update', handler: (update: ConnectionUpdateEvent) => void | Promise<void>): void;
         on(event: 'creds.update', handler: () => void | Promise<void>): void;
@@ -168,6 +176,48 @@ export class WhatsAppService {
         if (jid.includes('@')) return jid;
         const digits = jid.startsWith('+') ? jid.slice(1) : jid;
         return `${digits}@s.whatsapp.net`;
+    }
+
+    private normalizeJidForComparison(jid: string): string {
+        const [localPart, domain = ''] = jid.split('@');
+        const normalizedLocal = localPart.split(':')[0];
+        return domain ? `${normalizedLocal}@${domain}` : normalizedLocal;
+    }
+
+    private normalizeJidIdentity(jid: string): string {
+        return this.normalizeJidForComparison(jid).split('@')[0];
+    }
+
+    private getAgentJidCandidates(): string[] {
+        const user = this.socket?.user;
+        const rawJids = [user?.id, user?.lid].filter((jid): jid is string => Boolean(jid));
+        const candidates = new Set<string>();
+
+        for (const jid of rawJids) {
+            const normalized = this.normalizeJidForComparison(jid);
+            candidates.add(normalized);
+            candidates.add(this.normalizeJidIdentity(jid));
+        }
+
+        return [...candidates];
+    }
+
+    private messageHasDirectMention(message: IncomingMessageLike): boolean {
+        const mentionedJids = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        if (mentionedJids.length === 0) {
+            return false;
+        }
+
+        const agentCandidates = this.getAgentJidCandidates();
+        if (agentCandidates.length === 0) {
+            return false;
+        }
+
+        return mentionedJids.some(jid => {
+            const normalizedMention = this.normalizeJidForComparison(jid);
+            const mentionIdentity = this.normalizeJidIdentity(jid);
+            return agentCandidates.includes(normalizedMention) || agentCandidates.includes(mentionIdentity);
+        });
     }
 
     private getDisconnectStatusCode(error: unknown): number | undefined {
@@ -496,10 +546,18 @@ export class WhatsAppService {
         void this.recordIncomingMessage(message, remoteJid, text);
 
         const pushName = message.pushName || undefined;
+        const groupAllowed = isGroup && this.sessionManager.isAllowedGroup(remoteJid);
+        const passiveGroupBlocked = groupAllowed
+            && this.sessionManager.getAllowedGroupReactionMode(remoteJid) === 'passive'
+            && !this.messageHasDirectMention(message);
 
         if (this.boundGroupJid) {
             if (!this.sessionManager.isAllowedGroup(this.boundGroupJid)) {
                 await this.sessionManager.trackIgnoredNumber(this.boundGroupJid, pushName);
+                return;
+            }
+
+            if (this.sessionManager.getAllowedGroupReactionMode(this.boundGroupJid) === 'passive' && !this.messageHasDirectMention(message)) {
                 return;
             }
 
@@ -513,6 +571,10 @@ export class WhatsAppService {
                 console.log(`Ignoring message from ${senderJid} (not in allow list)`);
             }
             await this.sessionManager.trackIgnoredNumber(senderJid, pushName);
+            return;
+        }
+
+        if (passiveGroupBlocked) {
             return;
         }
 

@@ -10,6 +10,8 @@ export interface AllowList {
     numbers: string[];
 }
 
+export type ReactionMode = 'active' | 'passive';
+
 export interface IncomingMessage {
     id: string;
     remoteJid: string;

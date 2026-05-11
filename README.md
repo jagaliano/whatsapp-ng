@@ -19,6 +19,7 @@ Pi is a powerful agentic AI coding assistant that operates in your terminal. Thi
   - Manage aliases and print allowed contacts from the menu
 - **Allowed Groups**: Control which WhatsApp groups can interact with Pi
   - Add group JIDs with optional aliases
+  - Choose reaction mode per group: **Active** (reply to all allowed group messages) or **Passive** (reply only when mentioned with @)
   - Only groups in Allowed Groups are processed by the agent
 - **Recents & History**: Browse recent conversations, inspect full message history, and reply from message detail view
 - **Reliable Messaging**: Queue-based message sending with retry logic
@@ -124,7 +125,8 @@ pi -e whatsapp-pi.ts --whatsapp-pi-online
 
 ### Allowed Groups Management
 - **Add Group** - Add a WhatsApp group JID to the allowed groups list (format: 120363012345@g.us)
-- **Select a group** - Open a submenu with **History**, **Send Message**, **Print Group JID**, alias actions, **Remove Group**, and **Back**
+- **Select a group** - Open a submenu with **History**, **Send Message**, **Print Group JID**, **Reaction Mode**, alias actions, **Remove Group**, and **Back**
+- **Reaction Mode** - Switch between **Active** and **Passive** behavior for that group
 - **Back** - Return to main menu
 
 ### Recents Management
@@ -160,6 +162,7 @@ npm test
 
 - **Auto-Connect Support**: Use the `--whatsapp-pi-online` flag to connect on startup when credentials already exist.
 - **Group-Only Mode**: Use `--whatsapp-group <jid>` to bind Pi to a single WhatsApp group. The group must also be present in Allowed Groups.
+- **Allowed Group Reaction Mode**: Each allowed group can be set to Active or Passive. Passive mode only replies when the bot is directly mentioned with @.
 - **Recents Store**: Recent conversations and message history are persisted in `~/.pi/whatsapp-pi/recents/recents.json`.
 - **Message Detail / Reply**: Open a message from history to inspect full content and reply with `R`.
 - **Media Support**: Images are forwarded for vision analysis, audio is transcribed with Whisper, and PDFs are saved under `./.pi-data/whatsapp/documents/` with local text preview when available.

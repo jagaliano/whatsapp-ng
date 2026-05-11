@@ -84,7 +84,7 @@ describe('SessionManager', () => {
         await sessionManager.ensureInitialized();
 
         expect(sessionManager.getAllowList()).toEqual([{ number: '+1234567890', name: 'Ana' }]);
-        expect(sessionManager.getAllowedGroups()).toEqual([{ number: '120363012345@g.us', name: 'Team' }]);
+        expect(sessionManager.getAllowedGroups()).toEqual([{ number: '120363012345@g.us', name: 'Team', reactionMode: 'active' }]);
         expect(sessionManager.getStatus()).toBe('disconnected');
         const rewrittenConfig = await readFile(configPath, 'utf-8');
         expect(() => JSON.parse(rewrittenConfig)).not.toThrow();
@@ -98,7 +98,7 @@ describe('SessionManager', () => {
         expect(sessionManager.isConversationAllowed(groupJid)).toBe(true);
         expect(sessionManager.isAllowed(groupJid)).toBe(false);
         expect(sessionManager.getAllowList()).toEqual([]);
-        expect(sessionManager.getAllowedGroups()).toEqual([{ number: groupJid, name: 'Team' }]);
+        expect(sessionManager.getAllowedGroups()).toEqual([{ number: groupJid, name: 'Team', reactionMode: 'active' }]);
 
         await sessionManager.removeAllowedGroup(groupJid);
         expect(sessionManager.isAllowedGroup(groupJid)).toBe(false);
@@ -144,5 +144,16 @@ describe('SessionManager', () => {
         await sessionManager.removeAllowedGroupAlias(groupJid);
         allowedGroups = sessionManager.getAllowedGroups();
         expect(allowedGroups[0].name).toBeUndefined();
+    });
+
+    it('should default allowed group reaction mode to active and allow updates', async () => {
+        const groupJid = '120363012345@g.us';
+
+        await sessionManager.addAllowedGroup(groupJid);
+        expect(sessionManager.getAllowedGroupReactionMode(groupJid)).toBe('active');
+
+        await sessionManager.setAllowedGroupReactionMode(groupJid, 'passive');
+        expect(sessionManager.getAllowedGroupReactionMode(groupJid)).toBe('passive');
+        expect(sessionManager.getAllowedGroups()).toEqual([{ number: groupJid, reactionMode: 'passive' }]);
     });
 });
