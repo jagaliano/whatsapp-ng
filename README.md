@@ -8,15 +8,15 @@ A WhatsApp integration extension for the **[Pi Coding Agent](https://github.com/
 
 [![GitHub](https://img.shields.io/badge/github-repo-black.svg?style=flat-square&logo=github)](https://github.com/RaphaCastelloes/whatsapp-pi)
 
-Pi is a powerful agentic AI coding assistant that operates in your terminal. This extension allows you to chat and pair-program with your Pi agent directly through WhatsApp, featuring message filtering, allow-listing, recents/history browsing, message detail/reply, group-only binding, and reliable message delivery.
+Pi is a powerful agentic AI coding assistant that operates in your terminal. This extension lets you chat and pair-program with your Pi agent through WhatsApp, with message filtering, allowed contacts/groups, recents/history browsing, message detail/reply, group-only binding, and reliable message delivery.
 
 ## Features
 
 - **Manual WhatsApp Connection**: QR code-based authentication with session persistence
-- **Allow List**: Control which numbers can interact with Pi
+- **Allowed Contacts**: Control which phone numbers can interact with Pi
   - Add contacts with optional names for easy identification
-  - View ignored numbers (not in allow list) and add them when needed
-  - Manage aliases and print allowed numbers from the menu
+  - View ignored numbers (not yet allowed) and add them when needed
+  - Manage aliases and print allowed contacts from the menu
 - **Allowed Groups**: Control which WhatsApp groups can interact with Pi
   - Add group JIDs with optional aliases
   - Only groups in Allowed Groups are processed by the agent
@@ -48,17 +48,24 @@ To enable PDF reading capabilities (required for the agent to process documents)
 pi install npm:whatsapp-pi
 ```
 
-2. Start Pi (the extension will load automatically once installed):
+2. Start Pi:
 ```bash
 pi
 ```
 
-After connecting WhatsApp once from the menu and scanning the QR code, you can start Pi with auto-connect enabled:
+3. Open `/whatsapp` and choose **Connect / Reconnect WhatsApp**.
+   - QR appears only on first pair or after logoff.
+
+4. Add the chat you will use with Pi to **Allowed Contacts** or **Allowed Groups**.
+
+5. Send a message from that allowed chat to Pi.
+   - Pi replies in same thread.
+   - Use **Recents** only to browse history or reply manually.
+
+After first pairing, you can start Pi with auto-connect enabled:
 ```bash
 pi --whatsapp-pi-online
 ```
-
-3. Use the menu to connect WhatsApp and manage allowed numbers and groups
 
 ## Development / Testing
 
@@ -86,6 +93,20 @@ To test startup auto-connect locally after you have already paired WhatsApp:
 pi -e whatsapp-pi.ts --whatsapp-pi-online
 ```
 
+## How It Works
+
+- Pi processes **incoming** messages only from allowed contacts or allowed groups.
+- **Recents** is history browser, not trigger.
+- **Send Message** and `send_wa_message` are outbound only.
+- If you message yourself, WhatsApp may show sent/read ticks, but that does not guarantee Pi will treat it as a trigger.
+
+## WhatsApp Numbers and JIDs
+
+- Contacts use phone format in UI: `+5511999999999`
+- Internally, contacts map to JIDs like `5511999999999@s.whatsapp.net`
+- Groups use JIDs like `120363012345@g.us`
+- Recents may show normalized values from WhatsApp, so use **Print Contact** / **Print Group JID** and aliases to avoid confusion.
+
 ## Commands
 
 - `/whatsapp` - Open the WhatsApp management menu
@@ -95,12 +116,12 @@ pi -e whatsapp-pi.ts --whatsapp-pi-online
 - **Disconnect WhatsApp** - Stop WhatsApp connection
 - **Logoff (Delete Session)** - Remove all credentials and session data
 - **Recents** - Open recent conversations, view history, and reply
-- **Allowed Numbers** - Manage contacts that can interact with Pi
+- **Allowed Contacts** - Manage contacts that can interact with Pi
 - **Allowed Groups** - Manage WhatsApp groups that can interact with Pi
 
-### Allowed Numbers Management
-- **Add Number** - Add a new contact to the allow list (format: +5511999999999)
-- **Select a contact** - Open a submenu with **History**, **Send Message**, **Print Number**, alias actions, **Remove Number**, and **Back**
+### Allowed Contacts Management
+- **Add Contact** - Add a new contact to the allowed contacts list (format: +5511999999999)
+- **Select a contact** - Open a submenu with **History**, **Send Message**, **Print Contact**, alias actions, **Remove Contact**, and **Back**
 - **Back** - Return to main menu
 
 ### Allowed Groups Management
@@ -112,7 +133,7 @@ pi -e whatsapp-pi.ts --whatsapp-pi-online
 - **History** - Open full message history for that conversation
 - **Send Message** - Send a new message without Pi suffix
 - **Reply** - Open message detail, then press `R` to reply
-- **Allow Number / Allow Group** - Move a recent sender into the appropriate allow list
+- **Allow Contact / Allow Group** - Move a recent sender into the appropriate allowed list
 - **Remove Alias** - Clear saved alias for that sender
 - **Back** - Return to main menu
 
