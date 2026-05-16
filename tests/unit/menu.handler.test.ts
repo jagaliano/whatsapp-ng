@@ -163,8 +163,8 @@ describe('MenuHandler', () => {
         await handler.handleCommand(ctx as any);
 
         expect(ctx.ui.select).toHaveBeenCalledWith('Allowed Contacts', [
-            'Ana (+1)',
-            'Zoey (+2)',
+            'Ana [+1]',
+            'Zoey [+2]',
             'Add Contact',
             'Back'
         ]);
@@ -174,9 +174,9 @@ describe('MenuHandler', () => {
 
     it('sends a message to an allowed contact with the Pi suffix and records it', async () => {
         const { whatsappService, sessionManager, recentsService } = createServices();
-        sessionManager.getAllowList.mockReturnValue([{ number: '+5511999998888', name: 'Ana' }]);
+        sessionManager.getAllowList.mockReturnValue([{ number: '+5511999998888', name: 'Ana', sendNumber: '+5511999998888' }]);
         const ctx = createContext({
-            selects: ['Allowed Contacts', 'Ana (+5511999998888)', 'Send Message', 'Back', 'Back', 'Back'],
+            selects: ['Allowed Contacts', 'Ana [+5511999998888] (+5511999998888)', 'Send Message', 'Back', 'Back', 'Back'],
             inputs: ['', 'Oi']
         });
         const handler = new MenuHandler(whatsappService as any, sessionManager as any, recentsService as any);
@@ -208,10 +208,10 @@ describe('MenuHandler', () => {
         const ctx = createContext({
             selects: [
                 'Allowed Contacts',
-                'Ana (+5511999998888)',
+                'Ana [+5511999998888]',
                 'Print Contact',
                 'Back',
-                'Dani (+553291297719)',
+                'Dani [+553291297719]',
                 'Print Contact',
                 'Back',
                 'Back',
@@ -222,9 +222,9 @@ describe('MenuHandler', () => {
 
         await handler.handleCommand(ctx as any);
 
-        expect(ctx.ui.select).toHaveBeenCalledWith('Allowed Contact • Ana (+5511999998888)', [
+        expect(ctx.ui.select).toHaveBeenCalledWith('Allowed Contact • Ana [+5511999998888]', [
             'History',
-            'Send Message',
+            'Add Number',
             'Print Contact',
             'Remove Alias',
             'Remove Contact',
@@ -295,45 +295,6 @@ describe('MenuHandler', () => {
         expect(ctx.ui.notify).toHaveBeenCalledWith('Reaction mode set to Passive for Alpha (120363111@g.us)', 'info');
     });
 
-    it('sends a message from recents without adding an extra Pi suffix', async () => {
-        const { whatsappService, sessionManager, recentsService } = createServices();
-        recentsService.getRecentConversations.mockResolvedValue([{ 
-            senderNumber: '5511999998888@s.whatsapp.net',
-            senderName: 'Ana',
-            lastMessagePreview: 'hello',
-            lastMessageTime: 1234567890,
-            lastMessageDirection: 'incoming',
-            messageCount: 1,
-            isAllowed: false
-        }]);
-        const ctx = createContext({
-            selects: [
-                'Recents',
-                (_title, options) => options[0],
-                'Send Message',
-                'Back',
-                'Back',
-                'Back'
-            ],
-            inputs: ['Oi']
-        });
-        const handler = new MenuHandler(whatsappService as any, sessionManager as any, recentsService as any);
-
-        await handler.handleCommand(ctx as any);
-
-        expect(whatsappService.sendMenuMessage).toHaveBeenCalledWith(
-            '5511999998888@s.whatsapp.net',
-            'Oi'
-        );
-        expect(recentsService.recordMessage).toHaveBeenCalledWith({
-            messageId: 'MSG123',
-            senderNumber: '5511999998888@s.whatsapp.net',
-            senderName: 'Ana',
-            text: 'Oi',
-            direction: 'outgoing',
-            timestamp: 1234567890
-        });
-    });
 
     it('opens a message detail view when a recent history item is selected', async () => {
         const { whatsappService, sessionManager, recentsService } = createServices();
@@ -490,7 +451,6 @@ describe('MenuHandler', () => {
         expect(ctx.ui.select).toHaveBeenCalledWith('Recents • Ana (+5511999998888)', [
             'History',
             'Allow Contact',
-            'Send Message',
             'Back'
         ]);
     });

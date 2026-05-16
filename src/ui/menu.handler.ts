@@ -13,6 +13,12 @@ interface HistoryOptionEntry {
     message: RecentConversationMessage;
 }
 
+interface GroupedRecentEntry {
+    conversations: RecentConversationSummary[];
+    sharedPreview: string;
+    sharedTime: number;
+}
+
 export class MenuHandler {
     private readonly printedAllowedContacts: string[] = [];
     private readonly printedAllowedGroups: string[] = [];
@@ -137,8 +143,17 @@ export class MenuHandler {
         const removeAliasLabel = t('menu.allowed.contact.removeAlias');
         const addAliasLabel = t('menu.allowed.contact.addAlias');
         const removeNumberLabel = t('menu.allowed.contact.removeNumber');
+        const addSendNumberLabel = t('menu.allowed.contact.addNumber');
+        const removeSendNumberLabel = t('menu.allowed.contact.removeSendNumber');
         const backLabel = t('menu.allowed.contact.back');
-        const options = [historyLabel, sendMessageLabel, printNumberLabel];
+        const options = [historyLabel];
+        if (contact.sendNumber) {
+            options.push(sendMessageLabel);
+            options.push(removeSendNumberLabel);
+        } else {
+            options.push(addSendNumberLabel);
+        }
+        options.push(printNumberLabel);
         if (contact.name) {
             options.push(removeAliasLabel);
         } else {
@@ -147,6 +162,27 @@ export class MenuHandler {
         options.push(removeNumberLabel, backLabel);
 
         const choice = await ctx.ui.select(title, options);
+
+        if (choice === addSendNumberLabel) {
+            const input = await ctx.ui.input(t('menu.allowed.contact.enterNumber', { displayName }));
+            const trimmed = input?.trim() || '';
+            if (!validatePhoneNumber(trimmed)) {
+                ctx.ui.notify(t('menu.allowed.invalidNumber'), 'error');
+                await this.manageAllowedContact(ctx, contact);
+                return;
+            }
+            await this.sessionManager.setContactSendNumber(contact.number, trimmed);
+            ctx.ui.notify(t('menu.allowed.contact.numberAdded', { displayName }), 'info');
+            await this.manageAllowedContact(ctx, { ...contact, sendNumber: trimmed });
+            return;
+        }
+
+        if (choice === removeSendNumberLabel) {
+            await this.sessionManager.removeContactSendNumber(contact.number);
+            ctx.ui.notify(t('menu.allowed.contact.numberRemoved', { displayName }), 'info');
+            await this.manageAllowedContact(ctx, { ...contact, sendNumber: undefined });
+            return;
+        }
 
         if (choice === sendMessageLabel) {
             await this.sendMessageToAllowedContact(ctx, contact);
@@ -344,25 +380,26 @@ export class MenuHandler {
 
     private async manageRecents(ctx: ExtensionCommandContext) {
         const recentConversations = await this.recentsService.getRecentConversations();
+        const groupedEntries = this.groupRecentConversations(recentConversations);
         const title = t('menu.recents.title');
         const backLabel = t('menu.root.back');
         const nextLabel = 'Next';
         const previousLabel = 'Previous';
         const pageSize = 10;
 
-        if (recentConversations.length === 0) {
+        if (groupedEntries.length === 0) {
             ctx.ui.notify(t('menu.recents.empty'), 'info');
             await this.handleCommand(ctx);
             return;
         }
 
-        for (let page = 0; page * pageSize < recentConversations.length;) {
+        for (let page = 0; page * pageSize < groupedEntries.length;) {
             const start = page * pageSize;
-            const pageConversations = recentConversations.slice(start, start + pageSize);
+            const pageEntries = groupedEntries.slice(start, start + pageSize);
             const options = [
-                ...pageConversations.map(conversation => this.formatRecentConversationOption(conversation)),
+                ...pageEntries.map(entry => this.formatGroupedRecentOption(entry)),
                 ...(page > 0 ? [previousLabel] : []),
-                ...(start + pageSize < recentConversations.length ? [nextLabel] : []),
+                ...(start + pageSize < groupedEntries.length ? [nextLabel] : []),
                 backLabel
             ];
 
@@ -382,15 +419,15 @@ export class MenuHandler {
                 continue;
             }
 
-            const selectedConversation = pageConversations.find(conversation =>
-                this.formatRecentConversationOption(conversation) === choice
+            const selectedEntry = pageEntries.find(entry =>
+                this.formatGroupedRecentOption(entry) === choice
             );
 
-            if (!selectedConversation) {
+            if (!selectedEntry) {
                 return;
             }
 
-            await this.manageRecentConversation(ctx, selectedConversation);
+            await this.manageRecentConversation(ctx, selectedEntry.conversations[0]);
             return;
         }
     }
@@ -406,7 +443,6 @@ export class MenuHandler {
         const allowContactLabel = isGroup
             ? t('menu.recents.contact.allowGroup')
             : t('menu.recents.contact.allowNumber');
-        const sendMessageLabel = t('menu.recents.contact.sendMessage');
         const removeAliasLabel = t('menu.recents.contact.removeAlias');
         const backLabel = t('menu.recents.contact.back');
         const options: string[] = [historyLabel];
@@ -414,8 +450,6 @@ export class MenuHandler {
         if (!allowedContact) {
             options.push(allowContactLabel);
         }
-
-        options.push(sendMessageLabel);
 
         if (allowedContact?.name) {
             options.push(removeAliasLabel);
@@ -453,12 +487,6 @@ export class MenuHandler {
             return;
         }
 
-        if (choice === sendMessageLabel) {
-            await this.sendMessageFromRecents(ctx, conversation);
-            await this.manageRecentConversation(ctx, conversation);
-            return;
-        }
-
         if (choice === historyLabel) {
             await this.showConversationHistory(ctx, conversation);
             await this.manageRecentConversation(ctx, conversation);
@@ -468,19 +496,10 @@ export class MenuHandler {
         await this.manageRecents(ctx);
     }
 
-    private async sendMessageFromRecents(ctx: ExtensionCommandContext, conversation: RecentConversationSummary) {
-        await this.sendPromptedMenuMessage(ctx, {
-            displayName: this.getConversationDisplayName(conversation),
-            senderNumber: conversation.senderNumber,
-            senderName: conversation.senderName,
-            appendPiSuffix: false
-        });
-    }
-
     private async sendMessageToAllowedContact(ctx: ExtensionCommandContext, contact: Contact) {
         await this.sendPromptedMenuMessage(ctx, {
             displayName: this.formatAllowedContactOption(contact),
-            senderNumber: contact.number,
+            senderNumber: contact.sendNumber!,
             senderName: contact.name,
             appendPiSuffix: true
         });
@@ -652,6 +671,41 @@ export class MenuHandler {
         return options.find(option => option.label === choice)?.message;
     }
 
+    private getRecentsGroupKey(conversation: RecentConversationSummary): string {
+        if (conversation.lastMessageDirection === 'outgoing') {
+            return `outgoing::${conversation.senderNumber}`;
+        }
+        const d = new Date(conversation.lastMessageTime);
+        const minuteKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}-${d.getMinutes()}`;
+        return `${conversation.lastMessagePreview}::${minuteKey}`;
+    }
+
+    private groupRecentConversations(conversations: RecentConversationSummary[]): GroupedRecentEntry[] {
+        const groups = new Map<string, RecentConversationSummary[]>();
+        for (const conversation of conversations) {
+            const key = this.getRecentsGroupKey(conversation);
+            const existing = groups.get(key) ?? [];
+            existing.push(conversation);
+            groups.set(key, existing);
+        }
+        return Array.from(groups.values()).map(members => ({
+            conversations: members,
+            sharedPreview: members[0].lastMessagePreview,
+            sharedTime: members[0].lastMessageTime
+        }));
+    }
+
+    private formatGroupedRecentOption(entry: GroupedRecentEntry): string {
+        if (entry.conversations.length === 1) {
+            return this.formatRecentConversationOption(entry.conversations[0]);
+        }
+        const time = this.formatDateTime(entry.sharedTime);
+        const identifiers = entry.conversations
+            .map(c => c.senderName ? `[${c.senderNumber}] ${c.senderName}` : `(${c.senderNumber})`)
+            .join(' ');
+        return `${identifiers} • ${time} • ${entry.sharedPreview}`;
+    }
+
     private formatRecentConversationOption(conversation: RecentConversationSummary): string {
         const displayName = this.getConversationDisplayName(conversation);
         const time = this.formatDateTime(conversation.lastMessageTime);
@@ -659,7 +713,8 @@ export class MenuHandler {
     }
 
     private formatAllowedContactOption(contact: Contact): string {
-        return contact.name ? `${contact.name} (${contact.number})` : contact.number;
+        const base = contact.name ? `${contact.name} [${contact.number}]` : contact.number;
+        return contact.sendNumber ? `${base} (${contact.sendNumber})` : base;
     }
 
     private formatAllowedGroupOption(group: Contact): string {

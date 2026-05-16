@@ -8,6 +8,7 @@ import { t } from '../i18n.js';
 export interface Contact {
     number: string;
     name?: string;
+    sendNumber?: string;
     reactionMode?: ReactionMode;
 }
 
@@ -76,7 +77,8 @@ export class SessionManager {
                         const reactionMode = item.reactionMode === 'active' || item.reactionMode === 'passive'
                             ? item.reactionMode
                             : undefined;
-                        return { number: num, name: item.name, reactionMode };
+                        const sendNumber = typeof item.sendNumber === 'string' ? item.sendNumber : undefined;
+                        return { number: num, name: item.name, sendNumber, reactionMode };
                     }
                 }
                 return null;
@@ -290,6 +292,20 @@ export class SessionManager {
         }
 
         delete contact.name;
+        await this.saveConfig();
+    }
+
+    async setContactSendNumber(number: string, sendNumber: string) {
+        const contact = this.getAllowedContact(number);
+        if (!contact) return;
+        contact.sendNumber = sendNumber.trim();
+        await this.saveConfig();
+    }
+
+    async removeContactSendNumber(number: string) {
+        const contact = this.getAllowedContact(number);
+        if (!contact) return;
+        delete contact.sendNumber;
         await this.saveConfig();
     }
 
