@@ -268,8 +268,8 @@ export default function (pi: ExtensionAPI) {
             message: Type.String({ minLength: 1, description: "Plain-text message content to send" })
         }),
         async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-            // Resolve JID: jid > recipient_jid > lastRemoteJid
-            const resolvedJid = params.jid || params.recipient_jid || whatsappService.getLastRemoteJid();
+            // Resolve JID: jid > recipient_jid > lastRemoteJid > operatorJid (QR-scanned number)
+            const resolvedJid = params.jid || params.recipient_jid || whatsappService.getLastRemoteJid() || whatsappService.getOperatorJid();
             if (!resolvedJid) {
                 return {
                     isError: true,

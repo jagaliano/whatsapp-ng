@@ -38,6 +38,7 @@ export class SessionManager {
     private hasAuthState = false;
     private openaiKey: string = '';
     private visionModel: string = 'gpt-4o';
+    private operatorJid: string = '';
 
     constructor(baseDir = join(homedir(), '.pi', 'whatsapp-pi')) {
         this.baseDir = baseDir;
@@ -96,6 +97,7 @@ export class SessionManager {
             this.hasAuthState = Boolean(config.hasAuthState);
             this.openaiKey = config.openaiKey || '';
             this.visionModel = config.visionModel || 'gpt-4o';
+            this.operatorJid = config.operatorJid || '';
 
             if (recovered || needsReactionModeBackfill) {
                 await this.saveConfig();
@@ -169,11 +171,19 @@ export class SessionManager {
                 status: this.status,
                 hasAuthState: this.hasAuthState,
                 openaiKey: this.openaiKey,
-                visionModel: this.visionModel
+                visionModel: this.visionModel,
+                operatorJid: this.operatorJid
             };
             await mkdir(this.baseDir, { recursive: true });
-            await writeFile(tempPath, JSON.stringify(config, null, 2));
-            await rename(tempPath, this.configPath);
+            const serialized = JSON.stringify(config, null, 2);
+            await writeFile(tempPath, serialized);
+            try {
+                await rename(tempPath, this.configPath);
+            } catch {
+                // Windows EPERM: atomic rename failed (file locked). Fall back to direct write.
+                await writeFile(this.configPath, serialized);
+                await rm(tempPath, { force: true }).catch(() => {});
+            }
         } catch (error) {
             await rm(tempPath, { force: true }).catch(() => {});
             console.error(t('session.manager.failedSaveConfig'), error);
@@ -467,6 +477,15 @@ export class SessionManager {
 
     async setVisionModel(model: string) {
         this.visionModel = model;
+        await this.saveConfig();
+    }
+
+    getOperatorJid(): string {
+        return this.operatorJid;
+    }
+
+    async setOperatorJid(jid: string) {
+        this.operatorJid = jid;
         await this.saveConfig();
     }
 

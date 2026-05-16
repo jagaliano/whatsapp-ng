@@ -112,6 +112,7 @@ export class WhatsAppService {
     private onMessage?: (m: MessagesUpsertEvent) => void;
     private onStatusUpdate?: (status: string) => void;
     private lastRemoteJid: string | null = null;
+    private qrWasShown = false;
     private boundGroupJid: string | null = null;
     private groupMetadataCache: Map<string, { id: string; subject: string; participants: Array<{ id: string }> }> = new Map();
 
@@ -406,6 +407,7 @@ export class WhatsAppService {
         this.sessionManager.setStatus('pairing');
         this.onQRCode?.(qr);
         this.onStatusUpdate?.(t('service.whatsapp.typeToConnect'));
+        this.qrWasShown = true;
     }
 
     private async handleConnectionOpen() {
@@ -420,6 +422,29 @@ export class WhatsAppService {
         await this.sessionManager.markAuthStateAvailable();
         this.sessionManager.setStatus('connected');
         this.onStatusUpdate?.(t('service.whatsapp.connected'));
+
+        if (this.qrWasShown) {
+            this.qrWasShown = false;
+            console.log(t('service.whatsapp.qrConnected'));
+            console.log(t('service.whatsapp.qrWelcomeMessage'));
+            void this.sendQrWelcome();
+        }
+    }
+
+    private async sendQrWelcome(): Promise<void> {
+        const rawId = this.socket?.user?.id;
+        if (!rawId) return;
+        const selfJid = this.normalizeJidForComparison(rawId);
+        await this.sessionManager.setOperatorJid(selfJid);
+        try {
+            await this.socket?.sendMessage(selfJid, { text: t('service.whatsapp.qrWelcomeMessage') });
+        } catch {
+            // Best-effort — welcome send failure must not abort the session.
+        }
+    }
+
+    public getOperatorJid(): string {
+        return this.sessionManager.getOperatorJid();
     }
 
     private isBadMacError(errorMessage: string): boolean {
