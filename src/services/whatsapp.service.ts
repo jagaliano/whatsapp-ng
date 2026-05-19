@@ -462,7 +462,7 @@ export class WhatsAppService {
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
         const isBadMac = this.isBadMacError(errorMessage);
         const isAuthRejected = this.isAuthRejected(statusCode, errorMessage);
-        const shouldTreatAsLoggedOut = isBadMac || isAuthRejected;
+        const shouldTreatAsLoggedOut = isBadMac
 
         if (this.intentionalStop) {
             return;

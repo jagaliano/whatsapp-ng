@@ -95,8 +95,7 @@ describe('WhatsAppService auth failure handling', () => {
 
         expect(sessionManager.deleteAuthState).not.toHaveBeenCalled();
         expect(baileysMocks.makeWASocket).toHaveBeenCalledTimes(1);
-        expect(sessionManager.setStatus).toHaveBeenCalledWith('disconnected');
-        expect(statusCallback).toHaveBeenCalledWith('| WhatsApp: Session Preserved (Reconnect Failed)');
+        expect(sessionManager.setStatus).toHaveBeenCalledWith('logged-out');
         expect(statusCallback).toHaveBeenCalledWith('| WhatsApp: Disconnected');
 
         await service.stop();
@@ -122,7 +121,7 @@ describe('WhatsAppService auth failure handling', () => {
 
         expect(sessionManager.deleteAuthState).not.toHaveBeenCalled();
         expect(baileysMocks.makeWASocket).toHaveBeenCalledTimes(1);
-        expect(sessionManager.setStatus).toHaveBeenCalledWith('disconnected');
+        expect(sessionManager.setStatus).toHaveBeenCalledWith('logged-out');
         expect(statusCallback).toHaveBeenCalledWith('| WhatsApp: Disconnected');
 
         await service.stop();
