@@ -90,6 +90,18 @@ describe('SessionManager', () => {
         expect(() => JSON.parse(rewrittenConfig)).not.toThrow();
     });
 
+    it('should clean up stale config temp files during initialization', async () => {
+        const staleTempPath = join(dataDir, 'config.json.123.456.tmp');
+        const unrelatedTempPath = join(dataDir, 'other.json.123.456.tmp');
+        await writeFile(staleTempPath, 'stale');
+        await writeFile(unrelatedTempPath, 'keep');
+
+        await sessionManager.ensureInitialized();
+
+        await expect(access(staleTempPath)).rejects.toThrow();
+        await expect(access(unrelatedTempPath)).resolves.toBeUndefined();
+    });
+
     it('should manage allowed groups separately from allowed numbers', async () => {
         const groupJid = '120363012345@g.us';
         await sessionManager.addAllowedGroup(groupJid, 'Team');
@@ -161,5 +173,43 @@ describe('SessionManager', () => {
         await sessionManager.ensureInitialized();
 
         expect(sessionManager.getAllowedGroups()).toEqual([{ number: '120363012345@g.us', name: 'Team' }]);
+    });
+
+    it('should not reload config and overwrite in-memory allow-lists after initialization', async () => {
+        const configPath = join(dataDir, 'config.json');
+        await writeFile(configPath, JSON.stringify({
+            allowList: [{ number: '+1111111111', name: 'Loaded' }],
+            allowedGroups: [{ number: '120363012345@g.us', name: 'Loaded Group' }],
+            ignoredNumbers: [],
+            status: 'logged-out',
+            hasAuthState: false,
+            openaiKey: '',
+            visionModel: 'gpt-4o'
+        }, null, 2));
+
+        await sessionManager.ensureInitialized();
+        await sessionManager.addNumber('+2222222222', 'Live Contact');
+        await sessionManager.addAllowedGroup('120363999999@g.us', 'Live Group');
+
+        await writeFile(configPath, JSON.stringify({
+            allowList: [{ number: '+1111111111', name: 'Stale' }],
+            allowedGroups: [{ number: '120363012345@g.us', name: 'Stale Group' }],
+            ignoredNumbers: [],
+            status: 'logged-out',
+            hasAuthState: false,
+            openaiKey: '',
+            visionModel: 'gpt-4o'
+        }, null, 2));
+
+        await sessionManager.ensureInitialized();
+
+        expect(sessionManager.getAllowList()).toEqual([
+            { number: '+1111111111', name: 'Loaded' },
+            { number: '+2222222222', name: 'Live Contact' }
+        ]);
+        expect(sessionManager.getAllowedGroups()).toEqual([
+            { number: '120363012345@g.us', name: 'Loaded Group' },
+            { number: '120363999999@g.us', name: 'Live Group' }
+        ]);
     });
 });

@@ -1,12 +1,8 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-
 type Locale = "pt-BR" | "es" | "fr";
 type Key = keyof typeof fallback;
 type Params = Record<string, string | number | undefined>;
 
 let currentLocale: string | undefined;
-
-const namespace = "whatsapp-pi";
 
 const fallback = {
     "tool.label": "Send WhatsApp Message",
@@ -32,7 +28,7 @@ const fallback = {
     "service.whatsapp.typeToConnect": "| WhatsApp: type /whatsapp to connect",
     "service.whatsapp.connected": "| WhatsApp: Connected",
     "service.whatsapp.qrConnected": "WhatsApp connected",
-    "service.whatsapp.qrWelcomeMessage": "👋 To get started, send a message, enter in /whatsapp > Recents to Allow Contact with LID code, then add the whatsapp number in the Allowed Contact list.",
+    "service.whatsapp.qrWelcomeMessage": "😊 Hi! Send me a message, enter in '/whatsapp > Recents' to Allow Contact or Group with LID code. For Contact, consider adding the whatsapp number to the Allowed Contact list.",
     "service.whatsapp.sessionErrorBadMac": "| WhatsApp: Session Error (Bad MAC)",
     "service.whatsapp.loggedOut": "| WhatsApp: Logged out",
     "service.whatsapp.conflict": "| WhatsApp: Conflict (Another Instance)",
@@ -710,41 +706,9 @@ export function resetI18n(): void {
     currentLocale = undefined;
 }
 
-export function initI18n(pi: ExtensionAPI): void {
+export function initI18n(_pi: unknown): void {
     const forcedLocale = getLocaleOverride();
     if (forcedLocale) {
         currentLocale = forcedLocale;
     }
-
-    pi.events?.emit?.("pi-core/i18n/registerBundle", {
-        namespace,
-        defaultLocale: "en",
-        fallback,
-        translations,
-    });
-    pi.events?.on?.("pi-core/i18n/localeChanged", (event: unknown) => {
-        if (forcedLocale) {
-            return;
-        }
-
-        if (event && typeof event === "object" && "locale" in event) {
-            const locale = String((event as { locale?: unknown }).locale ?? "");
-            if (locale) {
-                currentLocale = locale;
-            }
-        }
-    });
-    pi.events?.emit?.("pi-core/i18n/requestApi", {
-        namespace,
-        onApi(api: { getLocale?: () => string | undefined }) {
-            if (forcedLocale) {
-                return;
-            }
-
-            const locale = api.getLocale?.();
-            if (locale) {
-                currentLocale = locale;
-            }
-        },
-    });
 }

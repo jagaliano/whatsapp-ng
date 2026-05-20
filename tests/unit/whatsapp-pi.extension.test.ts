@@ -178,6 +178,22 @@ describe('whatsapp-pi extension', () => {
         expect(pi.handlers.has('session_shutdown')).toBe(true);
     });
 
+    it('does not call the removed pi.events i18n API', async () => {
+        const registerExtension = await loadExtension();
+        const pi = {
+            ...createMockPi(),
+            events: {
+                emit: vi.fn(),
+                on: vi.fn()
+            }
+        };
+
+        registerExtension(pi as any);
+
+        expect(pi.events.emit).not.toHaveBeenCalled();
+        expect(pi.events.on).not.toHaveBeenCalled();
+    });
+
     it('initializes session services and restores saved WhatsApp state on session start', async () => {
         const registerExtension = await loadExtension();
         const pi = createMockPi();
@@ -242,6 +258,38 @@ describe('whatsapp-pi extension', () => {
 
         expect(ctx.ui.setStatus).toHaveBeenCalledWith('whatsapp', '| WhatsApp: Auto-connecting...');
         expect(mocks.whatsappService.start).toHaveBeenCalledOnce();
+    });
+
+    it('shows connected footer as not ready when there are no chats', async () => {
+        const registerExtension = await loadExtension();
+        const pi = createMockPi();
+        const ctx = createMockContext();
+        mocks.sessionManager.getAllowList.mockReturnValue([]);
+        mocks.sessionManager.getAllowedGroups.mockReturnValue([]);
+
+        registerExtension(pi as any);
+        await pi.handlers.get('session_start')!({ reason: 'manual' }, ctx);
+        const statusCallback = mocks.whatsappService.setStatusCallback.mock.calls[0][0];
+
+        statusCallback('| WhatsApp: Connected');
+
+        expect(ctx.ui.setStatus).toHaveBeenCalledWith('whatsapp', '| WhatsApp: Connected - No chats');
+    });
+
+    it('shows allowed chat count in connected footer', async () => {
+        const registerExtension = await loadExtension();
+        const pi = createMockPi();
+        const ctx = createMockContext();
+        mocks.sessionManager.getAllowList.mockReturnValue([{ number: '+5511999998888' }]);
+        mocks.sessionManager.getAllowedGroups.mockReturnValue([{ number: '120363012345@g.us' }]);
+
+        registerExtension(pi as any);
+        await pi.handlers.get('session_start')!({ reason: 'manual' }, ctx);
+        const statusCallback = mocks.whatsappService.setStatusCallback.mock.calls[0][0];
+
+        statusCallback('| WhatsApp: Connected');
+
+        expect(ctx.ui.setStatus).toHaveBeenCalledWith('whatsapp', '| WhatsApp: Connected - 2 chats');
     });
 
     it('does not preserve connected state when auto-connect is enabled without saved credentials', async () => {

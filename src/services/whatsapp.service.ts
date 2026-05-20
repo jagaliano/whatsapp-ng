@@ -397,7 +397,7 @@ export class WhatsAppService {
     }
 
     private async handlePairingQr(qr: string) {
-        this.sessionManager.setStatus('pairing');
+        await this.sessionManager.setStatus('pairing');
         this.onQRCode?.(qr);
         this.onStatusUpdate?.(t('service.whatsapp.typeToConnect'));
         this.qrWasShown = true;
@@ -413,7 +413,7 @@ export class WhatsAppService {
         this.clearReconnectTimeout();
         await this.saveCreds?.();
         await this.sessionManager.markAuthStateAvailable();
-        this.sessionManager.setStatus('connected');
+        await this.sessionManager.setStatus('connected');
         this.onStatusUpdate?.(t('service.whatsapp.connected'));
 
         if (this.qrWasShown) {
@@ -513,7 +513,7 @@ export class WhatsAppService {
             this.scheduleReconnect(options);
         } else if (!shouldReconnect) {
             this.reconnectAttempts = 0;
-            this.sessionManager.setStatus('logged-out');
+            await this.sessionManager.setStatus('logged-out');
             this.onStatusUpdate?.(t('service.whatsapp.disconnected'));
         }
     }
@@ -596,7 +596,7 @@ export class WhatsAppService {
 
         if (!this.sessionManager.isConversationAllowed(senderJid)) {
             if (this.isVerbose()) {
-                console.log(`Ignoring message from ${senderJid} (not in allow list)`);
+                console.log(t('service.whatsapp.ignoredNotAllowed', { senderJid }));
             }
             await this.sessionManager.trackIgnoredNumber(senderJid, pushName);
             return;

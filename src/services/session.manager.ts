@@ -1,6 +1,6 @@
 import { useMultiFileAuthState } from 'baileys';
-import { join } from 'path';
-import { readFile, writeFile, mkdir, rm, rename } from 'fs/promises';
+import { basename, join } from 'path';
+import { readFile, writeFile, mkdir, rm, rename, readdir } from 'fs/promises';
 import { homedir } from 'os';
 import { SessionStatus } from '../models/whatsapp.types.js';
 import { t } from '../i18n.js';
@@ -38,6 +38,7 @@ export class SessionManager {
     private openaiKey: string = '';
     private visionModel: string = 'gpt-4o';
     private operatorJid: string = '';
+    private configLoaded = false;
 
     constructor(baseDir = join(homedir(), '.pi', 'whatsapp-pi')) {
         this.baseDir = baseDir;
@@ -53,7 +54,11 @@ export class SessionManager {
     public async ensureInitialized() {
         try {
             await this.ensureStorageDirectories();
-            await this.loadConfig();
+            await this.cleanupStaleConfigTempFiles();
+            if (!this.configLoaded) {
+                await this.loadConfig();
+                this.configLoaded = true;
+            }
             await this.syncAuthStateFromDisk();
         } catch {
             // Initialization is best-effort; callers can continue with defaults.
@@ -176,11 +181,37 @@ export class SessionManager {
             } catch {
                 // Windows EPERM: atomic rename failed (file locked). Fall back to direct write.
                 await writeFile(this.configPath, serialized);
-                await rm(tempPath, { force: true }).catch(() => {});
+                await this.removeConfigTempFile(tempPath);
             }
         } catch (error) {
-            await rm(tempPath, { force: true }).catch(() => {});
+            await this.removeConfigTempFile(tempPath);
             console.error(t('session.manager.failedSaveConfig'), error);
+        }
+    }
+
+    private async cleanupStaleConfigTempFiles() {
+        const configFileName = basename(this.configPath);
+        let files: string[];
+
+        try {
+            files = await readdir(this.baseDir);
+        } catch {
+            return;
+        }
+
+        await Promise.all(files
+            .filter(fileName => fileName.startsWith(`${configFileName}.`) && fileName.endsWith('.tmp'))
+            .map(fileName => this.removeConfigTempFile(join(this.baseDir, fileName))));
+    }
+
+    private async removeConfigTempFile(tempPath: string) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                await rm(tempPath, { force: true });
+                return;
+            } catch {
+                await new Promise(resolve => setTimeout(resolve, 25));
+            }
         }
     }
 

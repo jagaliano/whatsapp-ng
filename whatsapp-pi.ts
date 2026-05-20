@@ -48,6 +48,26 @@ export default function (pi: ExtensionAPI) {
     const menuHandler = new MenuHandler(whatsappService, sessionManager, recentsService);
     let _ctx: ExtensionContext | undefined;
 
+    const formatFooterStatus = (status: string) => {
+        if (status !== t("service.whatsapp.connected")) {
+            return status;
+        }
+
+        const allowedChats = sessionManager.getAllowList().length + sessionManager.getAllowedGroups().length;
+        if (allowedChats === 0) {
+            return `${status} - No chats`;
+        }
+
+        return `${status} to ${allowedChats} chat${allowedChats === 1 ? '' : 's'}`;
+    };
+
+    const refreshFooterStatus = () => {
+        if (!_ctx) return;
+        _ctx.ui.setStatus('whatsapp', formatFooterStatus(whatsappService.getStatus() === 'connected'
+            ? t("service.whatsapp.connected")
+            : t("service.whatsapp.disconnected")));
+    };
+
     const installGracefulShutdownHandlers = () => {
         shutdownState.__whatsappPiShutdown ??= { installed: false };
         if (shutdownState.__whatsappPiShutdown.installed) {
@@ -84,7 +104,7 @@ export default function (pi: ExtensionAPI) {
         }
         ctx.ui.setStatus('whatsapp', '| WhatsApp: Disconnected');
         whatsappService.setStatusCallback((status) => {
-            ctx.ui.setStatus('whatsapp', status);
+            ctx.ui.setStatus('whatsapp', formatFooterStatus(status));
         });
 
         // Set up group binding if configured
@@ -351,6 +371,7 @@ export default function (pi: ExtensionAPI) {
                 allowList: sessionManager.getAllowList(),
                 allowedGroups: sessionManager.getAllowedGroups()
             });
+            refreshFooterStatus();
         }
     });
 

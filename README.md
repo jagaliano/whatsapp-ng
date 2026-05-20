@@ -5,7 +5,7 @@
 # WhatsApp-Pi
 [![GitHub](https://img.shields.io/badge/github-repo-black.svg?style=flat-square&logo=github)](https://github.com/RaphaCastelloes/whatsapp-pi)
 
-A WhatsApp integration extension for the **[Pi Coding Agent](https://github.com/mariozechner/pi-coding-agent)**. 
+A WhatsApp integration extension for the **[Pi Coding Agent](https://pi.dev)**. 
 
 Pi is a powerful agentic AI coding assistant that operates in your terminal. This extension lets you chat and pair-program with your Pi agent through WhatsApp, with message filtering, allowed contacts/groups, recents/history browsing, message detail/reply, group-only binding, and reliable message delivery.
 
@@ -31,6 +31,34 @@ Pi is a powerful agentic AI coding assistant that operates in your terminal. Thi
   - **Document Handling**: Downloads and stores documents (PDF, text) for agent access; PDFs include a bounded text preview when readable.
 
 ## Prerequisites
+
+### Pi Coding Agent
+
+Install Pi from [pi.dev](https://pi.dev):
+
+**Linux / macOS (recommended):**
+```bash
+curl -fsSL https://pi.dev/install.sh | sh
+```
+
+**Or via npm (requires Node.js 20+):**
+```bash
+npm install -g @earendil-works/pi-coding-agent
+```
+
+Then authenticate or set an API key before starting:
+```bash
+# Use /login inside Pi for subscription providers, or set an API key:
+export ANTHROPIC_API_KEY=sk-ant-...
+# OpenAI
+export OPENAI_API_KEY=sk-...
+# Google Gemini
+export GEMINI_API_KEY=...
+```
+
+See the [Pi documentation](https://pi.dev/docs/latest) for full setup, providers, and model configuration details.
+
+### Audio Transcription
 
 To enable audio transcription features:
 ```bash
@@ -120,12 +148,12 @@ pi -e whatsapp-pi.ts --whatsapp-pi-online
 
 ### Allowed Contacts Management
 - **Add Contact** - Add a new contact to the allowed contacts list (format: +5511999999999)
-- **Select a contact** - Open a submenu with **History**, **Send Message**, **Print Contact**, alias actions, **Remove Contact**, and **Back**
+- **Select a contact** - Open a submenu with **History**, **Send Message**, **Print Contact**, **Add Alias**, **Remove Alias**, **Add Number**, **Remove Number**, **Remove Contact**, and **Back**
 - **Back** - Return to main menu
 
 ### Allowed Groups Management
 - **Add Group** - Add a WhatsApp group JID to the allowed groups list (format: 120363012345@g.us)
-- **Select a group** - Open a submenu with **History**, **Send Message**, **Print Group JID**, **Reaction Mode**, alias actions, **Remove Group**, and **Back**
+- **Select a group** - Open a submenu with **History**, **Send Message**, **Print Group JID**, **Reaction Mode**, **Add Alias**, **Remove Alias**, **Remove Group**, and **Back**
 - **Reaction Mode** - Switch between **Active** and **Passive** behavior for that group
 - **Back** - Return to main menu
 
@@ -136,6 +164,11 @@ pi -e whatsapp-pi.ts --whatsapp-pi-online
 - **Allow Contact / Allow Group** - Move a recent sender into the appropriate allowed list
 - **Remove Alias** - Clear saved alias for that sender
 - **Back** - Return to main menu
+
+### WhatsApp Chat Commands
+Send these commands directly in WhatsApp to control the agent session:
+- **`/compact`** - Compact the current Pi session context
+- **`/abort`** - Abort the current Pi agent operation
 
 ## Project Structure
 
@@ -169,4 +202,4 @@ npm test
 - **Session Handling**: Saved state, allow list, and startup reconnects are restored automatically when available.
 - **Intelligent Message Filtering**: Messages ending with `π` are ignored to prevent bot loops.
 - **Storage Management**: Persistent data lives under `.pi-data/` plus the recents store in the user home directory.
-- **Improved Test Coverage (v1.0.56)**: Added unit tests for the `message_end` auto-reply handler, covering the happy path, disconnected guard, role guard, send failure, thrown exceptions, and the `send_wa_message` dedup flag. Fixed a Windows path separator bug in the recents service test suite.
+- **Improved Test Coverage (v1.0.59)**: Added unit tests for the `message_end` auto-reply handler, covering the happy path, disconnected guard, role guard, send failure, thrown exceptions, and the `send_wa_message` dedup flag. Fixed a Windows path separator bug in the recents service test suite.

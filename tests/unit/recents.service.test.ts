@@ -121,6 +121,25 @@ describe('RecentsService', () => {
         await expect(service.getRecentConversations()).resolves.toEqual([]);
     });
 
+    it('strips emoji components without dropping adjacent text', async () => {
+        const service = new RecentsService(sessionManager as any);
+        await service.ensureInitialized();
+
+        await service.recordMessage({
+            messageId: 'MSG1',
+            senderNumber: '+5511999998888',
+            text: '\u2708\uFE0F Boarding \u{1F1E7}\u{1F1F7} now',
+            direction: 'incoming',
+            timestamp: 1000
+        });
+
+        const persisted = JSON.parse(fsMocks.writeFile.mock.calls[0][1]);
+        expect(persisted.messagesBySender['+5511999998888'][0].text).toBe('Boarding now');
+        await expect(service.getRecentConversations()).resolves.toEqual([
+            expect.objectContaining({ lastMessagePreview: 'Boarding now' })
+        ]);
+    });
+
     it('orders conversations by their latest message time', async () => {
         const service = new RecentsService(sessionManager as any);
         await service.ensureInitialized();

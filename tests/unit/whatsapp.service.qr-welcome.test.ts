@@ -159,4 +159,22 @@ describe('WhatsAppService QR welcome message', () => {
 
         await service.stop();
     });
+
+    it('propagates status persistence failures before reporting connected', async () => {
+        const { WhatsAppService } = await import('../../src/services/whatsapp.service.ts');
+        const sessionManager = createSessionManager();
+        const statusCallback = vi.fn();
+        const service = new WhatsAppService(sessionManager as any);
+        service.setStatusCallback(statusCallback);
+        sessionManager.setStatus.mockRejectedValueOnce(new Error('write failed'));
+
+        await service.start();
+        const socket = baileysMocks.sockets[0];
+
+        await expect(socket.handlers.get('connection.update')!({ connection: 'open' }))
+            .rejects.toThrow('write failed');
+        expect(statusCallback).not.toHaveBeenCalledWith('| WhatsApp: Connected');
+
+        await service.stop();
+    });
 });
