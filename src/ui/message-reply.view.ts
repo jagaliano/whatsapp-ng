@@ -49,6 +49,14 @@ const buildReplyTitle = (selectedMessage: SelectedMessageContext): string => {
     return truncateToWidth(`${t('message.reply.title')} ${sender}`, 120);
 };
 
+const toRecentSenderNumber = (recipientJid: string): string => {
+    if (recipientJid.endsWith('@g.us')) {
+        return recipientJid;
+    }
+
+    return `+${recipientJid.split('@')[0]}`;
+};
+
 export async function showMessageReplyView(
     ctx: MessageReplyContext,
     props: MessageReplyViewProps
@@ -75,16 +83,19 @@ export async function showMessageReplyView(
                 targetMessageId: props.selectedMessage.messageId,
                 targetConversation: props.selectedMessage.senderNumber
             };
+            const recipientJid = props.whatsappService.resolveOutboundRecipientJid(
+                props.selectedMessage.senderNumber
+            );
 
             const result: ReplySendResult = await props.whatsappService.sendMenuMessage(
-                props.selectedMessage.senderNumber,
+                recipientJid,
                 draft.text
             );
 
             if (result.success) {
                 await props.recentsService.recordMessage({
                     messageId: result.messageId ?? `${Date.now()}`,
-                    senderNumber: props.selectedMessage.senderNumber,
+                    senderNumber: toRecentSenderNumber(recipientJid),
                     senderName: props.selectedMessage.senderName,
                     text: draft.text,
                     direction: 'outgoing',

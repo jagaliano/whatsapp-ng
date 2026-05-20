@@ -191,6 +191,22 @@ export class WhatsAppService {
         return `${digits}@s.whatsapp.net`;
     }
 
+    public resolveOutboundRecipientJid(recipient: string): string {
+        if (SessionManager.isGroupJid(recipient)) {
+            return recipient;
+        }
+
+        const senderNumber = this.normalizeContactNumber(recipient.split('@')[0]);
+        const allowedContact = this.sessionManager.getAllowedContact(recipient)
+            ?? this.sessionManager.getAllowedContact(senderNumber);
+
+        if (allowedContact?.sendNumber) {
+            return this.normalizeRecipientJid(allowedContact.sendNumber);
+        }
+
+        return this.normalizeRecipientJid(recipient);
+    }
+
     private normalizeJidForComparison(jid: string): string {
         const [localPart, domain = ''] = jid.split('@');
         const normalizedLocal = localPart.split(':')[0];
@@ -654,26 +670,28 @@ export class WhatsAppService {
     }
 
     async sendMessage(jid: string, text: string) {
+        const recipientJid = this.resolveOutboundRecipientJid(jid);
+
         // Ensure we show the typing indicator before sending
-        await this.sendPresence(jid, 'composing');
+        await this.sendPresence(recipientJid, 'composing');
 
         const result = await this.messageSender.send({
-            recipientJid: jid,
+            recipientJid,
             text: text
         });
 
         // After sending, we can stop the typing indicator
-        await this.sendPresence(jid, 'paused');
+        await this.sendPresence(recipientJid, 'paused');
 
         if (!result.success) {
-            console.error(t('service.whatsapp.failedSendMessage', { jid, error: result.error ?? t('message.sender.unknownError') }));
+            console.error(t('service.whatsapp.failedSendMessage', { jid: recipientJid, error: result.error ?? t('message.sender.unknownError') }));
         }
 
         return result;
     }
 
     async sendMenuMessage(jid: string, text: string) {
-        const normalizedJid = this.normalizeRecipientJid(jid);
+        const normalizedJid = this.resolveOutboundRecipientJid(jid);
         const socket = this.getActiveSocket();
 
         if (!socket) {

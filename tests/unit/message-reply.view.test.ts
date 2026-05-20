@@ -24,6 +24,7 @@ describe('showMessageReplyView', () => {
     it('sends the reply to the selected conversation and records it', async () => {
         const ctx = createContext(['Obrigada!']);
         const whatsappService = {
+            resolveOutboundRecipientJid: vi.fn((recipient: string) => recipient.includes('@') ? recipient : `${recipient.slice(1)}@s.whatsapp.net`),
             sendMenuMessage: vi.fn().mockResolvedValue({ success: true, messageId: 'MSG-REPLY' })
         };
         const recentsService = {
@@ -45,7 +46,7 @@ describe('showMessageReplyView', () => {
 
         expect(ctx.ui.setWidget).toHaveBeenCalledWith('message-reply-context', expect.any(Array), { placement: 'belowEditor' });
         expect(ctx.ui.editor).toHaveBeenCalledWith('Reply to Ana (+5511999998888)');
-        expect(whatsappService.sendMenuMessage).toHaveBeenCalledWith('+5511999998888', 'Obrigada!');
+        expect(whatsappService.sendMenuMessage).toHaveBeenCalledWith('5511999998888@s.whatsapp.net', 'Obrigada!');
         expect(recentsService.recordMessage).toHaveBeenCalledWith({
             messageId: 'MSG-REPLY',
             senderNumber: '+5511999998888',
@@ -61,6 +62,7 @@ describe('showMessageReplyView', () => {
     it('rejects empty reply submissions and keeps the composer open', async () => {
         const ctx = createContext(['   ', 'Tudo certo']);
         const whatsappService = {
+            resolveOutboundRecipientJid: vi.fn((recipient: string) => recipient.includes('@') ? recipient : `${recipient.slice(1)}@s.whatsapp.net`),
             sendMenuMessage: vi.fn().mockResolvedValue({ success: true, messageId: 'MSG-REPLY' })
         };
         const recentsService = {
@@ -81,13 +83,14 @@ describe('showMessageReplyView', () => {
         });
 
         expect(ctx.ui.notify).toHaveBeenCalledWith('Please enter a message before sending.', 'error');
-        expect(whatsappService.sendMenuMessage).toHaveBeenCalledWith('+5511999998888', 'Tudo certo');
+        expect(whatsappService.sendMenuMessage).toHaveBeenCalledWith('5511999998888@s.whatsapp.net', 'Tudo certo');
         expect(recentsService.recordMessage).toHaveBeenCalledOnce();
     });
 
     it('returns to the detail view when the user cancels', async () => {
         const ctx = createContext([undefined]);
         const whatsappService = {
+            resolveOutboundRecipientJid: vi.fn((recipient: string) => recipient.includes('@') ? recipient : `${recipient.slice(1)}@s.whatsapp.net`),
             sendMenuMessage: vi.fn()
         };
         const recentsService = {
@@ -110,5 +113,35 @@ describe('showMessageReplyView', () => {
         expect(whatsappService.sendMenuMessage).not.toHaveBeenCalled();
         expect(recentsService.recordMessage).not.toHaveBeenCalled();
         expect(ctx.ui.setWidget).toHaveBeenCalledWith('message-reply-context', undefined);
+    });
+
+    it('resolves an allowed contact LID reply to its configured phone number', async () => {
+        const ctx = createContext(['Oi pelo numero']);
+        const whatsappService = {
+            resolveOutboundRecipientJid: vi.fn().mockReturnValue('5511999998888@s.whatsapp.net'),
+            sendMenuMessage: vi.fn().mockResolvedValue({ success: true, messageId: 'MSG-REPLY' })
+        };
+        const recentsService = {
+            recordMessage: vi.fn().mockResolvedValue(undefined)
+        };
+
+        await showMessageReplyView(ctx as any, {
+            selectedMessage: {
+                messageId: 'MSG-1',
+                senderNumber: '123456789@lid',
+                senderName: 'Ana',
+                text: 'Original message',
+                direction: 'incoming',
+                timestamp: 1111
+            },
+            whatsappService: whatsappService as any,
+            recentsService: recentsService as any
+        });
+
+        expect(whatsappService.resolveOutboundRecipientJid).toHaveBeenCalledWith('123456789@lid');
+        expect(whatsappService.sendMenuMessage).toHaveBeenCalledWith('5511999998888@s.whatsapp.net', 'Oi pelo numero');
+        expect(recentsService.recordMessage).toHaveBeenCalledWith(expect.objectContaining({
+            senderNumber: '+5511999998888'
+        }));
     });
 });

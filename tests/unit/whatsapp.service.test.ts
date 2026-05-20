@@ -60,6 +60,24 @@ describe('WhatsAppService Filtering', () => {
         expect(callback).toHaveBeenCalledTimes(1); // Still 1
     });
 
+    it('should resolve an allowed contact JID to its configured send phone number for outbound replies', async () => {
+        await sessionManager.addNumber('+1234567890');
+        await sessionManager.setContactSendNumber('+1234567890', '+5511999998888');
+
+        expect(whatsappService.resolveOutboundRecipientJid('1234567890@s.whatsapp.net')).toBe('5511999998888@s.whatsapp.net');
+    });
+
+    it('should resolve an allowed contact LID to its configured send phone number for outbound replies', async () => {
+        await sessionManager.addNumber('1234567890@lid');
+        await sessionManager.setContactSendNumber('1234567890@lid', '+5511999998888');
+
+        expect(whatsappService.resolveOutboundRecipientJid('1234567890@lid')).toBe('5511999998888@s.whatsapp.net');
+    });
+
+    it('should keep group reply targets as group JIDs', () => {
+        expect(whatsappService.resolveOutboundRecipientJid('120363012345@g.us')).toBe('120363012345@g.us');
+    });
+
     it('should accept messages sent by me fromMe without pi symbol "π" at last letter', () => {
         const callback = vi.fn();
         whatsappService.setMessageCallback(callback);

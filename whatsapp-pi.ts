@@ -208,6 +208,14 @@ export default function (pi: ExtensionAPI) {
     // Track whether send_wa_message tool already sent a reply this turn
     let toolSentToJid: string | null = null;
 
+    const toRecentSenderNumber = (recipientJid: string): string => {
+        if (recipientJid.endsWith('@g.us')) {
+            return recipientJid;
+        }
+
+        return `+${recipientJid.split('@')[0]}`;
+    };
+
     // Handle incoming messages by injecting them as user prompts
     whatsappService.setMessageCallback(async (m) => {
         const msg = m.messages?.[0];
@@ -318,16 +326,15 @@ export default function (pi: ExtensionAPI) {
                 formattedMessage
             ].join('\n'));
 
-            const result = await whatsappService.sendMessage(resolvedJid, params.message);
+            const outboundJid = whatsappService.resolveOutboundRecipientJid(resolvedJid);
+            const result = await whatsappService.sendMessage(outboundJid, params.message);
 
             if (result.success) {
                 // Mark that tool already sent to this JID — prevents message_end from re-sending
-                toolSentToJid = resolvedJid;
-                const isGroupJid = resolvedJid.endsWith('@g.us');
-                const senderNumber = isGroupJid ? resolvedJid : `+${resolvedJid.split('@')[0]}`;
+                toolSentToJid = outboundJid;
                 await recentsService.recordMessage({
                     messageId: result.messageId!,
-                    senderNumber,
+                    senderNumber: toRecentSenderNumber(outboundJid),
                     text: params.message,
                     direction: 'outgoing',
                     timestamp: Date.now()
@@ -380,7 +387,7 @@ export default function (pi: ExtensionAPI) {
         if (sessionManager.getStatus() !== 'connected') return;
         const lastJid = whatsappService.getLastRemoteJid();
         if (lastJid) {
-            await whatsappService.sendPresence(lastJid, 'composing');
+            await whatsappService.sendPresence(whatsappService.resolveOutboundRecipientJid(lastJid), 'composing');
         }
     });
 
@@ -392,20 +399,23 @@ export default function (pi: ExtensionAPI) {
         if (message.role === "assistant") {
             const lastJid = whatsappService.getLastRemoteJid();
             const text = message.content.filter(c => c.type === "text").map(c => c.text).join("\n");
+            const outboundJid = lastJid
+                ? whatsappService.resolveOutboundRecipientJid(lastJid)
+                : null;
 
             // Skip if send_wa_message tool already sent a reply to this JID
-            if (toolSentToJid === lastJid) {
+            if (toolSentToJid === outboundJid) {
                 toolSentToJid = null;
                 return;
             }
 
-            if (lastJid && text) {
+            if (outboundJid && text) {
                 try {
-                    const result = await whatsappService.sendMessage(lastJid, text);
+                    const result = await whatsappService.sendMessage(outboundJid, text);
                     if (result.success) {
                         await recentsService.recordMessage({
                             messageId: result.messageId ?? `${Date.now()}`,
-                            senderNumber: `+${lastJid.split('@')[0]}`,
+                            senderNumber: toRecentSenderNumber(outboundJid),
                             text,
                             direction: 'outgoing',
                             timestamp: Date.now()
