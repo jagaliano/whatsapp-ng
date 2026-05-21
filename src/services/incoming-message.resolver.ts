@@ -9,6 +9,7 @@ export type IncomingResolution =
     | { kind: 'contact'; text: string }
     | { kind: 'location'; text: string }
     | { kind: 'system'; text: string }
+    | { kind: 'reaction'; text: string; reactionMessage: any }
     | { kind: 'unsupported'; text: string };
 
 const protocolTypes: Record<number, keyof typeof protocolLabels> = {
@@ -144,6 +145,22 @@ export const extractIncomingText = (message: any): IncomingResolution => {
 
     if (resolved?.templateButtonReplyMessage?.selectedDisplayText) {
         return { kind: 'text', text: resolved.templateButtonReplyMessage.selectedDisplayText };
+    }
+
+    if (resolved?.reactionMessage) {
+        const emoji = resolved.reactionMessage.text;
+        if (emoji) {
+            return {
+                kind: 'reaction',
+                text: t('incoming.media.reaction', { emoji }),
+                reactionMessage: resolved.reactionMessage
+            };
+        }
+        return {
+            kind: 'reaction',
+            text: t('incoming.media.reactionRemoved'),
+            reactionMessage: resolved.reactionMessage
+        };
     }
 
     return { kind: 'unsupported', text: t('incoming.media.unsupported', { typeName }) };

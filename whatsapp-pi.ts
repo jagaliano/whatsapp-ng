@@ -8,6 +8,7 @@ import { AudioService } from './src/services/audio.service.js';
 import { extractIncomingText } from './src/services/incoming-message.resolver.js';
 import { IncomingMediaService } from './src/services/incoming-media.service.js';
 import { WhatsAppPiLogger } from './src/services/whatsapp-pi.logger.js';
+import { ReactionSender } from './src/services/reaction.sender.js';
 import { initI18n, t } from './src/i18n.js';
 
 const shutdownState = globalThis as typeof globalThis & {
@@ -358,6 +359,44 @@ export default function (pi: ExtensionAPI) {
                 isError: !result.success,
                 details: undefined,
                 content: [{ type: "text" as const, text: JSON.stringify({ success: result.success, messageId: result.messageId, error: result.error, attempts: result.attempts }) }]
+            };
+        }
+    });
+
+    // Register send_reaction tool (LLM-callable)
+    pi.registerTool({
+        name: "send_reaction",
+        label: t("tool.sendReaction.label"),
+        description: t("tool.sendReaction.description"),
+        promptSnippet: "send_reaction(jid, messageId, emoji) - React to a WhatsApp message with an emoji. The 'jid' is the chat JID (e.g. 5511999998888@s.whatsapp.net), 'messageId' is the ID of the message to react to, and 'emoji' is the emoji to react with (e.g., 👍, ❤️, 😂).",
+        parameters: Type.Object({
+            jid: Type.String({ description: "WhatsApp JID of the chat (e.g. 5511999998888@s.whatsapp.net or 120363012345@g.us)" }),
+            messageId: Type.String({ description: "ID of the message to react to" }),
+            emoji: Type.String({ description: "Emoji to react with (e.g., 👍, ❤️, 😂). Use empty string to remove reaction." })
+        }),
+        async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+            // Get socket from WhatsApp service
+            const socket = whatsappService.getSocket();
+            if (!socket) {
+                return {
+                    isError: true,
+                    details: undefined,
+                    content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: t("service.whatsapp.notConnected") }) }]
+                };
+            }
+
+            // Create sender with the socket
+            const sender = new ReactionSender(socket as any);
+            const result = await sender.sendReaction({
+                jid: params.jid,
+                messageId: params.messageId,
+                emoji: params.emoji
+            });
+
+            return {
+                isError: !result.success,
+                details: undefined,
+                content: [{ type: "text" as const, text: JSON.stringify({ success: result.success, messageId: result.messageId, error: result.error }) }]
             };
         }
     });

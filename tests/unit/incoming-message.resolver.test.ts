@@ -50,4 +50,22 @@ describe('extractIncomingText', () => {
             text: '[Message Deleted]'
         });
     });
+
+    it('extracts reaction messages with emoji', () => {
+        const reactionMessage = { text: '👍', key: { remoteJid: '123@s.whatsapp.net', id: 'msg123', fromMe: false } };
+        expect(extractIncomingText({ reactionMessage })).toEqual({
+            kind: 'reaction',
+            text: '👍 Reacted to message',
+            reactionMessage
+        });
+    });
+
+    it('handles removed reactions', () => {
+        const reactionMessage = { text: '', key: { remoteJid: '123@s.whatsapp.net', id: 'msg123', fromMe: false } };
+        expect(extractIncomingText({ reactionMessage })).toEqual({
+            kind: 'reaction',
+            text: 'Removed reaction',
+            reactionMessage
+        });
+    });
 });
