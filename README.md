@@ -19,7 +19,6 @@ Pi is a powerful agentic AI coding assistant that operates in your terminal. Thi
   - Manage aliases and print allowed contacts from the menu
 - **Allowed Groups**: Control which WhatsApp groups can interact with Pi
   - Add group JIDs with optional aliases
-  - Choose reaction mode per group: **Active** (reply to all allowed group messages) or **Passive** (reply only when mentioned with @)
   - Only groups in Allowed Groups are processed by the agent
 - **Recents & History**: Browse recent conversations, inspect full message history, and reply from message detail view
 - **Reliable Messaging**: Queue-based message sending with retry logic
@@ -153,8 +152,8 @@ pi -e whatsapp-pi.ts --whatsapp-pi-online
 
 ### Allowed Groups Management
 - **Add Group** - Add a WhatsApp group JID to the allowed groups list (format: 120363012345@g.us)
-- **Select a group** - Open a submenu with **History**, **Send Message**, **Print Group JID**, **Reaction Mode**, **Add Alias**, **Remove Alias**, **Remove Group**, and **Back**
-- **Reaction Mode** - Switch between **Active** and **Passive** behavior for that group
+- **Select a group** - Open a submenu with **History**, **Send Message**, **Print Group JID**, **Add Alias**, **Remove Alias**, **Remove Group**, and **Back**
+
 - **Back** - Return to main menu
 
 ### Recents Management
