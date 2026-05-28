@@ -401,6 +401,112 @@ export default function (pi: ExtensionAPI) {
         }
     });
 
+    // Register list_wa_conversations tool (LLM-callable, read-only)
+    pi.registerTool({
+        name: "list_wa_conversations",
+        label: t("tool.listConversations.label"),
+        description: t("tool.listConversations.description"),
+        promptSnippet: "list_wa_conversations({onlyIncoming?, onlyAllowed?, limit?}) - List recent WhatsApp conversations from the local recents store. Read-only; safe to call any time.",
+        parameters: Type.Object({
+            onlyIncoming: Type.Optional(Type.Boolean({ description: "Only return conversations whose last message is incoming (waiting for a reply)." })),
+            onlyAllowed: Type.Optional(Type.Boolean({ description: "Only return conversations from senders/groups currently in the allow list." })),
+            limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20, description: "Maximum number of conversations to return (default 20)." }))
+        }),
+        async execute(_toolCallId, params) {
+            try {
+                const conversations = await recentsService.getRecentConversations();
+                let filtered = conversations;
+                if (params.onlyIncoming) {
+                    filtered = filtered.filter(c => c.lastMessageDirection === 'incoming');
+                }
+                if (params.onlyAllowed) {
+                    filtered = filtered.filter(c => c.isAllowed);
+                }
+                const limit = typeof params.limit === 'number' ? params.limit : 20;
+                filtered = filtered.slice(0, limit);
+                return {
+                    isError: false,
+                    details: undefined,
+                    content: [{ type: "text" as const, text: JSON.stringify({ success: true, count: filtered.length, conversations: filtered }) }]
+                };
+            } catch (error) {
+                return {
+                    isError: true,
+                    details: undefined,
+                    content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }) }]
+                };
+            }
+        }
+    });
+
+    // Register get_wa_conversation_history tool (LLM-callable, read-only)
+    pi.registerTool({
+        name: "get_wa_conversation_history",
+        label: t("tool.getHistory.label"),
+        description: t("tool.getHistory.description"),
+        promptSnippet: "get_wa_conversation_history({senderNumber, limit?}) - Get the most recent messages with a sender. `senderNumber` accepts +E164 (e.g. +14155551212), raw digits, or a JID (e.g. 14155551212@s.whatsapp.net, 120363012345@g.us). Read-only.",
+        parameters: Type.Object({
+            senderNumber: Type.String({ description: "Phone number (+E164 or raw digits) or WhatsApp JID of the conversation." }),
+            limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20, description: "Maximum number of messages to return (default 20)." }))
+        }),
+        async execute(_toolCallId, params) {
+            if (!params.senderNumber || !params.senderNumber.trim()) {
+                return {
+                    isError: true,
+                    details: undefined,
+                    content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: t("tool.error.missingSender") }) }]
+                };
+            }
+            try {
+                const messages = await recentsService.getConversationHistory(params.senderNumber);
+                const limit = typeof params.limit === 'number' ? params.limit : 20;
+                const sliced = messages.slice(-limit);
+                return {
+                    isError: false,
+                    details: undefined,
+                    content: [{ type: "text" as const, text: JSON.stringify({ success: true, count: sliced.length, messages: sliced }) }]
+                };
+            } catch (error) {
+                return {
+                    isError: true,
+                    details: undefined,
+                    content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }) }]
+                };
+            }
+        }
+    });
+
+    // Register check_wa_new_messages tool (LLM-callable, read-only)
+    pi.registerTool({
+        name: "check_wa_new_messages",
+        label: t("tool.checkNew.label"),
+        description: t("tool.checkNew.description"),
+        promptSnippet: "check_wa_new_messages({sinceTimestamp?}) - List conversations whose most recent message is incoming (i.e. waiting for a reply). Optional `sinceTimestamp` (ms epoch) filters to messages newer than that. Read-only.",
+        parameters: Type.Object({
+            sinceTimestamp: Type.Optional(Type.Integer({ minimum: 0, description: "Only include conversations whose last incoming message timestamp is strictly greater than this (ms since epoch)." }))
+        }),
+        async execute(_toolCallId, params) {
+            try {
+                const conversations = await recentsService.getRecentConversations();
+                const since = typeof params.sinceTimestamp === 'number' ? params.sinceTimestamp : 0;
+                const pending = conversations.filter(c =>
+                    c.lastMessageDirection === 'incoming' && c.lastMessageTime > since
+                );
+                return {
+                    isError: false,
+                    details: undefined,
+                    content: [{ type: "text" as const, text: JSON.stringify({ success: true, count: pending.length, conversations: pending }) }]
+                };
+            } catch (error) {
+                return {
+                    isError: true,
+                    details: undefined,
+                    content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }) }]
+                };
+            }
+        }
+    });
+
     // Suppress automatic message_end reply when tool already sent
     // This is checked by the message_end handler below
 

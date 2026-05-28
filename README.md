@@ -126,6 +126,20 @@ pi -e whatsapp-pi.ts --whatsapp-pi-online
 - **Send Message** and `send_wa_message` are outbound only.
 - If you message yourself, WhatsApp may show sent/read ticks, but that does not guarantee Pi will treat it as a trigger.
 
+## LLM-Callable Tools
+
+The extension registers the following tools that the Pi agent can call:
+
+| Tool | Direction | Description |
+| --- | --- | --- |
+| `send_wa_message` | outbound | Send a WhatsApp message to a contact or group (or reply to the last conversation if `jid` is omitted). |
+| `send_reaction` | outbound | React to a WhatsApp message with an emoji. |
+| `list_wa_conversations` | read-only | List recent conversations from the local recents store. Supports `onlyIncoming`, `onlyAllowed`, and `limit`. |
+| `get_wa_conversation_history` | read-only | Get the most recent messages with a given `senderNumber` (accepts `+E164`, raw digits, or a JID). Supports `limit`. |
+| `check_wa_new_messages` | read-only | List conversations whose most recent message is incoming (i.e. waiting for a reply). Supports `sinceTimestamp` (ms epoch). |
+
+The three read-only tools query the local recents store at `~/.pi/whatsapp-pi/recents/recents.json`. They never touch the network and do not mark messages as read.
+
 ## WhatsApp Numbers and JIDs
 
 - Contacts use phone format in UI: `+5511999999999`
