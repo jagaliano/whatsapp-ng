@@ -96,7 +96,7 @@ describe('WhatsAppService QR welcome message', () => {
         expect(socket.sendMessage).toHaveBeenCalledOnce();
         expect(socket.sendMessage).toHaveBeenCalledWith(
             SELF_JID_NORMALIZED,
-            expect.objectContaining({ text: expect.stringContaining('get started') })
+            expect.objectContaining({ text: expect.stringContaining('Send me a message') })
         );
 
         await service.stop();

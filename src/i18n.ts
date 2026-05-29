@@ -193,7 +193,7 @@ const fallback = {
     "incoming.media.reactionRemoved": "Removed reaction",
     "tool.sendReaction.label": "Send WhatsApp Reaction",
     "tool.sendReaction.description": "React to a WhatsApp message with an emoji",
-    "tool.sendReaction.error.invalidEmoji": "Invalid emoji provided",
+    "tool.sendReaction.error.invalidEmoji": "Invalid emoji",
     "tool.listConversations.label": "List WhatsApp Conversations",
     "tool.listConversations.description": "List recent WhatsApp conversations from the local recents store (sender number, optional name, last message preview, direction, timestamp, allowed flag). Read-only.",
     "tool.getHistory.label": "Get WhatsApp Conversation History",

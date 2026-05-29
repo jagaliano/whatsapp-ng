@@ -290,7 +290,7 @@ describe('whatsapp-pi extension', () => {
 
         statusCallback('| WhatsApp: Connected');
 
-        expect(ctx.ui.setStatus).toHaveBeenCalledWith('whatsapp', '| WhatsApp: Connected - 2 chats');
+        expect(ctx.ui.setStatus).toHaveBeenCalledWith('whatsapp', '| WhatsApp: Connected to 2 chats');
     });
 
     it('does not preserve connected state when auto-connect is enabled without saved credentials', async () => {
