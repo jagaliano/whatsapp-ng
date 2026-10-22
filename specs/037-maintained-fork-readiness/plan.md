@@ -14,7 +14,7 @@ baseline: d415f0ba7f392b15d5b635f5b3aa9f62ab58c25c
 
 **Decision:** continue the existing codebase as `jagaliano/whatsapp-ng`, with npm candidate name `whatsapp-ng`; do not migrate to another extension or Baileys fork.
 
-**Execution status:** M0 completed and independently source-reviewed. The owner subsequently authorized committing/pushing its documentation and continuing with M1. M0 was committed/pushed as `911cecd`. Safe M1 preparation and parent validation are implemented, but the owner has accepted upstream's MIT declaration and LICENSE has been added; M1 still awaits npm-account verification; M2 implementation, exact-model review, then commit/push are now authorized; M3–M5 remain separately gated. See section 13 for the approved M2 decisions. This numbered plan and [tasks](tasks.md) are the canonical repository artifacts; the ignored root strategy is only a navigation pointer. The later approval permits M0 documentation publication, not npm publication or stable promotion.
+**Execution status:** M0 completed and independently source-reviewed. The owner subsequently authorized committing/pushing its documentation and continuing with M1. M0 was committed/pushed as `911cecd`. Safe M1 preparation and parent validation are implemented, but the owner has accepted upstream's MIT declaration and LICENSE has been added; M1 still awaits npm-account verification; M2 implementation, exact-model review and separate M1/M2 commit/push are completed (`f90be5a`, `759a47f`); M3–M5 remain separately gated. See section 13 for the approved M2 decisions. This numbered plan and [tasks](tasks.md) are the canonical repository artifacts; the ignored root strategy is only a navigation pointer. The later approval permits M0 documentation publication, not npm publication or stable promotion.
 
 ## 1. Direction and boundaries
 
@@ -72,7 +72,7 @@ Serialize M1/M2 manifest and dependency-file edits; keep packaging, transport pi
 
 **Scope:** repository/release decisions, no dependency or transport changes.
 
-1. Completed locally: `chore/fork-release-readiness` was created from `main` at `d415f0b`. `main` and `origin/main` remain at the original baseline. The reviewed M0 documentation was later committed/pushed as `911cecd`; M1 edits remain uncommitted. The old repository and its published upstream feature branches are untouched.
+1. Completed locally: `chore/fork-release-readiness` was created from `main` at `d415f0b`. `main` and `origin/main` remain at the original baseline. The reviewed M0 documentation was later committed/pushed as `911cecd`; The later M1 packaging checkpoint was committed as `f90be5a` and followed by M2 `759a47f`; both were pushed under the owner's later approval. The old repository and its published upstream feature branches are untouched.
 2. Completed locally: this canonical numbered plan and `tasks.md` record the baseline, remotes, existing PR links, supported-use-case boundaries and known live gaps. README links to this record. The reviewed M0 files were committed/pushed as `911cecd` after separate approval; later M1 work is not covered by that commit approval. No ignored root file is the sole authority.
 3. Record the integration policy for the new `main`: reviewed maintenance work promotes there, while the old fork and upstream feature PR branches remain intact. The new repository's initial default-branch bootstrap was explicitly approved; this does not authorize changing the old repository's default branch or rewriting history. We need not wait for upstream merges to maintain our line.
 4. Approved: npm candidate `whatsapp-ng`, first prerelease `1.1.0-rc.1`, published only under `next` if M1–M5 pass and publication is explicitly approved. Stable `1.1.0`/`latest` is a separate later decision. No existing npm package was found at the M0 lookup, but registration eligibility and publishing rights remain M1 gates. A different package name does not automatically update existing `whatsapp-pi` installations.
@@ -220,7 +220,7 @@ All unofficial personal-account transports retain platform-policy, account-restr
 
 ## 8. Immediate next action and open gates
 
-**Current gate:** M0 implementation and independent review are complete on `chore/fork-release-readiness`; separate commit/push and M1 implementation approval have now been received. The M0 record was published as `911cecd`. Current work is authorized M2 review and subsequent approved M1/M2 commit/push preparation; do not start M3–M5. The owner has accepted upstream MIT and added notices; the remaining M1 gate is npm-account/registration verification. Publication still requires the later qualification and approval gates. Do not start Phase 4 or patch Baileys. Upstream PR merges are not a prerequisite.
+**Current gate:** M0 implementation and independent review are complete on `chore/fork-release-readiness`; separate commit/push and M1 implementation approval have now been received. The M0 record was published as `911cecd`. M2 review and approved M1/M2 commit/push are complete. The next implementation gate is separately authorized M3; do not start M3–M5 automatically. The owner has accepted upstream MIT and added notices; the remaining M1 gate is npm-account/registration verification. Publication still requires the later qualification and approval gates. Do not start Phase 4 or patch Baileys. Upstream PR merges are not a prerequisite.
 
 M0 decisions are recorded below. Remaining implementation gates include:
 
@@ -376,3 +376,10 @@ The owner authorized implementation, independent `openai-codex/gpt-6.1-sol` revi
 - A final rerun discovered that the untracked review checkpoint's copied manifest test was included by default globbing, producing an inappropriate 419/46 count. That is not the accepted project-test result. Vitest now explicitly includes only `tests/**/*.test.ts`; actual `vitest list --filesOnly` lists 45 owned test files, and the rerun passed **414/45**, lint/typecheck/whitespace. The final test-discovery correction received exact-model focused review in run `fa6b0aaa-e1eb-4c37-a5de-3d5399013d74`: **OK**, **No issues found**. Actual runtime again confirmed `openai-codex/gpt-6.1-sol`, medium thinking. Source-only coverage limits remain; no application test/assertion was removed.
 
 No publication certificate is implied; npm-account and M3–M5 gates remain open.
+
+### Delivery receipt
+
+- `f90be5a6a3cbcf6b91e4b6e1f56b8939058f3b69`: reviewed historical M1 packaging checkpoint, 10 whole files. Index blobs were verified byte-for-byte against the independently reviewed snapshot; final M2 working files were not swapped or rewritten.
+- `759a47f2e060e6a3f5078807154e5a335320b5e5`: reviewed M2 dependency/runtime/test/documentation delta, 19 files including the explicitly approved lockfile. Staged contents passed safety, lock consistency and whitespace checks.
+- Normal fast-forward push to `origin/chore/fork-release-readiness` succeeded; remote ref was verified equal to `759a47f`. No force push, main/default-branch update, old-repository mutation, PR or npm publication occurred.
+- This documentation-only receipt records the already completed delivery, without changing the tested code, dependency lock or loader-tested package bytes. M2 is complete for this scoped host/candidate; later artifact/platform/live/publication work still requires approval.

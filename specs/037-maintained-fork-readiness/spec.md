@@ -4,7 +4,7 @@
 
 **Scope:** M0 decisions, M1 packaging and owner-authorized M2 dependency/security changes, exact Codex review, then commit/push. M3–M5 remain separate gates.
 
-**Status:** M1 packaging and accepted MIT are implemented; npm-account verification remains open. M2 implementation passed clean npm ci, 414 tests/45 files, lint/typecheck and zero-finding full/production audits; independent exact-model review and focused rechecks returned OK. Reviewed commits/push are authorized. No npm publication.
+**Status:** M1 packaging and accepted MIT are implemented; npm-account verification remains open. M2 implementation passed clean npm ci, 414 tests/45 files, lint/typecheck and zero-finding full/production audits; independent exact-model review and focused rechecks returned OK. Reviewed M1/M2 commits `f90be5a` and `759a47f` were pushed to the maintenance branch. No npm publication.
 
 ## Requirements
 

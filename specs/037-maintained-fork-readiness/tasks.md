@@ -6,7 +6,7 @@
 
 **Canonical decisions/gates:** [plan.md](plan.md)
 
-**Status:** M0 complete and independently reviewed; the owner subsequently approved committing/pushing its documentation and starting M1.
+**Status:** M0 published as `911cecd`; M1 packaging committed as `f90be5a`; M2 implemented, independently reviewed, validated and pushed as `759a47f`. The M1 npm-account check remains open; M3–M5 require separate authorization.
 
 **Scope:** M1/M2 implementation, exact Codex review, then separate commits/push are authorized. M3–M5 and npm publication require separate authorization. Phase 4 is undefined/deferred.
 
@@ -46,12 +46,12 @@ The preparation checkboxes did not authorize publication. The owner subsequently
 - [x] T022 Reproduce via script-disabled npm ci; 414 tests/45 files, lint/typecheck/whitespace passed with unchanged lock bytes. Full and production audits reported zero findings.
 - [x] T023 Inspect 36-entry refreshed artifact/isolated loader and complete dependency/native-tool and reproducibility evidence. Reused-clean-ci dependency limits remain explicit.
 - [x] T024 Run exact openai-codex/gpt-6.1-sol independent read-only review; correct stale authorization wording, recheck extracted M1 checkpoint and test discovery. Final verdict OK/No issues found; commands/evidence remain parent-verified.
-- [ ] T025 Safety-check/stage explicit M1/M2 scope, create separate reviewed commits and push origin maintenance branch. Do not publish npm or open a PR.
+- [x] T025 Safety-check/stage explicit M1/M2 scope; created separate reviewed commits `f90be5a` and `759a47f`, pushed and verified `origin/chore/fork-release-readiness`. No npm publication or PR.
 
 ## Later milestones: M2 authorized; M3–M5 separately gated
 
 - [ ] M1 Resolve licensing/provenance, npm rights, actual fork metadata, private security channel and Pi host packaging.
-- [ ] M2 Approve reproducibility/lockfile policy and implement individually reviewed security/runtime dependency changes.
+- [x] M2 Implement owner-approved lock policy and scoped dependency/security migrations; clean reproduction, exact-model review and commit/push completed. Platform/native limits remain explicit.
 - [ ] M3 Qualify the actual distributable and targeted environments using synthetic data, including process/account isolation.
 - [ ] M4 Perform freshly authorized live verification or keep the unverified capabilities explicitly experimental.
 - [ ] M5 Publish only with separate approval; verify prerelease installation and make stable promotion a later decision.
