@@ -2,7 +2,7 @@ import { downloadContentFromMessage } from 'baileys';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createStoragePaths } from './storage-path.js';
-import { LiteParse } from '@llamaindex/liteparse';
+import type { LiteParse } from '@llamaindex/liteparse';
 import { AudioService } from './audio.service.js';
 import type { IncomingResolution } from './incoming-message.resolver.js';
 import { WhatsAppPiLogger } from './whatsapp-pi.logger.js';
@@ -17,7 +17,6 @@ export interface ProcessedIncomingContent {
 const PDF_PREVIEW_LIMIT = 1200;
 
 export class IncomingMediaService {
-    private readonly pdfParser = new LiteParse({ ocrEnabled: true });
     private readonly mediaDir = createStoragePaths().mediaDir;
 
     constructor(
@@ -144,12 +143,25 @@ export class IncomingMediaService {
     }
 
     private async extractPdfPreview(buffer: Buffer): Promise<string | null> {
+        let parser: LiteParse | undefined;
         try {
-            const result = await this.pdfParser.parse(buffer);
+            // Native PDF support is optional: its absence must not disable other messages.
+            const { LiteParse } = await import('@llamaindex/liteparse');
+            parser = new LiteParse({
+                ocrEnabled: true,
+                ocrFailureFatal: false,
+                quiet: true,
+                numWorkers: 1,
+                poolSize: 1,
+                parseTimeoutMs: 60_000
+            });
+            const result = await parser.parse(buffer);
             return this.formatPdfPreview(result.text);
         } catch (error) {
             this.logger.warn('[WhatsApp-Pi] PDF parsing failed, falling back to storage-only behavior.', error);
             return null;
+        } finally {
+            parser?.close();
         }
     }
 

@@ -16,6 +16,6 @@ All allowed chats share one Pi context. This is a trusted-user extension, not a 
 
 Baileys is an unofficial personal-account transport. Protocol changes, platform policies, account restrictions and upstream security defects remain risks. Use one active extension/process per auth profile; archive locking does not establish transport exclusivity.
 
-M2 must assess dependency findings, including the reported LiteParse/Sharp path. M1's packaging changes are not a security-upgrade certification. See [LICENSING.md](LICENSING.md) and [the approved release gates](https://github.com/jagaliano/whatsapp-ng/blob/911cecd/specs/037-maintained-fork-readiness/plan.md).
+M2 migrated the LiteParse/Sharp and stale development-tool paths; fresh full/production npm audits reported zero findings in the tested candidate tree. This is time-scoped advisory evidence, not native-binary or platform certification. See [DEPENDENCIES.md](DEPENDENCIES.md) for the exact setup, retained GPL components and limits. See [LICENSING.md](LICENSING.md) and [the approved release gates](https://github.com/jagaliano/whatsapp-ng/blob/911cecd/specs/037-maintained-fork-readiness/plan.md).
 
 If a session appears compromised, stop the extension/services and review linked devices through WhatsApp. Do not publish sensitive evidence or delete/migrate state automatically as a recovery procedure.

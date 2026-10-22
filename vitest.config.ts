@@ -16,5 +16,8 @@ function resolveLocalJsImports() {
 }
 
 export default defineConfig({
-    plugins: [resolveLocalJsImports()]
+    plugins: [resolveLocalJsImports()],
+    test: {
+        include: ['tests/**/*.test.ts']
+    }
 });

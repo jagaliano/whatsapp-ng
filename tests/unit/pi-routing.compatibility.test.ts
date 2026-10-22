@@ -1,12 +1,12 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
-    AuthStorage, createAgentSession, DefaultResourceLoader,
+    ModelRuntime, createAgentSession, DefaultResourceLoader,
     SessionManager, SettingsManager, type ExtensionAPI
 } from '@mariozechner/pi-coding-agent';
-import { createAssistantMessageEventStream, getModel, type AssistantMessage } from '@mariozechner/pi-ai';
+import { createAssistantMessageEventStream, getModel, type AssistantMessage } from '@earendil-works/pi-ai/compat';
 import { ConversationRouter } from '../../src/services/conversation-router.service.ts';
 
 const image = {
@@ -16,6 +16,7 @@ const image = {
 
 describe('declared Pi SDK sidecar compatibility', () => {
     it('uses the real user-input pipeline with policy blocking, transformation and image ownership', async () => {
+        const network = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network disabled in offline SDK fixture'));
         const root = await mkdtemp(join(tmpdir(), 'whatsapp-pi-sdk-'));
         const router = new ConversationRouter();
         const policies: string[] = [];
@@ -23,8 +24,11 @@ describe('declared Pi SDK sidecar compatibility', () => {
         let api!: ExtensionAPI;
         let finishRun: (() => void) | undefined;
         const settings = SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false } });
-        const auth = AuthStorage.inMemory();
-        auth.setRuntimeApiKey('openai', 'offline-fixture-not-a-credential');
+        const modelRuntime = await ModelRuntime.create({
+            authPath: join(root, 'auth.json'), modelsPath: null,
+            allowModelNetwork: false, refreshOnCreate: false
+        });
+        await modelRuntime.setRuntimeApiKey('openai', 'offline-fixture-not-a-credential');
         const loader = new DefaultResourceLoader({
             cwd: root, agentDir: root, settingsManager: settings,
             noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
@@ -51,10 +55,10 @@ describe('declared Pi SDK sidecar compatibility', () => {
         const { session } = await createAgentSession({
             cwd: root, agentDir: root, resourceLoader: loader,
             sessionManager: SessionManager.inMemory(), settingsManager: settings,
-            authStorage: auth, model: getModel('openai', 'gpt-4o-mini'), tools: []
+            modelRuntime, model: getModel('openai', 'gpt-4o-mini'), tools: []
         });
         try {
-            session.agent.streamFn = model => {
+            const stream = vi.spyOn(modelRuntime, 'streamSimple').mockImplementation(model => {
                 const stream = createAssistantMessageEventStream();
                 const message: AssistantMessage = {
                     role: 'assistant', api: model.api, provider: model.provider, model: model.id,
@@ -68,7 +72,7 @@ describe('declared Pi SDK sidecar compatibility', () => {
                     stream.end();
                 });
                 return stream;
-            };
+            });
             await session.bindExtensions({});
             for (const mode of ['text', 'image', 'TRANSFORMED']) {
                 const input = router.prepare(mode === 'image' ? [{ type: 'text', text: 'image' }, image] : mode,
@@ -82,7 +86,10 @@ describe('declared Pi SDK sidecar compatibility', () => {
             await session.sendUserMessage(blocked.content, { deliverAs: 'followUp' });
             expect(policies).toHaveLength(4);
             expect(mirrors).toHaveLength(3);
+            expect(stream).toHaveBeenCalledTimes(3);
+            expect(network).not.toHaveBeenCalled();
         } finally {
+            vi.restoreAllMocks();
             session.dispose();
             await rm(root, { recursive: true, force: true });
         }

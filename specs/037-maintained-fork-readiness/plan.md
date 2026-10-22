@@ -14,7 +14,7 @@ baseline: d415f0ba7f392b15d5b635f5b3aa9f62ab58c25c
 
 **Decision:** continue the existing codebase as `jagaliano/whatsapp-ng`, with npm candidate name `whatsapp-ng`; do not migrate to another extension or Baileys fork.
 
-**Execution status:** M0 completed and independently source-reviewed. The owner subsequently authorized committing/pushing its documentation and continuing with M1. M0 was committed/pushed as `911cecd`. Safe M1 preparation and parent validation are implemented, but the owner has accepted upstream's MIT declaration and LICENSE has been added; M1 still awaits npm-account verification; M2–M5 remain unstarted and unauthorized. This numbered plan and [tasks](tasks.md) are the canonical repository artifacts; the ignored root strategy is only a navigation pointer. The later approval permits M0 documentation publication, not npm publication or stable promotion.
+**Execution status:** M0 completed and independently source-reviewed. The owner subsequently authorized committing/pushing its documentation and continuing with M1. M0 was committed/pushed as `911cecd`. Safe M1 preparation and parent validation are implemented, but the owner has accepted upstream's MIT declaration and LICENSE has been added; M1 still awaits npm-account verification; M2 implementation, exact-model review, then commit/push are now authorized; M3–M5 remain separately gated. See section 13 for the approved M2 decisions. This numbered plan and [tasks](tasks.md) are the canonical repository artifacts; the ignored root strategy is only a navigation pointer. The later approval permits M0 documentation publication, not npm publication or stable promotion.
 
 ## 1. Direction and boundaries
 
@@ -220,7 +220,7 @@ All unofficial personal-account transports retain platform-policy, account-restr
 
 ## 8. Immediate next action and open gates
 
-**Current gate:** M0 implementation and independent review are complete on `chore/fork-release-readiness`; separate commit/push and M1 implementation approval have now been received. The M0 record was published as `911cecd`. Execute only M1. The owner has accepted upstream MIT and added notices; the remaining M1 gate is npm-account/registration verification. Publication still requires the later qualification and approval gates. Do not start Phase 4 or patch Baileys. Upstream PR merges are not a prerequisite.
+**Current gate:** M0 implementation and independent review are complete on `chore/fork-release-readiness`; separate commit/push and M1 implementation approval have now been received. The M0 record was published as `911cecd`. Current work is authorized M2 review and subsequent approved M1/M2 commit/push preparation; do not start M3–M5. The owner has accepted upstream MIT and added notices; the remaining M1 gate is npm-account/registration verification. Publication still requires the later qualification and approval gates. Do not start Phase 4 or patch Baileys. Upstream PR merges are not a prerequisite.
 
 M0 decisions are recorded below. Remaining implementation gates include:
 
@@ -286,7 +286,7 @@ M0 completion means the local branch and reviewed, staged decision record are re
 
 ## 11. M1 preparation and validation checkpoint
 
-**Status:** technical preparation/parent checks implemented; **M1 is not complete** because npm-account rights remain unresolved. The owner-accepted MIT basis resolves the earlier licensing gate. No M1 commit, npm publication, live operation or M2 upgrade is authorized/performed. M0 documentation alone was committed/pushed as `911cecd`.
+**Historical M1 checkpoint before M2 authorization:** technical preparation/parent checks implemented; **M1 is not complete** because npm-account rights remain unresolved. The owner-accepted MIT basis resolves the earlier licensing gate. At that checkpoint, no M1 commit, npm publication, live operation or M2 upgrade had been authorized/performed. The later M2 implementation and reviewed commit/push approval is recorded in section 13. M0 documentation alone was committed/pushed as `911cecd`.
 
 ### Scope and requirement trace
 
@@ -324,7 +324,7 @@ M0 completion means the local branch and reviewed, staged decision record are re
 
 No constitutional deviation: packaging metadata/docs and a small typed manifest test only; no new runtime class, abstraction, framework or `any`. Existing OOP/service boundaries are untouched. Sensitive module-resolution behavior received an actual host-loader check. Independent read-only review used the retained exact `openai-codex/gpt-6.1-sol` model (runtime verified), run `70adfdc6-e2a5-494e-aa01-fbb0c606edfa`. Verdict: **OK with notes** for technical preparation; all five constitutional principles were confirmed. One P2 historical/current-state ambiguity was corrected by explicitly labeling the M0 snapshot and using past tense. No commands, tests, network checks or artifact executions were performed by the reviewer; parent evidence was not independently reproduced. This is not M1 completion or publication approval.
 
-To close M1: verify the npm publishing account/name eligibility without exposing credentials. The owner-accepted MIT basis has closed the earlier licensing gate. Any resulting content/package change must be revalidated. Do not remove the private guard, publish npm, run live accounts, start M2 or commit M1 automatically.
+To close M1: verify the npm publishing account/name eligibility without exposing credentials. The owner-accepted MIT basis has closed the earlier licensing gate. Any resulting content/package change must be revalidated. Do not remove the private guard, publish npm, run live accounts, start M3 or publish automatically. The later owner approval in section 13 permits reviewed M1/M2 commits and push.
 
 ## 12. Owner-accepted MIT licensing decision
 
@@ -337,3 +337,42 @@ The owner instructed this continuation to rely on upstream's declared MIT licens
 - Validation rerun: `npm test` passed **402 tests across 44 files**; `npm run lint`, `npm run typecheck` and `git diff --check` passed with temporary HOME/agent directory and system FFmpeg on PATH. No build script is declared.
 - Refreshed local tarball: **35 entries**, SHA-1 `e86bcd585aea738d26f85392d15f84212cf71911`. LICENSE is included automatically and matches source byte-for-byte; packaged document links resolve. Private guard and runtime/source boundary are unchanged, with no credentials/state/caches/tests bundled.
 - Refreshed actual-packed-entry loader registered **7 tools/1 command, 0 errors/warnings**; isolated RPC `get_state` passed. Production dependencies were linked to the validated local tree, with no consumer host-peer copies. This is still preliminary reused-dependency evidence, not M3 independent clean-install/platform certification. No further independent review was dispatched for this license-text/typed-test update; the earlier packaging review remains historical.
+
+## 13. Authorized M2 dependency/security slice
+
+The owner authorized implementation, independent `openai-codex/gpt-6.1-sol` review, then commit/push. In two explicit decisions the owner approved tracking the root npm lockfile and the scoped LiteParse/native, dev-SDK and existing-test-tooling migrations. M2 depends on M0 and coordinates with M1; the still-open npm-account check does not prevent this non-publishing work. M3–M5/live operations remain separately gated.
+
+### Scope and decisions
+
+- Track package-lock.json; remove only its ignore rule. Maintainer reproduction uses `npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund`, followed by existing test/lint/typecheck scripts. No global/npm auth configuration change. Retain other direct ranges under the committed lock rather than perform unrelated upgrades.
+- Pin Baileys `7.0.0-rc14`. Pin LiteParse `2.15.1`; remove the vulnerable 1.5.3/Sharp dependency path through that migration, not a forced override. No transport patches.
+- Keep production legacy imports and wildcard host peers. Dev aliases point to the actual Pi 1.3.0 SDK/TUI and TypeBox 1.3.27; explicitly declare the matching test-only pi-ai dependency. Pin Vitest/coverage 5.0.5 and its required Vite peer 8.3.5, with Node 26 types 26.6.5. This replaces stale/vulnerable dev copies, not the runtime host.
+- LiteParse 2 loads native code on import. Move that import and construction inside the PDF-only fallback boundary so unsupported/missing optional binaries cannot disable unrelated traffic. Allocate/close a parser per PDF; retain saved bytes and 1200-character previews. Set `numWorkers: 1` and a one-process pool, with local OCR, nonfatal OCR failure and a 60-second **parse-only** pool deadline. Library initialization is not covered by that deadline; no total-operation guarantee is claimed.
+- Preserve active FFmpeg-static/Whisper paths rather than remove imported dependencies wholesale. Disabled install scripts mean the downloaded FFmpeg binary is absent; system FFmpeg is the tested path. OCR is now local Tesseract, not the prior JavaScript OCR/model-download stack. These are explicit external prerequisites.
+- Preserve the tested M1 file checkpoint for a separate packaging commit after the requested review, then commit M2 deltas/lock separately. Only push `origin/chore/fork-release-readiness`; do not publish npm, open a PR, touch old repositories or use live credentials.
+
+### Characterization and regression evidence
+
+- Six focused pre-implementation failures demonstrated missing exact pins/dev aliases, eager PDF initialization, failed-native startup escaping fallback, and absent parser cleanup.
+- The SDK/test-tooling migration exposed constructor-arrow mocks and a previously transitive/undeclared pi-ai import. Only those fixture seams were adjusted; production routing assertions are retained.
+- The modern SDK no longer uses the old test assignment to `agent.streamFn`. Initial compatibility attempts reached OpenAI with the synthetic fixture key and received 401s; no real credentials/messages were used. The fixture now intercepts the canonical ModelRuntime stream method, explicitly disables catalog networking, blocks fetch and asserts both stream invocation count and zero fetch calls. Text/image ownership, policy transformation and blocking pass against actual Pi 1.3.0.
+- Synthetic PDF contracts exercise real native text extraction, OCR off/on, corrupt input recovery, saved bytes/preview/fallback, and actual pool-child reaping after success/failure. No business documents, auth or account data are fixtures. Tesseract-dependent OCR may be skipped when unavailable, which must be disclosed rather than counted as validation.
+
+### Parent validation checkpoint before independent review
+
+- Fresh `npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund` regenerated node_modules (358 packages); the committed-candidate lock SHA-256 remained `c8e7dcad6fc0bb31473052bd3d747bec4fe89d8cd9b3e7a740db3efd8d23c9a4`.
+- `npm test`: **414 passed/45 files**, including actual local Tesseract OCR and native worker cleanup after success/failure; no skipped OCR test. `npm run lint`, `npm run typecheck`, `git diff --check`: exit 0. Temporary HOME/agent directory, system FFmpeg, no real auth/account fixtures.
+- Full and production-only `npm audit`: **0 vulnerabilities**, compared with 16 initial findings. No overrides, audit exclusions or forced audit fix. This is a dated registry assessment, not a scan of every embedded/system native library.
+- `DEPENDENCIES.md` records exact dependency/native-tool setup, declared licenses (including inherited GPL components), seven optional PDF platform variants, disabled install scripts/external downloads, consumer lock limits and M3/M4 qualification boundaries. FFmpeg-static/Whisper remain used and were not deleted as unrelated cleanup.
+- Deprecation warnings for unchanged eslint/node-domexception are recorded, not mistaken for resolved/ignored security advisories. Linux/Windows and Whisper model/CLI transcription remain unverified.
+
+- Refreshed local artifact: **36 entries**, SHA-1 `6fa8e2164c2c570b08ffa270a248cab87c21e02a`; includes LICENSE/DEPENDENCIES.md, excludes root lock/state/caches/tests/scripts/vendor. Actual packed-entry loader registered **7 tools/1 command, 0 errors/warnings** with no consumer host-peer copies. Isolated Pi RPC `get_state` passed. Production dependencies were linked from the clean-ci tree: this is preliminary module evidence, not M3 managed installation or all-platform certification.
+- Review prerequisites refreshed: installed pi-subagents 0.80.0, registry lists exact `openai-codex/gpt-6.1-sol`, and configured reviewer is read-only. Its default differs, so the requested retained model must be confirmed from the actual run; no fallback is allowed.
+
+### Independent review and final discovery correction
+
+- Exact `openai-codex/gpt-6.1-sol` run `d8d367a8-a31d-4b23-a3e3-fefc1ffc55c4` returned **OK with notes**, with no P0/P1 findings. It confirmed the five constitutional principles, PDF boundary/cleanup, native contracts, SDK assertions and pinned graph. Its P2 identified stale M1-only restrictions in the current spec/gate; these were qualified/updated, and section 11 was explicitly labeled historical.
+- Focused run `8dc3e7fc-5b21-4e1e-a6bc-ee01ae9a1b4c` returned **OK**, **No issues found**, and read all ten M1 checkpoint files after they were extracted into individually readable files. Snapshot byte equality and command/artifact results remain parent-verified; the reviewer ran no commands/tests/network. No fallback was used.
+- A final rerun discovered that the untracked review checkpoint's copied manifest test was included by default globbing, producing an inappropriate 419/46 count. That is not the accepted project-test result. Vitest now explicitly includes only `tests/**/*.test.ts`; actual `vitest list --filesOnly` lists 45 owned test files, and the rerun passed **414/45**, lint/typecheck/whitespace. The final test-discovery correction received exact-model focused review in run `fa6b0aaa-e1eb-4c37-a5de-3d5399013d74`: **OK**, **No issues found**. Actual runtime again confirmed `openai-codex/gpt-6.1-sol`, medium thinking. Source-only coverage limits remain; no application test/assertion was removed.
+
+No publication certificate is implied; npm-account and M3–M5 gates remain open.
