@@ -56,7 +56,10 @@ The preparation checkboxes did not authorize publication. The owner subsequently
 - [x] T029 Ask for client confirmation and record the lack of confirmation without claiming delivery/rendering/playback. Preserve private detailed results outside Git; commit only [sanitized evidence](validation.md).
 - [ ] T030 Close remaining managed-install/platform/exclusivity and successful live backfill/receipt/client gaps under fresh scope, or preserve explicit prerelease/unverified limits. No full M3/M4 completion or npm release is claimed.
 - [x] T031 Diagnose M4 topology without reconnecting: read-only saved-session metadata confirms the earlier recipient was the sender account (self-chat). Record the limited evidence and avoid speculative receipt/protocol fixes or another full media batch.
-- [ ] T032 Obtain a distinct recipient/current connection-readiness scope for independent receipt testing, or the owner's explicit experimental/unverified disposition; physical-client playback confirmation remains separate.
+- [x] T032 Obtain a distinct approved recipient and fresh same-profile exclusivity confirmation for the bounded follow-up; physical-client playback confirmation remains separate.
+- [x] T033 Run exactly two generated text calls and one history request capped at three. Record API acceptance/native quote, unknown/zero-import history, absent exposed receipt events, archive/offline checks and safe shutdown; retain the subsequent owner-reported unreadable placeholder as an unresolved client result.
+- [x] T034 Record owner-led Logoff/unlink/QR relinking and read-only verification of maintained-package selection/auth presence. Do not claim that metadata alone proves recovery or that the agent performed an auth reset.
+- [x] T035 Under fresh one-text approval, record the definite zero-attempt disconnected result, later readiness confirmation, one accepted send via the existing extension (one attempt), and the owner's explicit recipient-side normal readability confirmation. No competing harness/additional history/media send; full M4 remains open.
 
 ## Later milestones: scoped validation recorded; remaining M3–M5 gates open
 

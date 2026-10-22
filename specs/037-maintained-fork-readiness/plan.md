@@ -401,3 +401,11 @@ No source fix was required. This evidence-only update leaves runtime/lock/packag
 The owner then requested continued M4 work. Read-only saved-session identity comparison established that the prior approved recipient was the linked sender itself. This is self-chat evidence, not independent recipient receipt validation. No credentials were printed/copied/written and no new socket was opened. The installed rc14 history-call arguments match count/key/millisecond expectations; no source defect is demonstrated by the unknown result alone.
 
 The next targeted scope requires a distinct approved recipient and client-ready window, or the owner's explicit experimental/unverified prerelease disposition. Self-chat media playback can be confirmed separately but cannot establish two-account receipts/backfill. No full media batch was resent and M4 is not marked complete. See [the validation follow-up](validation.md#m4-follow-up-test-topology).
+
+### Separate-recipient observation and post-relink recovery
+
+The owner approved a distinct recipient/current exclusivity window for two generated texts and one history request capped at three. Both calls returned API acceptance with one attempt each; the second had a native quote. No matching receipt/status/history event or recipient reply was exposed during observation; history ended unknown with zero imports. The owner then reported a “Waiting for this message” placeholder, so readability was not claimed. The harness was already safely disconnected; its successful archive/offline checks do not override that client result.
+
+The owner chose an auth reset/relink and switched to the maintained local package. Under separate one-text approval, a definite pre-send disconnected result (zero attempts) was followed, only after owner readiness confirmation, by one accepted send through the existing extension (one attempt). The owner explicitly confirmed normal readability on the recipient's phone. No competing harness, source fix, further history request or media send was used.
+
+This is a limited post-relink text-readability result, not root-cause proof or recovery of old placeholders. Protocol receipt persistence, successful live backfill, media/client and remaining M3 qualification remain open; M4/M5 are not marked complete. See [the recovery evidence](validation.md#post-relink-single-text-recovery-check).

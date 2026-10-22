@@ -55,6 +55,22 @@ Self-chat transport success does not establish independent recipient delivery/re
 
 Next useful scope is either a freshly approved separate recipient and client-ready window for receipt/history observation, or the plan's explicit experimental/unverified prerelease disposition. The earlier media can be checked in the client's self-chat, but playback confirmation would still not prove independent receipt or successful backfill. No full-batch resend was started.
 
+## M4 separate-recipient follow-up
+
+The owner approved a distinct recipient, confirmed other same-profile connections were stopped, and limited this follow-up to two generated texts and one history request capped at three. The installed-candidate harness verified a distinct account, made exactly two text send calls with one attempt each, and submitted exactly one bounded history request. Both text calls returned API success and the second contained the intended native quote.
+
+During the bounded observation window, Baileys' public event emitter exposed no matching delivery/read/status updates, history sets or recipient reply. History ended **unknown / 0 imported**. This does not establish that no wire-level event or delivery occurred. The accepted outgoing projections survived offline reopening unchanged; archive mode 0600 and secret-field exclusion passed. The harness disconnected without logout and retained saved auth.
+
+The owner subsequently reported the client placeholder **“Waiting for this message”**. The affected device and whether ordinary chats were also affected were not established before the owner chose to reset/relink. Accordingly, API acceptance was not treated as successful client readability or full M4 closure. No extra harness sends, retries or speculative source/auth fixes followed that report. Unstructured dependency stdout was withheld from chat/Git and removed from the private generated capture; reporting uses sanitized projections only.
+
+## Post-relink single-text recovery check
+
+The owner reports switching to the maintained local package, using **Logoff (Delete Session)**, unlinking the old device and completing fresh QR linking. A read-only check confirmed the maintained package source in Pi settings and presence of saved auth. These checks alone did not prove a working connection or recovery.
+
+With separate approval for one fresh text through the existing newly linked extension, the first tool invocation returned **WhatsApp not connected / attempts: 0**; nothing was sent and no second connection or harness was started. After the owner confirmed the existing connection ready, one `send_wa_message` invocation returned **success / attempts: 1**. The owner explicitly confirmed that this new text was **readable normally on the recipient's phone**.
+
+This establishes operator-confirmed readability for one fresh outbound text after relinking, not a diagnosed root cause, repaired older placeholders, media playback, protocol receipt persistence or successful history import. No source fix, additional test message, history request, media send or automated auth reset was performed for this recovery check. Full M3/M4 and publication gates remain open.
+
 ## Remaining boundaries
 
 This is an installed-package, service-level live probe on the current Darwin x86_64 / Node 26.12.0 host, not a production certificate, group/participant receipt test, complete agent-mediated conversation test or full M3/M4 closure. Successful live history import and receipt reconciliation remain unverified. Client rendering/playback must not be inferred from send success or quote metadata.
