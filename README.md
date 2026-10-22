@@ -46,7 +46,7 @@ curl -fsSL https://pi.dev/install.sh | sh
 
 **Or via npm (initial qualification target: Node.js 26.x and Pi 1.3.0):**
 ```bash
-npm install -g @earendil-works/pi-coding-agent
+npm install -g @earendil-works/pi-coding-agent@1.3.0
 ```
 
 Then authenticate or set an API key before starting:
@@ -63,19 +63,19 @@ See the [Pi documentation](https://pi.dev/docs/latest) for full setup, providers
 
 ### Audio Transcription
 
-Audio transcription uses a local `whisper.cpp` CLI and FFmpeg; no transcription API key is required.
+Audio transcription uses local Whisper.cpp: a native binding when available on macOS/Windows, with CLI fallback; Linux uses the CLI. FFmpeg converts input audio. No transcription API key is required.
 
 Install dependencies and build the Whisper CLI:
 
 **Linux/macOS:**
 ```bash
-npm install
+npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
 ./scripts/build-whisper-cli.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
-npm install
+npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
 ./scripts/build-whisper-cli.ps1
 ```
 
@@ -83,7 +83,7 @@ The CLI is expected at `vendor/whisper.cpp/build/bin/whisper-cli` (or `.exe` on 
 
 These build scripts require a source checkout; they are not included in the candidate npm tarball. For an installed package, provide an external Whisper CLI through `WHISPER_CLI_PATH`. FFmpeg is also required for applicable media features. Native dependency installation/downloads and platform availability are separate from extension runtime behavior.
 
-PDF documents are parsed locally. If parsing fails, the file is still saved and forwarded with a fallback notice. M2 still needs to assess the reported LiteParse/Sharp dependency finding; M1 is not a dependency-security upgrade.
+PDF previews use pinned LiteParse 2.15.1 and its matching optional native package. Local OCR requires Tesseract and language data; native text can still be extracted without OCR. PDF support loads only when needed, and failure retains the saved file/fallback notice. Each PDF parser is closed afterward, with a 60-second parse-only deadline (not an initialization deadline). See [dependency/native-tool policy](DEPENDENCIES.md) for reviewed versions, native prerequisites and security evidence.
 
 ## Quick Start
 
@@ -102,11 +102,11 @@ git clone https://github.com/jagaliano/whatsapp-ng.git
 cd whatsapp-ng
 # Use the reviewed maintenance ref; main may still contain the pre-M1 baseline.
 git checkout chore/fork-release-readiness
-npm install
+npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
 pi --no-extensions -e ./whatsapp-pi.ts
 ```
 
-Uncommitted local M1 preparation is not present in a remote checkout. Source installs currently have no approved reproducible lockfile policy; M2 must resolve that. Dependency installation can run native install scripts; review prerequisites first.
+Use the reviewed maintenance commit, not uncommitted local work. The owner-approved lockfile reproduces maintainer dependencies with the flags above. Lifecycle scripts are disabled; provide system FFmpeg and, for OCR, Tesseract. Normal installs without that flag can run native downloads/builds. The lock does not freeze every future consumer install; see [DEPENDENCIES.md](DEPENDENCIES.md).
 
 Only **after** a reviewed prerelease is actually published under separate authorization, its pinned registry form will be:
 
@@ -159,7 +159,7 @@ The maintained source repository is [jagaliano/whatsapp-ng](https://github.com/j
 git clone https://github.com/jagaliano/whatsapp-ng.git
 cd whatsapp-ng
 git checkout chore/fork-release-readiness
-npm install
+npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
 ```
 
 2. Run the extension:
@@ -236,7 +236,7 @@ The three inbox read tools use the selected local archive projection. They never
 - Files must resolve under the current Pi workspace (`ctx.cwd`) or the extension's `whatsapp-medias` directory. Symlink escapes, ancestor replacement, URLs/base64, empty/nonregular files, credential/auth folders, `.env*`, private-key names and detected private-key headers are rejected. Opened descriptor identity, non-symlink ancestry and file stability are checked before and after copying; nonblocking open rejects FIFO replacement without wedging a worker. This is an egress policy, not an OS sandbox or general secret scanner.
 - The application limit is **25 MiB**, checked on the source, bounded snapshot copy and converted output. Only owned temporary snapshots are removed; originals are never edited or deleted. Local paths inside Baileys' payload refer to these snapshots and are streamed from disk. Tool results contain metadata, not attachment bytes.
 - Documents include PDF, XLSX, Markdown and other regular files with filename/MIME metadata (unknown extensions use `application/octet-stream`). Images support JPEG and PNG signatures.
-- Images, audio and video require FFmpeg for bounded thumbnail generation or codec inspection, even when payload conversion is unnecessary. Resolution uses `FFMPEG_PATH`, otherwise the system executable, then the existing `ffmpeg-static` path if available. No automatic installation occurs.
+- Images, audio and video require FFmpeg for bounded thumbnail generation or codec inspection, even when payload conversion is unnecessary. Resolution uses `FFMPEG_PATH`, otherwise the system executable, then the existing `ffmpeg-static` path if available. The extension does not install tools at runtime; normal dependency installs may run the FFmpeg-static downloader unless lifecycle scripts are disabled.
 - MP3, AAC-in-MP4 and Ogg/Opus audio send directly when compatible. WAV/FLAC and other supported binary audio containers convert to AAC/M4A. `voiceNote: true` sends Ogg/Opus with the PTT flag, converting when necessary. Audio captions are rejected instead of silently dropped.
 - Compatible MP4/H.264/yuv420p with optional AAC audio sends directly. Other supported MP4/MOV, AVI or Matroska/WebM video converts to MP4/H.264/AAC. Text playlists and network input protocols are not accepted. Codec support depends on the installed FFmpeg build.
 - Probe, conversion and thumbnail generation share a **60-second budget**. Duration and JPEG thumbnails are prepared explicitly so Baileys does not recreate plaintext in a shared temp directory or launch an unbounded thumbnail child. PTT waveform data is explicitly unavailable instead of invoking Baileys' unowned audio decoder. Abort/timeout terminates the child, escalates to a forced kill if necessary, and waits for child exit before cleanup. Baileys receives `mediaUploadTimeoutMs: 60000`; it has no caller abort signal.

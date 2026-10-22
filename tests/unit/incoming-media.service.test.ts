@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IncomingMediaService } from '../../src/services/incoming-media.service.ts';
+import type { AudioService } from '../../src/services/audio.service.ts';
 
 const mocks = vi.hoisted(() => ({
     downloadContentFromMessage: vi.fn(),
     mkdir: vi.fn().mockResolvedValue(undefined),
     writeFile: vi.fn().mockResolvedValue(undefined),
-    pdfParse: vi.fn()
+    pdfParse: vi.fn(),
+    pdfClose: vi.fn(),
+    pdfConstructor: vi.fn()
 }));
 
 vi.mock('baileys', () => ({
@@ -18,9 +21,10 @@ vi.mock('node:fs/promises', () => ({
 }));
 
 vi.mock('@llamaindex/liteparse', () => ({
-    LiteParse: vi.fn(() => ({
-        parse: mocks.pdfParse
-    }))
+    LiteParse: vi.fn(function () {
+        mocks.pdfConstructor();
+        return { parse: mocks.pdfParse, close: mocks.pdfClose };
+    })
 }));
 
 const streamFrom = async function* (chunks: Buffer[]) {
@@ -41,6 +45,7 @@ describe('IncomingMediaService', () => {
         audioService.transcribe.mockResolvedValue('audio text');
         mocks.downloadContentFromMessage.mockResolvedValue(streamFrom([Buffer.from('media')]));
         mocks.pdfParse.mockResolvedValue({ text: 'PDF body text' });
+        mocks.pdfConstructor.mockReset();
         vi.spyOn(Date, 'now').mockReturnValue(1234567890);
     });
 
@@ -177,6 +182,33 @@ describe('IncomingMediaService', () => {
         expect(result.text).toContain('Location: ./.pi-data/whatsapp/documents/1234567890_scanned.pdf');
         expect(result.text).toContain('PDF text was not extracted automatically. The file is saved at the path above.');
         expect(result.text).not.toContain('PDF text preview:');
+    });
+
+    it('does not initialize native PDF resources for non-PDF traffic', async () => {
+        const service = new IncomingMediaService(audioService as unknown as AudioService);
+        await service.process({ kind: 'text', text: 'hello' }, 'Ana');
+        expect(mocks.pdfConstructor).not.toHaveBeenCalled();
+    });
+
+    it('preserves the saved document when native PDF initialization fails', async () => {
+        mocks.pdfConstructor.mockImplementationOnce(() => { throw new Error('native module unavailable'); });
+        const service = new IncomingMediaService(audioService as unknown as AudioService);
+        const result = await service.process({
+            kind: 'document', text: '[Document]',
+            documentMessage: { fileName: 'scan.pdf', mimetype: 'application/pdf' }
+        }, 'Ana');
+        expect(result.text).toContain('[Document Received: scan.pdf]');
+        expect(result.text).toContain('PDF text was not extracted automatically.');
+    });
+
+    it.each([false, true])('closes native PDF resources after parsing (failure=%s)', async (failure) => {
+        if (failure) mocks.pdfParse.mockRejectedValueOnce(new Error('bad pdf'));
+        const service = new IncomingMediaService(audioService as unknown as AudioService);
+        await service.process({
+            kind: 'document', text: '[Document]',
+            documentMessage: { fileName: 'scan.pdf', mimetype: 'application/pdf' }
+        }, 'Ana');
+        expect(mocks.pdfClose).toHaveBeenCalledOnce();
     });
 
     it('keeps non-pdf document behavior unchanged', async () => {

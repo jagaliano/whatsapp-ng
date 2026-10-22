@@ -10,5 +10,7 @@ Maintained continuation of [RaphaCastelloes/whatsapp-pi](https://github.com/Raph
 - Add maintained-fork installation/switchback guidance and a private security-report route.
 - Include the MIT license, the owner's supplied 2026 notice and yearless upstream attribution, based on the accepted upstream MIT declaration.
 - Preserve `whatsapp-pi.ts`, existing commands/flags, storage/auth paths and profile/account identity. No transport upgrade, protocol patch or storage migration.
+- Track the owner-approved npm lock, pin transport rc14, and migrate LiteParse to 2.15.1 with lazy native PDF loading, per-document cleanup and preserved storage-only fallback.
+- Align development SDK aliases with Pi 1.3.0 and update the existing test/coverage tooling; full/production npm audits report zero findings in the tested tree. Native/OCR contracts and setup limits are documented in [DEPENDENCIES.md](DEPENDENCIES.md).
 
 Not published. The MIT licensing basis is accepted; npm publishing-account verification remains open. Successful live history backfill and receipt reconciliation remain unverified; server acceptance is not recipient delivery/read. M2–M5 qualification/publication gates remain separate.

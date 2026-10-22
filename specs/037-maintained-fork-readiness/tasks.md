@@ -8,7 +8,7 @@
 
 **Status:** M0 complete and independently reviewed; the owner subsequently approved committing/pushing its documentation and starting M1.
 
-**Scope:** M0 documentation publication and M1 implementation are authorized. M2–M5 and npm publication require separate authorization. Phase 4 is undefined/deferred.
+**Scope:** M1/M2 implementation, exact Codex review, then separate commits/push are authorized. M3–M5 and npm publication require separate authorization. Phase 4 is undefined/deferred.
 
 ## M0: maintenance lane and decisions
 
@@ -35,9 +35,20 @@ M0 is local and review-ready only after T006–T007. No commit, push or PR is au
 - [x] T016 Obtain independent packaging review and resolve notes. Exact Codex reviewer returned OK with notes; historical M0 paragraph corrected, constitution checks confirmed. Source-only, no independently rerun commands.
 - [ ] T017 Close M1 after remaining npm-account verification (T009) and any resulting revalidation. T008's licensing gate is resolved. Keep private guard and no-publication boundary.
 
-No M1 commit/push, npm publication, live account operation or M2 upgrade is authorized by the completed preparation checkboxes. See [the execution checkpoint](plan.md#11-m1-preparation-and-validation-checkpoint).
+The preparation checkboxes did not authorize publication. The owner subsequently approved scoped M2 work and reviewed M1/M2 commit/push; npm publication and live operations remain unauthorized. See [the execution checkpoint](plan.md#11-m1-preparation-and-validation-checkpoint).
 
-## Later milestones: M1 incomplete; M2–M5 not authorized
+## M2: authorized dependency/security work
+
+- [x] T018 Record owner approval of committed lockfile, scoped major migrations, exact-model review and subsequent commit/push; preserve the M1 checkpoint for separate reviewable commits.
+- [x] T019 Capture baseline audit/native inventory and six failing pin/lazy-initialization/cleanup regressions.
+- [x] T020 Pin rc14; migrate LiteParse 2.15.1, actual-host development aliases and patched existing test tooling. Keep wildcard host peers and runtime/storage identities.
+- [x] T021 Add native synthetic PDF/OCR/error/worker-reaping contracts and adapt only the SDK/Vitest fixture seams required by the migration.
+- [x] T022 Reproduce via script-disabled npm ci; 414 tests/45 files, lint/typecheck/whitespace passed with unchanged lock bytes. Full and production audits reported zero findings.
+- [x] T023 Inspect 36-entry refreshed artifact/isolated loader and complete dependency/native-tool and reproducibility evidence. Reused-clean-ci dependency limits remain explicit.
+- [x] T024 Run exact openai-codex/gpt-6.1-sol independent read-only review; correct stale authorization wording, recheck extracted M1 checkpoint and test discovery. Final verdict OK/No issues found; commands/evidence remain parent-verified.
+- [ ] T025 Safety-check/stage explicit M1/M2 scope, create separate reviewed commits and push origin maintenance branch. Do not publish npm or open a PR.
+
+## Later milestones: M2 authorized; M3–M5 separately gated
 
 - [ ] M1 Resolve licensing/provenance, npm rights, actual fork metadata, private security channel and Pi host packaging.
 - [ ] M2 Approve reproducibility/lockfile policy and implement individually reviewed security/runtime dependency changes.
