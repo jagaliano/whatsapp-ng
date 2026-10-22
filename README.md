@@ -10,6 +10,8 @@ A WhatsApp integration extension for the **[Pi Coding Agent](https://pi.dev)**.
 Pi is a powerful agentic AI coding assistant that operates in your terminal. This extension lets you chat and pair-program with your Pi agent through WhatsApp, with message filtering, allowed contacts/groups, recents/history browsing, message detail/reply, group-only binding, and reliable message delivery.
 
 
+> **whatsapp-ng maintenance status:** This repository is a maintained continuation of [RaphaCastelloes/whatsapp-pi](https://github.com/RaphaCastelloes/whatsapp-pi). See the [maintenance decisions and release gates](specs/037-maintained-fork-readiness/plan.md). `whatsapp-ng` is an unpublished npm candidate, not a reserved name. The inherited branding and installation instructions below still refer to the upstream package; M1 will update them before any maintained-package release.
+
 ## Features
 
 - **Manual WhatsApp Connection**: QR code-based authentication with session persistence
