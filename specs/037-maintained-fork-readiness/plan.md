@@ -220,7 +220,7 @@ All unofficial personal-account transports retain platform-policy, account-restr
 
 ## 8. Immediate next action and open gates
 
-**Current gate:** M0 implementation and independent review are complete on `chore/fork-release-readiness`; separate commit/push and M1 implementation approval have now been received. The M0 record was published as `911cecd`. M2 review and approved M1/M2 commit/push are complete. The next implementation gate is separately authorized M3; do not start M3–M5 automatically. The owner has accepted upstream MIT and added notices; the remaining M1 gate is npm-account/registration verification. Publication still requires the later qualification and approval gates. Do not start Phase 4 or patch Baileys. Upstream PR merges are not a prerequisite.
+**Current gate:** M0 implementation and independent review are complete on `chore/fork-release-readiness`; separate commit/push and M1 implementation approval have now been received. The M0 record was published as `911cecd`. M2 review and approved M1/M2 commit/push are complete. The owner subsequently authorized a bounded installed-candidate/live probe, recorded in section 14. Remaining M3–M5 implementation/release work must not start automatically. The owner has accepted upstream MIT and added notices; the remaining M1 gate is npm-account/registration verification. Publication still requires the later qualification and approval gates. Do not start Phase 4 or patch Baileys. Upstream PR merges are not a prerequisite.
 
 M0 decisions are recorded below. Remaining implementation gates include:
 
@@ -383,3 +383,15 @@ No publication certificate is implied; npm-account and M3–M5 gates remain open
 - `759a47f2e060e6a3f5078807154e5a335320b5e5`: reviewed M2 dependency/runtime/test/documentation delta, 19 files including the explicitly approved lockfile. Staged contents passed safety, lock consistency and whitespace checks.
 - Normal fast-forward push to `origin/chore/fork-release-readiness` succeeded; remote ref was verified equal to `759a47f`. No force push, main/default-branch update, old-repository mutation, PR or npm publication occurred.
 - This documentation-only receipt records the already completed delivery, without changing the tested code, dependency lock or loader-tested package bytes. M2 is complete for this scoped host/candidate; later artifact/platform/live/publication work still requires approval.
+
+## 14. Subsequent approved installed-candidate/live probe
+
+After M2 delivery the owner requested another complete check run and live testing. The recipient was corrected and explicitly confirmed; the owner approved the default saved session, generated media/native replies, receipt observation, a history request capped at three, normal credential refresh and safe disconnect, and confirmed prior same-profile connections/services stopped. This was a bounded validation approval, not npm publication or an unbounded M3/M4 implementation mandate.
+
+See [the sanitized validation report](validation.md). Fresh repository checks passed **414 tests/45 files**, lint/typecheck/whitespace, and zero-finding full/production audits. Unlike the M2 symlinked-dependency probe, the exact 36-entry tarball was actually installed with its production dependencies in a fresh temporary consumer (92 packages, no physical host peers), audited at zero and loaded with seven tools/one command and zero warnings. Installed storage classes passed synthetic isolation/restart/corruption/permissions probes.
+
+Seven generated live send calls returned success and six replies carried native quote stanzas. Downloading/decrypting the generated sent PDF through the actual incoming-media pipeline produced its expected preview. Offline restart, restored quoting, archive privacy and safe disconnect/auth retention passed. No real credentials were copied into the consumer; configuration/archive/logs/media were isolated.
+
+The history request concluded **unknown with 0 imports**; no delivery/read receipts were observed. The owner did not confirm client receipt/rendering/playback when asked. These are not silently promoted to passing delivery/history tests, and transport return values are not a server-ack/client-delivery certificate. No automatic resend was attempted. The probe is service-level, not a complete agent-mediated inbound conversation or group receipt test.
+
+No source fix was required. This evidence-only update leaves runtime/lock/package bytes unchanged. Full M3 managed-install/removal/exclusivity/platform qualification, M4 backfill/receipt/client gaps, the M1 npm-account check and M5 publication remain open; the candidate stays private/unpublished. The existing single-profile process rule remains mandatory, and later live operations require fresh approval.
