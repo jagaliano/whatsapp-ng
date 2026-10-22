@@ -2,15 +2,17 @@
   <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp Logo" width="100">
 </p>
 
-# WhatsApp-Pi
-[![GitHub](https://img.shields.io/badge/github-repo-black.svg?style=flat-square&logo=github)](https://github.com/RaphaCastelloes/whatsapp-pi)
+# whatsapp-ng
+[![GitHub](https://img.shields.io/badge/github-repo-black.svg?style=flat-square&logo=github)](https://github.com/jagaliano/whatsapp-ng)
 
 A WhatsApp integration extension for the **[Pi Coding Agent](https://pi.dev)**. 
 
 Pi is a powerful agentic AI coding assistant that operates in your terminal. This extension lets you chat and pair-program with your Pi agent through WhatsApp, with message filtering, allowed contacts/groups, recents/history browsing, message detail/reply, group-only binding, and reliable message delivery.
 
 
-> **whatsapp-ng maintenance status:** This repository is a maintained continuation of [RaphaCastelloes/whatsapp-pi](https://github.com/RaphaCastelloes/whatsapp-pi). See the [maintenance decisions and release gates](specs/037-maintained-fork-readiness/plan.md). `whatsapp-ng` is an unpublished npm candidate, not a reserved name. The inherited branding and installation instructions below still refer to the upstream package; M1 will update them before any maintained-package release.
+Maintained continuation of [RaphaCastelloes/whatsapp-pi](https://github.com/RaphaCastelloes/whatsapp-pi), preserving original Git history and attribution for independent fixes and releases. Original author metadata remains **Rapha**; fork maintenance is led by **jagaliano**. This does not assert that upstream is abandoned.
+
+> **Unreleased candidate:** `whatsapp-ng@1.1.0-rc.1` is not published to npm. `private: true` keeps publication blocked pending npm-account verification and release qualification. The code is [MIT licensed](LICENSE); see [licensing and attribution](LICENSING.md). The intended first tag is `next`, not `latest`. See [approved maintenance plan](https://github.com/jagaliano/whatsapp-ng/blob/911cecd/specs/037-maintained-fork-readiness/plan.md), [changes](CHANGELOG.md) and [private security reporting](SECURITY.md).
 
 ## Features
 
@@ -42,7 +44,7 @@ Install Pi from [pi.dev](https://pi.dev):
 curl -fsSL https://pi.dev/install.sh | sh
 ```
 
-**Or via npm (requires Node.js 20+):**
+**Or via npm (initial qualification target: Node.js 26.x and Pi 1.3.0):**
 ```bash
 npm install -g @earendil-works/pi-coding-agent
 ```
@@ -79,17 +81,43 @@ npm install
 
 The CLI is expected at `vendor/whisper.cpp/build/bin/whisper-cli` (or `.exe` on Windows). To use another location, set `WHISPER_CLI_PATH`.
 
-PDF documents are parsed locally and do not require extra system utilities.
-If a PDF cannot be parsed automatically, it is still saved and forwarded with a clear fallback notice.
+These build scripts require a source checkout; they are not included in the candidate npm tarball. For an installed package, provide an external Whisper CLI through `WHISPER_CLI_PATH`. FFmpeg is also required for applicable media features. Native dependency installation/downloads and platform availability are separate from extension runtime behavior.
+
+PDF documents are parsed locally. If parsing fails, the file is still saved and forwarded with a fallback notice. M2 still needs to assess the reported LiteParse/Sharp dependency finding; M1 is not a dependency-security upgrade.
 
 ## Quick Start
 
-1. Install the extension:
+### Before switching from whatsapp-pi
+
+Stop the prior extension and every same-profile Pi/tmux/headless service before enabling this continuation. Use `/whatsapp > Disconnect WhatsApp`, stop the owning Pi process as needed, and disable the old package/resource with `pi config` or remove its exact source with `pi remove <source>` after checking `pi list`. Project-local installations need the corresponding local configuration too. Do not edit global settings or delete auth as an automatic migration step.
+
+Both names deliberately use the existing `~/.pi/agent/extensions/whatsapp-pi` storage/auth/profile layout. A package-name change alone does not require re-pairing. Archive locks do not prevent a second WhatsApp connection taking over the session. Do not run both packages against one profile.
+
+### Candidate use and future registry installation
+
+For now, inspect a source checkout and use its explicit entry only after stopping the prior installation:
+
 ```bash
-pi install npm:whatsapp-pi
+git clone https://github.com/jagaliano/whatsapp-ng.git
+cd whatsapp-ng
+# Use the reviewed maintenance ref; main may still contain the pre-M1 baseline.
+git checkout chore/fork-release-readiness
+npm install
+pi --no-extensions -e ./whatsapp-pi.ts
 ```
 
-2. Start Pi:
+Uncommitted local M1 preparation is not present in a remote checkout. Source installs currently have no approved reproducible lockfile policy; M2 must resolve that. Dependency installation can run native install scripts; review prerequisites first.
+
+Only **after** a reviewed prerelease is actually published under separate authorization, its pinned registry form will be:
+
+```bash
+# Future command, not currently available on npm:
+pi install npm:whatsapp-ng@1.1.0-rc.1
+```
+
+Do not install `npm:whatsapp-pi` expecting this fork. A registry name lookup does not reserve `whatsapp-ng`. Standard flags, `/whatsapp`, tool names, the `whatsapp-pi.ts` entry and existing storage names remain unchanged for compatibility.
+
+After an approved installation is enabled, start Pi:
 ```bash
 pi
 ```
@@ -108,30 +136,29 @@ After first pairing, you can start Pi with auto-connect enabled:
 pi --whatsapp-pi-online
 ```
 
-### Iniciar automaticamente no Ubuntu
+### Headless services and switchback
 
-Com `tmux` instalado, o instalador abaixo instala `whatsapp-pi` no agente Pi do usuário e cria um serviço systemd que inicia `pi --whatsapp-pi-online` em um tmux no boot:
+The inherited `scripts/install-whatsapp-pi-service.sh` still installs the **upstream** npm package. It is not a validated whatsapp-ng installer and is intentionally not advertised for enabling this fork. Scripts/systemd templates require a source checkout and are not in the candidate tarball. Linux service qualification belongs to M3.
+
+An existing installation may use the legacy names below. Review these commands on your own host; no service was stopped or modified by M1:
 
 ```bash
-sudo apt install tmux
-./scripts/install-whatsapp-pi-service.sh
-```
-
-Comandos úteis:
-```bash
-tmux attach -t whatsapp-pi
 systemctl --user status whatsapp-pi.service
+# Stop/disable the prior service before using this fork:
 systemctl --user disable --now whatsapp-pi.service
 ```
 
+To switch back, stop this candidate and any same-profile processes first, then restore only the previously recorded package/source configuration. Preserve auth and the new archive; do not select Logoff or delete storage to change package names. Older code/old recents will omit post-migration records from its view. This is not a lossless data downgrade, and M1 performs no real rollback.
+
 ## Development / Testing
 
-If you are developing or testing the extension locally, you can clone the repository from [GitHub](https://github.com/RaphaCastelloes/whatsapp-pi):
+The maintained source repository is [jagaliano/whatsapp-ng](https://github.com/jagaliano/whatsapp-ng). macOS and Linux with Node 26.x / Pi 1.3.0 are initial qualification targets; only tested OS/architecture/patch combinations can become supported artifact claims. Windows remains best effort/unverified.
 
 1. Clone and install dependencies:
 ```bash
-git clone https://github.com/RaphaCastelloes/whatsapp-pi.git
-cd whatsapp-pi
+git clone https://github.com/jagaliano/whatsapp-ng.git
+cd whatsapp-ng
+git checkout chore/fork-release-readiness
 npm install
 ```
 
@@ -302,6 +329,14 @@ tests/
 └── unit/            # Unit tests
 ```
 
+## Support and attribution
+
+Report ordinary non-sensitive bugs to [whatsapp-ng issues](https://github.com/jagaliano/whatsapp-ng/issues). Use [private vulnerability reporting](SECURITY.md) for security concerns. Support is owner-led and best effort, with no SLA. Do not attach real credentials or private conversation data.
+
+The maintained line includes the existing identity/routing, media/quotes and conversation-fidelity work through `d415f0b`; M1 does not add new messaging capabilities. Successful live backfill import and delivery/read receipt reconciliation remain unverified. Socket acceptance is not proof of recipient delivery or rendering. Unofficial transport/platform/account risks remain.
+
+Licensed under [MIT](LICENSE), retaining attribution to Rapha Castelloes and fork contributions by José Antonio Galiano Sandoval. See [LICENSING.md](LICENSING.md) for the accepted upstream licensing basis. This does not imply upstream maintainer endorsement.
+
 ## Development
 
 Run tests:
@@ -313,6 +348,6 @@ npm test
 
 - `--whatsapp-pi-online` auto-connects when credentials already exist.
 - `--whatsapp-group <jid>` binds Pi to one WhatsApp group.
-- Media handling is local: images for vision, audio via Whisper.cpp + ffmpeg, documents stored under `.pi-data/whatsapp/documents/`.
-- Recents/history live in `~/.pi/agent/extensions/whatsapp-pi/recents/recents.json`.
+- Media handling is local; images for vision, audio via external Whisper CLI + FFmpeg. Runtime/storage layout remains unchanged by the package rename.
+- Normalized history is under `~/.pi/agent/extensions/whatsapp-pi/archive/`; the old recents file is a legacy migration input, not a parallel authority. See the archive section above.
 - Session state, allow lists, and startup reconnects are persisted locally.
