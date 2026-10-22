@@ -55,6 +55,8 @@ The preparation checkboxes did not authorize publication. The owner subsequently
 - [x] T028 Perform the explicitly approved seven generated sends, six native quotes, generated-PDF network parse, restart and one history request capped at three; disconnect safely without logout. Transport calls succeeded, but history remained unknown with zero imports and receipts were not observed.
 - [x] T029 Ask for client confirmation and record the lack of confirmation without claiming delivery/rendering/playback. Preserve private detailed results outside Git; commit only [sanitized evidence](validation.md).
 - [ ] T030 Close remaining managed-install/platform/exclusivity and successful live backfill/receipt/client gaps under fresh scope, or preserve explicit prerelease/unverified limits. No full M3/M4 completion or npm release is claimed.
+- [x] T031 Diagnose M4 topology without reconnecting: read-only saved-session metadata confirms the earlier recipient was the sender account (self-chat). Record the limited evidence and avoid speculative receipt/protocol fixes or another full media batch.
+- [ ] T032 Obtain a distinct recipient/current connection-readiness scope for independent receipt testing, or the owner's explicit experimental/unverified disposition; physical-client playback confirmation remains separate.
 
 ## Later milestones: scoped validation recorded; remaining M3–M5 gates open
 

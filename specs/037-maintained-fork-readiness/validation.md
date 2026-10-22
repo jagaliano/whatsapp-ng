@@ -47,6 +47,14 @@ The harness loaded services from the actually installed package, used an isolate
 | Client rendering/playback | Asked explicitly; the owner did not confirm receipt/checking. Receipt, PDF/image opening, quote rendering and audio/video playback remain unverified on a physical client. |
 | Shutdown | Disconnected without logout; saved credentials remained present. No automatic message retry was performed after the completed run. |
 
+## M4 follow-up: test topology
+
+The owner subsequently requested continued M4 work. A read-only check of saved-session identity metadata confirmed that the approved test recipient is the linked sender account: the prior run was **self-chat**, not an independent two-account recipient test. Only booleans were output; no connection was opened, credentials written or credential contents disclosed.
+
+Self-chat transport success does not establish independent recipient delivery/read behavior. The absent receipts are not treated as a demonstrated reconciliation bug. The installed rc14 history-call mapping was inspected and matches the expected count/key/millisecond arguments; there is no evidence yet for a speculative protocol/source fix.
+
+Next useful scope is either a freshly approved separate recipient and client-ready window for receipt/history observation, or the plan's explicit experimental/unverified prerelease disposition. The earlier media can be checked in the client's self-chat, but playback confirmation would still not prove independent receipt or successful backfill. No full-batch resend was started.
+
 ## Remaining boundaries
 
 This is an installed-package, service-level live probe on the current Darwin x86_64 / Node 26.12.0 host, not a production certificate, group/participant receipt test, complete agent-mediated conversation test or full M3/M4 closure. Successful live history import and receipt reconciliation remain unverified. Client rendering/playback must not be inferred from send success or quote metadata.

@@ -395,3 +395,9 @@ Seven generated live send calls returned success and six replies carried native 
 The history request concluded **unknown with 0 imports**; no delivery/read receipts were observed. The owner did not confirm client receipt/rendering/playback when asked. These are not silently promoted to passing delivery/history tests, and transport return values are not a server-ack/client-delivery certificate. No automatic resend was attempted. The probe is service-level, not a complete agent-mediated inbound conversation or group receipt test.
 
 No source fix was required. This evidence-only update leaves runtime/lock/package bytes unchanged. Full M3 managed-install/removal/exclusivity/platform qualification, M4 backfill/receipt/client gaps, the M1 npm-account check and M5 publication remain open; the candidate stays private/unpublished. The existing single-profile process rule remains mandatory, and later live operations require fresh approval.
+
+### Continued M4 diagnosis
+
+The owner then requested continued M4 work. Read-only saved-session identity comparison established that the prior approved recipient was the linked sender itself. This is self-chat evidence, not independent recipient receipt validation. No credentials were printed/copied/written and no new socket was opened. The installed rc14 history-call arguments match count/key/millisecond expectations; no source defect is demonstrated by the unknown result alone.
+
+The next targeted scope requires a distinct approved recipient and client-ready window, or the owner's explicit experimental/unverified prerelease disposition. Self-chat media playback can be confirmed separately but cannot establish two-account receipts/backfill. No full media batch was resent and M4 is not marked complete. See [the validation follow-up](validation.md#m4-follow-up-test-topology).
