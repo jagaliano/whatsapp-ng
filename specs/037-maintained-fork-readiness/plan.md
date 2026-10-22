@@ -1,0 +1,285 @@
+---
+title: "whatsapp-ng maintenance and release readiness"
+type: maintenance
+status: active
+date: 2026-10-22
+baseline: d415f0ba7f392b15d5b635f5b3aa9f62ab58c25c
+---
+
+# whatsapp-ng maintenance and release-readiness plan
+
+**Updated:** 2026-10-22
+
+**Baseline:** `d415f0b` on `main` in the new repository; original source branch `feat/baileys-conversation-fidelity` remains unchanged.
+
+**Decision:** continue the existing codebase as `jagaliano/whatsapp-ng`, with npm candidate name `whatsapp-ng`; do not migrate to another extension or Baileys fork.
+
+**Execution status:** M0 completed and independently source-reviewed. The owner subsequently authorized committing/pushing its documentation and continuing with M1. M1 is authorized but not implemented at this checkpoint; M2–M5 remain unstarted and unauthorized. This numbered plan and [tasks](tasks.md) are the canonical repository artifacts; the ignored root strategy is only a navigation pointer. The later approval permits M0 documentation publication, not npm publication or stable promotion.
+
+## 1. Direction and boundaries
+
+Continue this extension, retain the currently installed `baileys@7.0.0-rc14` transport as the starting baseline, and prepare a clearly identified maintained release. Reusing our tested identity, routing, media and archive work is a lower-risk starting point than replacing it without a demonstrated benefit.
+
+There are two distinct fork decisions:
+
+- **Extension ownership:** maintain our continuation of `RaphaCastelloes/whatsapp-pi` in `jagaliano/whatsapp-ng`. Preserve `jagaliano/whatsapp-pi` and its upstream PRs as the original contribution lane.
+- **Transport ownership:** continue consuming Baileys. Do not take on a private protocol fork or a bundle of third-party patches by default. A reproducible transport defect can justify a separately reviewed patch later.
+
+This is **maintenance of Phases 1–3**, not Phase 4. Phase 4 remains undefined, unscheduled and unauthorized. New capabilities require a concrete use case and their own scope/approval; the existence of an upstream PR is not a product requirement.
+
+The owner approved the public `whatsapp-ng` repository/local checkout, then separately authorized **M0 implementation followed by an independent `openai-codex/gpt-6.1-sol` review**. M0 creates the maintenance branch, prepares the tracked decision record and documents selected policies. It does **not** authorize runtime/package/dependency changes, new commits/pushes, license assertions, npm publication, GitHub security/settings changes, live WhatsApp operations, auth migration or rollback. The owner subsequently approved M0 commit/push and M1 implementation. M1 may change the approved package/documentation/host-peer metadata and establish the selected private reporting channel; it cannot invent a license grant or bypass publication rights. M2–M5 remain separately gated.
+
+## 2. Verified starting point
+
+Evidence was refreshed on 2026-10-22. Counts and package versions are snapshots, not guarantees about future upstream activity.
+
+| Area | Current evidence | Consequence |
+|---|---|---|
+| Foundation | `948f539`, upstream [PR 14](https://github.com/RaphaCastelloes/whatsapp-pi/pull/14), open | Batch intake, identity, full keys and response ownership are already in our baseline. |
+| Media/native replies | `875ad9e`, upstream [PR 15](https://github.com/RaphaCastelloes/whatsapp-pi/pull/15), open | Existing bounded send/preparation and native-quote paths must be preserved. |
+| Conversation fidelity | `d415f0b`, upstream [PR 16](https://github.com/RaphaCastelloes/whatsapp-pi/pull/16), open | Persistence, explicit history requests and lifecycle reconciliation are implemented, not an unfinished future phase. |
+| Automated baseline | 397 tests across 43 files; lint, typecheck and whitespace checks passed in the implementation/publication session | A starting regression baseline, not proof for future dependency/donor changes. No build script is declared. |
+| Live validation | Phase 2: 11 sends and operator-confirmed rendering/playback. Phase 3: 3 accepted sends, offline restart and native quote stanza after reconnect | Phase 3 successful backfill import and live receipt reconciliation remain unverified. Its request timed out as unknown, with 0 imports. |
+| Source/publication | Local manifest is `1.0.71`; npm currently reports `whatsapp-pi@1.0.70`. Upstream repository is not archived; reported push date is 2026-10-04 | There is a distribution gap. This is not proof that the maintainer has abandoned the project or that existing users do not matter. |
+| License | `package.json` declares MIT; no tracked `LICENSE`/`COPYING` file; GitHub reports no detected upstream license | Resolve provenance/notices before redistribution under our package identity. Do not invent copyright ownership. |
+| Dependency policy | Manifest declares `baileys: ^7.0.0-rc14`; installed version is rc14. `package-lock.json` is ignored | The transport is not exactly pinned, and a clean install is not fully reproducible merely because this workstation passes. |
+| PDF dependency path | Installed LiteParse 1.5.3 uses `sharp@0.34.5`; installed Baileys separately uses `sharp@0.35.5` | [Issue 10](https://github.com/RaphaCastelloes/whatsapp-pi/issues/10) needs a current security assessment. Removing one dependency path does not remove all `sharp`. |
+
+Repository bootstrap: [jagaliano/whatsapp-ng](https://github.com/jagaliano/whatsapp-ng) is public, with local checkout `~/workspace/whatsapp-ng`. `origin` points to the new repository, `upstream` to `RaphaCastelloes/whatsapp-pi`, and `legacy-fork` to `jagaliano/whatsapp-pi`. No existing npm package named `whatsapp-ng` was found when checked; that does not reserve the name or establish publishing rights. The runtime manifest still says `whatsapp-pi@1.0.71` until M1 is authorized. Only reachable published Git history was cloned; no ignored auth, recents, caches or dependencies were copied.
+
+Detailed test/review/live evidence is in [the Phase 1–3 plan](../036-baileys-capability-roadmap/plan.md). Those earlier reviews are source reviews, not proof that every platform, device or transport event works live.
+
+## 3. Invariants for every maintenance slice
+
+- Preserve allowlists/group binding, canonical PN/LID identity, complete keys, account/profile isolation, response ownership, stable send IDs, cancellation/unknown-delivery semantics and quote revalidation.
+- Keep one authoritative normalized archive, separate memory-only raw retry data, bounded retention, protocol expiry, deletion/admission protection and truthful degraded/unknown states.
+- Preserve shared Pi context as an explicit trusted-user limitation. Routing isolation is not context isolation.
+- Keep `pi.extensions` pointing at `./whatsapp-pi.ts` and the default storage root at `~/.pi/agent/extensions/whatsapp-pi`. Preserve relative auth profiles and archive profile/account markers.
+- A different npm/repository name does not itself require QR re-pairing. Losing or changing auth state without a valid migration can. This plan does not rename or migrate storage.
+- Do not run the old installation and the maintained package simultaneously against the same auth profile. An archive-writer lock is not proof of transport/socket exclusivity.
+- Never copy real credentials, recents, messages, logs or downloaded business files into fixtures, tarballs, issues or public evidence. Tests use temporary synthetic data.
+- Do not rewrite published history or automatically merge upstream/donor changes. Attribute adopted work and keep upstream PRs open unless the owner decides otherwise.
+
+## 4. Ordered implementation milestones
+
+Milestone IDs are independent of the feature roadmap's U1–U10. Start in order. Each slice needs explicit implementation authorization; high-risk operations have additional gates below. Completed deliverables and evidence should be recorded here as work actually finishes, not checked off in advance.
+
+Serialize M1/M2 manifest and dependency-file edits; keep packaging, transport pinning and runtime migrations in separately reviewed commits when committing is authorized. Only read-only licensing/dependency research may overlap. Freeze the M3 candidate commit after both M1 and M2 are final; later code/manifest/dependency edits invalidate the affected artifact evidence and require a new candidate.
+
+### M0. Establish the maintenance lane and release decisions
+
+**Depends on:** prior strategy review and explicit M0 authorization, both received.
+
+**Scope:** repository/release decisions, no dependency or transport changes.
+
+1. Completed locally: `chore/fork-release-readiness` was created from `main` at `d415f0b`. `main` and `origin/main` remain at the original baseline; the maintenance branch is not pushed. The old repository and its published upstream feature branches are untouched.
+2. Completed locally: this canonical numbered plan and `tasks.md` record the baseline, remotes, existing PR links, supported-use-case boundaries and known live gaps. README links to this record. Files are staged for review, not committed or published; they become a durable public handoff only after separate commit/push approval. No ignored root file is the sole authority.
+3. Record the integration policy for the new `main`: reviewed maintenance work promotes there, while the old fork and upstream feature PR branches remain intact. The new repository's initial default-branch bootstrap was explicitly approved; this does not authorize changing the old repository's default branch or rewriting history. We need not wait for upstream merges to maintain our line.
+4. Approved: npm candidate `whatsapp-ng`, first prerelease `1.1.0-rc.1`, published only under `next` if M1–M5 pass and publication is explicitly approved. Stable `1.1.0`/`latest` is a separate later decision. No existing npm package was found at the M0 lookup, but registration eligibility and publishing rights remain M1 gates. A different package name does not automatically update existing `whatsapp-pi` installations.
+5. Approved: GitHub owner `jagaliano` is the initial maintainer; non-sensitive bugs go to the new repository's issues, best effort with no SLA. M1 must establish a private security-reporting channel before npm release. Initial qualification targets are macOS and Linux with Node 26.x / Pi 1.3.0, not yet certified artifact support; Windows is best effort/unverified. See the decision/matrix record below.
+
+**Deliverable:** reviewed maintenance-lane and release-decision record, with unresolved choices visible.
+
+**Done when:** baseline, ownership, candidate identity, branch policy and supported test matrix are explicit; no published branch has been rewritten. Legal, dependency and release gates remain open for later milestones.
+
+### M1. Resolve licensing, package identity and host integration
+
+**Depends on:** M0.
+
+**Scope:** a packaging/documentation slice; no bundled PDF major upgrade or protocol patch.
+
+1. Verify the upstream MIT declaration's provenance and applicable original notices. Obtain authoritative license text/clarification where necessary; seek appropriate advice if the grant remains unclear. Preserve original attribution and relevant third-party notices. **Do not publish while this is unresolved.**
+2. Verify the chosen npm name/scope and account permissions without exposing tokens. Update package name/version, repository, homepage and issue destinations to the maintained line, while crediting/linking upstream.
+3. Verify Pi's current host-provided dependency contract before changing TypeBox declarations. [Issue 12](https://github.com/RaphaCastelloes/whatsapp-pi/issues/12) proposes a wildcard peer plus a development dependency. Confirm this against the targeted host/loader and an actual packaged install; do not treat a donor manifest as self-validating.
+4. Keep storage/auth/archive identities unchanged. Document removal or disabling of the prior extension before enabling the maintained package, including persistent/headless services and how to return to the prior installation safely.
+5. Update README/changelog/support policy: maintained fork, divergence, installation source, shared-context limitations, unofficial transport risk, and known experimental history/receipt behavior. Verify referenced installation/build/service resources are included in the artifact or clearly external prerequisites.
+
+**Deliverable:** license/provenance resolution and coherent fork packaging/install metadata.
+
+**Done when:** legal redistribution basis and package rights are recorded; targeted Pi loader registers the packaged extension without duplicate host-module warnings; no unintended auth/profile path change or duplicate installation is introduced. Publication still waits for M2–M5.
+
+### M2. Make dependency changes deliberate and resolve security findings
+
+**Depends on:** M0; coordinate manifest changes with M1.
+
+**Scope:** separate, reviewable slices for reproducibility and each runtime dependency change.
+
+1. Propose an exact transport pin to `7.0.0-rc14` for the initial candidate. Record resolved dependencies and the tested Pi host/SDK, Node, OS, FFmpeg and Whisper setup. Review the drifting SDK `latest` declaration too; do not silently upgrade it.
+2. Agree on a clean-checkout lockfile policy for maintainer/CI reproduction. The repo currently ignores `package-lock.json`; changing that policy or committing a lockfile requires owner approval. Use `npm ci` only once the agreed lockfile exists. Exact direct pins alone do not freeze transitive dependencies or all future consumer installs.
+3. Run a fresh dependency/security assessment, separating actual installed paths from stale reports. Inventory native binary downloads/build scripts and licenses. Disposition high/critical findings with evidence and an effective fix/mitigation; generic audit suppression is not a release gate.
+4. Evaluate the smallest safe remediation for the LiteParse/`sharp` finding. LiteParse 2.15.1 metadata currently declares only `commander`, but a major upgrade is a **runtime migration**, not packaging-only work. Validate imports, PDF extraction, OCR on/off, errors, resource cleanup and supported platforms with representative synthetic PDF fixtures. Re-audit the complete tree afterward; Baileys' separate `sharp` path remains relevant.
+5. Inspect whether legacy native packages/build scripts are actually needed before proposing removals. No bulk dependency cleanup, `npm audit fix --force` or replacement transport is authorized by this plan.
+
+**Deliverable:** approved dependency/lock policy, resolved candidate tree, security dispositions and focused compatibility tests.
+
+**Done when:** a clean candidate environment can reproduce the maintainer checks; no known high/critical finding lacks an accepted effective disposition; runtime dependency changes have their own review/test evidence. Document the limits of consumer transitive-version reproducibility.
+
+### M3. Validate the actual distributable in isolation
+
+**Depends on:** M1 and M2.
+
+**Scope:** candidate artifact, install and regression checks, without live credentials.
+
+1. Inspect `npm pack --dry-run` output, then build a local candidate tarball. Confirm entry/source/runtime resources and license notices are present, and credentials, local archives, caches, logs, drafts and test artifacts are absent.
+2. Install that tarball through the targeted Pi package loader in a temporary environment. Test installation, extension discovery, schema/peer resolution and removal/reinstall. Do not use source-tree success as evidence for the installed artifact.
+3. Run the common validation gate in section 5, including native Baileys/FFmpeg contracts. Test whichever OS/Node/Pi versions we intend to claim; narrow unsupported/unverified claims rather than assuming this macOS host proves Linux/Windows support.
+4. Exercise synthetic old-recents import, disconnected reads, same-account restart, account/profile changes, auth/config/archive permissions, corruption/degraded recovery and quote/retention behavior. Use only the isolated test profile. Never touch a production profile or use production data as migration fixtures.
+5. Check duplicate extension loading and same-profile second-process behavior. Distinguish archive locking from transport takeover. If the candidate can silently steal/reuse a live session or corrupt shared state, open a dedicated blocking reliability slice before release; a donor instance-lock patch is only a candidate, not assumed protection.
+6. Add or document a minimal repeatable maintainer/CI check using the agreed dependency policy and existing scripts. Do not add new test frameworks or unrelated abstractions.
+
+**Deliverable:** tarball inventory and clean-install/compatibility report tied to an exact candidate commit and artifact.
+
+**Done when:** the distributable, not just the checkout, loads correctly; its dependency/peer behavior and data isolation are validated; discovered release-blocking defects are resolved. Any fixture/native/platform coverage gaps are explicit.
+
+### M4. Close live gaps or keep the candidate explicitly experimental
+
+**Depends on:** M3 and **fresh explicit approval** for the exact account, recipient, operations and possible connection takeover. Saved auth availability is not permission to use it. Before the candidate/harness accesses an approved real auth profile, confirm the previous extension and every same-profile headless service/process are stopped or disabled. Do not rely on the archive lock to prevent a second socket connection.
+
+1. Use only generated non-sensitive fixtures and an approved harness. Record the artifact/version/device scope. Never copy auth into the repo or public reports; preserve normal credential refresh and disconnect without logout.
+2. Confirm representative text/media/native-quote behavior from the installed candidate. Distinguish socket acceptance, recipient delivery, physical client rendering and playback.
+3. Attempt a small explicitly authorized backfill with an observed anchor. Verify exact request correlation, an actually imported record and its local visibility after restart. A pending ID or unknown timeout does **not** count as successful import.
+4. Observe at least one genuine delivery/read lifecycle event where the approved client/privacy settings permit it, and verify the intended record changes. Do not claim group/per-participant coverage from a direct-chat observation. Remote edit/delete tests require their own explicit authorization.
+5. Record success, unsupported/device-limited results and failures separately. Bounded unknown outcomes can be correct behavior without proving successful backfill/receipt integration.
+
+**Deliverable:** private evidence summary with sanitized public conclusions.
+
+**Done when:** successful live backfill import and representative receipt reconciliation are demonstrated, **or** those capabilities remain explicitly experimental/unverified and the first distribution stays a prerelease. The latter is not permission to claim production validation. Any later stable promotion with exclusions needs an explicit supported-feature contract and owner approval. New actual data-loss/session/identity defects block release regardless of labels.
+
+### M5. Publish a reviewed prerelease, then decide stable promotion
+
+**Depends on:** M0–M3 complete, M4 evidence/disposition recorded, and **separate publication approval**.
+
+1. Review the exact candidate commit, version, package contents, dependency provenance, install instructions, license notices, known limitations and changelog. Re-run gates after any code/manifest/dependency change; tie the evidence to the final artifact rather than a different checkout.
+2. With explicit authorization, publish a prerelease under a non-default tag such as `next`. Do not overwrite another package's identity or move the stable/default tag automatically.
+3. Verify installation of that registry artifact in a clean Pi environment, without using real credentials for the install smoke. Record the maintainer's issue/support route and a practical observation period before promotion.
+4. Stable promotion requires a separate owner decision, no unresolved release-blocking defects, accepted compatibility/security evidence, a clear supported-feature contract and explicit treatment of M4's live gaps.
+5. Rollback guidance must distinguish package rollback from data rollback. Preserve the new archive; older code/old recents will omit post-migration records in the old view. Do not promise lossless downgrade or make destructive state changes an automatic recovery action.
+
+**Deliverable:** identified prerelease artifact and verification/release notes; later stable decision recorded separately.
+
+**Done when:** the approved registry artifact installs as tested, default-tag changes are deliberate, and support/rollback limitations are visible. If publication rights/license remain unresolved, stop before publishing rather than finding a workaround.
+
+## 5. Common validation gate
+
+For each implementation slice, record the exact commit, dependency tree and environment. Run:
+
+```sh
+npm test
+npm run lint
+npm run typecheck
+git diff --check
+```
+
+Use temporary `HOME` and `PI_CODING_AGENT_DIR` for tests and this credential-free startup smoke. Do not run with `--whatsapp-pi-online`:
+
+```sh
+pi --mode rpc --no-session --no-extensions --no-skills \
+  --no-prompt-templates --no-themes -e ./whatsapp-pi.ts
+```
+
+Require an actual successful `get_state` RPC response, not just a process that stays alive. Artifact installation also gets its own smoke using the installed entry. There is no declared build command.
+
+The native suites include `native-quote.contract.test.ts`, `native-media.contract.test.ts`, `native-archive-quote.contract.test.ts` and `outgoing-media.conversion.test.ts`. Verify native cases actually ran rather than being skipped because of missing tools. Add focused fixtures for each change and use an independent read-only review for sensitive runtime, identity/auth, persistence and dependency changes. Tests do not replace authorized live checks of protocol behavior.
+
+The 397-test baseline is historical evidence for `d415f0b`, not a fixed target count or a claim that proposed updates have passed. No tests, upgrades, packaging operations or live sessions are executed merely by approving the direction in this document.
+
+## 6. Selective donor/backlog policy
+
+Other forks and upstream proposals are **sources to inspect**, not replacement baselines or a mandatory merge queue. After baseline release blockers are understood, prioritize reproducible defects by impact. A blocking defect can interrupt M1–M5; optional features cannot.
+
+| Candidate | Classification / treatment |
+|---|---|
+| [PR 11: own-LID self-chat](https://github.com/RaphaCastelloes/whatsapp-pi/pull/11) | Correctness candidate. Reproduce against `d415f0b` or the current maintenance candidate. If still broken, port the minimal fix/test while preserving canonical resolution, send overrides, stable IDs, quotes and ownership. Old conflict counts are not current evidence. |
+| [Issue 12: TypeBox peers](https://github.com/RaphaCastelloes/whatsapp-pi/issues/12) | M1 host integration. Verify the targeted loader and packaged artifact before adopting any donor declaration. |
+| [Issue 10: LiteParse/Sharp](https://github.com/RaphaCastelloes/whatsapp-pi/issues/10) | M2 security/runtime migration, not a blind packaging bump. |
+| `bamer` instance-lock work | Reliability candidate if duplicate-process/session takeover is reproduced. Inspect pre-connect enforcement and recovery/lock ownership; archive locking alone is insufficient. |
+| `pp14z` auth backup/shutdown/reconnect work | High-risk candidate only for a reproduced defect. Review write ordering, process ownership and failure recovery using synthetic auth fixtures. No bulk cherry-pick or credentials migration. |
+| `lwyxzm` host dependency fix | Packaging candidate, subject to M1 tests. Additional document-send tools may duplicate current media support; compare contracts before adding them. |
+| `lwyxzm` active-run steering | Do not adopt automatically. It changes consumed-input attribution and can invalidate response ownership; requires its own approved design/characterization if ever needed. |
+| [PR 9: brand settings](https://github.com/RaphaCastelloes/whatsapp-pi/pull/9), [issue 13: thinking indicator](https://github.com/RaphaCastelloes/whatsapp-pi/issues/13) | Optional UX/product work, not required to publish the maintained baseline. Keep deferred. If requested later, define requirements; never replace the shared send pipeline to add branding or presence. |
+
+For each adopted change: name the source commit/author and applicable license, demonstrate the current failure, preserve attribution, port the smallest coherent change, run focused and full gates, then obtain the required review/operational approval. Do not estimate safety from a patch's line count or a third party's success report.
+
+### Transport patches are an escalation, not a starting task
+
+The earlier draft listed Baileys PRs 2711, 2743, 2763, 2765, 2820 and 2722. They remain **unvalidated leads** here, not an approved patchset; their current state and applicability must be refreshed before use.
+
+A transport patch requires a minimal reproduction demonstrating that the defect is below the extension boundary, full-source security/compatibility review, a native contract regression and appropriately authorized live verification. Signal/decryption/session/app-state changes receive extra scrutiny. Test typed edit reconciliation separately from encrypted-edit decoding; success in one does not prove the other.
+
+Only then decide how to consume a reviewed fix: compatible upstream release, narrowly scoped patch, or a separate transport branch. Record exact immutable commit/artifact provenance and dependency/build requirements. Do not prescribe a rebasable private Baileys fork or `patch-package` until there is an actual patch and a reviewed distribution method. A breaking upstream refactor triggers evaluation, not automatic abandonment of monitoring.
+
+## 7. Alternatives and reconsideration triggers
+
+- **Another extension fork:** reconsider only if it offers a verified, maintained capability we need at materially lower total migration/support risk. Compare routing, auth/storage, privacy, lifecycle and packaging contracts, not README claims alone.
+- **Another Baileys fork:** require demonstrated fixes/security/maintenance advantage and compatible live behavior. Missing identifiers in one source file do not prove absence of LID support throughout a fork. SDK types/builders for albums/buttons/events likewise do not prove client rendering, account availability or complete feature support.
+- **Browser-based transports:** assess session model, resource requirements, platform support and current licenses before migration. Do not describe Open-WA as simply a wrapper around whatsapp-web.js; current Open-WA metadata shows its own driver packages, including Puppeteer and Lightpanda. No migration is selected here.
+- **Official API:** reconsider if the product becomes a business/compliance integration. It is a product/operating-model decision, not a drop-in personal-account transport replacement.
+- **New extension/daemon:** reconsider only with an approved change in product shape such as independent multi-account service operation, not to work around an unresponsive publish channel.
+
+All unofficial personal-account transports retain platform-policy, account-restriction and protocol-change risks. Changing forks does not eliminate them. Revisit this strategy when actual maintenance capacity, a demonstrated incompatibility or product requirements change. Upstream response latency and download counts alone do not settle that decision.
+
+## 8. Immediate next action and open gates
+
+**Current gate:** M0 implementation and independent review are complete on `chore/fork-release-readiness`; separate commit/push and M1 implementation approval have now been received. Publish the reviewed M0 record, then execute only M1. Any unresolved license/rights check remains a stop condition for npm release. Do not start Phase 4 or patch Baileys. Upstream PR merges are not a prerequisite.
+
+M0 decisions are recorded below. Remaining implementation gates include:
+
+- M1: authoritative license/provenance, npm registration/publishing rights, actual package metadata and private security channel.
+- M2: dependency/security remediation and owner-approved lockfile/reproducibility policy.
+- M3: actual artifact qualification, including Linux and architecture/patch-version evidence.
+- M4: separately authorized live backfill/receipt verification or truthful experimental disposition.
+- M5: separately authorized prerelease publication and later stable-promotion decision.
+
+Then execute **M1 → M2 → M3 → M4 → M5**, keeping each manifest/runtime change separately reviewable. Licensing investigation and dependency/security diagnosis may proceed in parallel, but no prerelease escapes the stated gates. A verified critical defect takes priority over this ordering; optional donor features stay deferred.
+
+## 9. Verification and independent review record
+
+**Parent verification for this update:** read current source/manifest/storage and existing Phase 1–3 evidence; queried GitHub repository/PR/issue metadata, npm extension/Open-WA/LiteParse metadata, and the installed LiteParse/Baileys `sharp` paths. GitHub reports no detected upstream license; npm reports MIT metadata. Those are evidence inputs, not a legal determination. Old download/star/LOC/conflict counts and assumptions of total LID/feature coverage were deliberately removed.
+
+**Execution distinction:** the earlier strategy review and approved repository bootstrap are historical. Current M0 created only the local maintenance branch and documentation/decision record. No package/dependency/runtime/global settings change, dependency installation, new commit/push, GitHub security-setting change, package packing/install/publication, production migration or live WhatsApp operation was performed. The earlier 397-test and live results remain explicitly dated baseline evidence. Remote metadata/package versions must be refreshed before their implementation milestones.
+
+**Independent review:** Anthropic Claude Sonnet 5.5, exact registry ID `anthropic/claude-sonnet-5-5`, medium thinking. `pi-subagents` 0.80.0 and model availability were checked before dispatch; actual run status confirmed the requested provider/model despite the reviewer's different configured default. No provider/model fallback was used. Run `06d0f243-c8cf-4929-a775-a1ce164dcc14` reviewed the full strategy plus `package.json` and `src/services/storage-path.ts`; it did not independently re-query remote metadata, re-run tests or inspect every related source file.
+
+Initial verdict: **OK with notes**, no P0/P1 findings. Two actionable P2 clarifications were applied: serialize manifest/lockfile edits and freeze the candidate after M1/M2; explicitly stop prior same-profile installs/services before live use. M3's synthetic profile and auth/config/archive permission checks were made explicit too. The remaining note requires no correction: M0 selects candidate identity/policy, M1 verifies rights and legal gates before any publication. The same retained Sonnet 5.5 reviewer re-checked the clarifications in run `a70e0675-50f4-4f15-b444-9c83a5f7294a`: final verdict **OK**, **“No issues found.”** No new contradictions were found.
+
+The prior parent document checks belong to that earlier strategy revision. Current M0 checks and the requested Codex review are recorded separately below; no runtime test result is inferred from documentation validation.
+
+## 10. Approved M0 decision and qualification record
+
+The owner selected the release, target matrix and support policies through explicit questions on 2026-10-22. These are planning decisions, not performed M1–M5 operations.
+
+| ID | Decision | Boundary / next gate |
+|---|---|---|
+| D1 | Continue `jagaliano/whatsapp-ng` from full commit `d415f0ba7f392b15d5b635f5b3aa9f62ab58c25c` | No rewrite, transport-fork migration or Phase 4. Original attribution/history retained. |
+| D2 | Work on `chore/fork-release-readiness`; new default branch remains `main` | Reviewed, explicitly authorized commits/PRs promote to `main`. Never rewrite the three upstream feature PRs. Original M0 implementation stopped before commit/push; later explicit owner approval now permits publishing its reviewed documentation. |
+| D3 | `origin` = new repo; `upstream` = RaphaCastelloes/whatsapp-pi; `legacy-fork` = jagaliano/whatsapp-pi | Use old remotes for inspection by policy, not as implicit push targets. No remote mutation/technical push-block claim. |
+| D4 | npm candidate `whatsapp-ng`; initial prerelease `1.1.0-rc.1` tagged `next` | M1 verifies name/rights and implements metadata. M5 requires separate publication approval. No name reservation is claimed. |
+| D5 | Stable candidate `1.1.0`, default tag `latest` only by later approval | Not an automatic consequence of a passing prerelease; M4 limitations must be dispositioned. |
+| D6 | Initial maintainer `jagaliano`; [ordinary issues](https://github.com/jagaliano/whatsapp-ng/issues), best effort, no SLA | Original authors retain attribution; maintaining the fork is not ownership of all inherited copyright. Sensitive reports must not include credentials/private messages in public issues. |
+| D7 | Establish GitHub private vulnerability reporting or an approved equivalent in M1, before npm release | Policy selected, channel not enabled/verified by M0. Do not advertise a working private-report route until implemented. |
+| D8 | Canonical plan/tasks live in `specs/037-maintained-fork-readiness/`, with README navigation | Prepared and Git-indexed during M0; documentation publication was subsequently approved separately. Root `FORK-STRATEGY.md` stays an ignored convenience pointer. |
+| D9 | macOS and Linux qualification targets, Node 26.x / Pi 1.3.0 | Architecture and exact Node/OS patch combinations must be recorded by M3. Only demonstrated combinations can become artifact-supported claims. Windows remains best effort/unverified. |
+| D10 | Keep current entry, storage/auth/profile/archives and actual manifest unchanged in M0 | `whatsapp-pi.ts`, `~/.pi/agent/extensions/whatsapp-pi`, and current `whatsapp-pi@1.0.71` are intentional until their separately gated work. |
+
+### Qualification targets versus existing observations
+
+| OS | Node / Pi target | Existing observation | Release qualification status |
+|---|---|---|---|
+| macOS | Node 26.x / Pi 1.3.0 | Current host reports Node v26.12.0 and Pi 1.3.0. Earlier source-checkout tests/startup/live evidence exists for Phases 1–3. | Installed `whatsapp-ng` artifact not qualified; exact OS/architecture/patch results required in M3. |
+| Linux | Node 26.x / Pi 1.3.0 | No Linux run supplied for this baseline. Existing Linux instructions are not test evidence. | M3 qualification required before supported-artifact claims. |
+| Windows | No initial qualification commitment | No Windows run supplied. Existing inherited instructions are not certification. | Best effort/unverified; no stable support promise. |
+
+The inherited README/manifest still describe the upstream package and broader prerequisites. The M0 status notice points out that distinction; M1 must align installation/support claims before publication. No dependencies are installed in this new checkout, and the old checkout's environment/results must not be relabeled as new clean-install results.
+
+### M0 implementation evidence and completion boundary
+
+- Local branch created from the exact `d415f0b` baseline. New `main`/`origin/main` and the old repository's feature branch remain unchanged.
+- GitHub reports the new repository public, default branch `main`, with ordinary issues enabled. npm lookup found no existing `whatsapp-ng` package; registration/publishing rights are still unverified.
+- Prepared this canonical plan, its tasks and a minimal README status/navigation notice. No license text or package/dependency/storage/runtime edits.
+- Safely inspected only relevant model/subagent policy fields: no auth files, tokens or global configuration edits. Registry lists `openai-codex/gpt-6.1-sol`; `pi-subagents` 0.80.0 is installed. The configured reviewer default differs, so the requested provider/model must be explicitly overridden and confirmed from runtime.
+- Parent document/source/index validation passed: M0–M5 order/gates, D1–D10, selected policies, relative links, whitespace, exact baseline and unchanged runtime/package/storage/gitignore/old-repo state. Only README plus this numbered plan/tasks are staged; `git diff --cached --check` passed. New `main`/`origin/main` remain at `d415f0b`.
+- Runtime test/lint/typecheck/startup were not rerun: M0 changes only documentation and no dependency installation was authorized/performed. The 397-test result remains prior source-checkout evidence, not a new artifact qualification.
+- Independent requested Codex review completed: run `5f322a94-441f-47f1-807a-fcb82edfd142`, actual runtime confirmed **`openai-codex/gpt-6.1-sol`**, medium thinking, with no provider/model fallback. Verdict: **OK**, **“No issues found.”** The reviewer inspected the documentation and relevant source read-only; it performed no commands/tests, remote checks or live operations. Branch/index state and historical evidence were parent-supplied, not independently reproduced.
+- Parent final checks additionally verified document anchors, staged content safety and the exact three-file documentation scope. No code/package/configuration side effects were introduced. M0 is ready for the separate owner commit/push decision, not an operational release approval.
+
+M0 completion means the local branch and reviewed, staged decision record are ready for owner approval to commit/push. It does not mean the decisions are implemented in package metadata, published publicly, or that any M1–M5 release gate has passed.
