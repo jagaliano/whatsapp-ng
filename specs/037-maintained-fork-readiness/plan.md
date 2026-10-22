@@ -14,7 +14,7 @@ baseline: d415f0ba7f392b15d5b635f5b3aa9f62ab58c25c
 
 **Decision:** continue the existing codebase as `jagaliano/whatsapp-ng`, with npm candidate name `whatsapp-ng`; do not migrate to another extension or Baileys fork.
 
-**Execution status:** M0 completed and independently source-reviewed. The owner subsequently authorized committing/pushing its documentation and continuing with M1. M1 is authorized but not implemented at this checkpoint; M2–M5 remain unstarted and unauthorized. This numbered plan and [tasks](tasks.md) are the canonical repository artifacts; the ignored root strategy is only a navigation pointer. The later approval permits M0 documentation publication, not npm publication or stable promotion.
+**Execution status:** M0 completed and independently source-reviewed. The owner subsequently authorized committing/pushing its documentation and continuing with M1. M0 was committed/pushed as `911cecd`. Safe M1 preparation and parent validation are implemented, but the owner has accepted upstream's MIT declaration and LICENSE has been added; M1 still awaits npm-account verification; M2–M5 remain unstarted and unauthorized. This numbered plan and [tasks](tasks.md) are the canonical repository artifacts; the ignored root strategy is only a navigation pointer. The later approval permits M0 documentation publication, not npm publication or stable promotion.
 
 ## 1. Direction and boundaries
 
@@ -72,8 +72,8 @@ Serialize M1/M2 manifest and dependency-file edits; keep packaging, transport pi
 
 **Scope:** repository/release decisions, no dependency or transport changes.
 
-1. Completed locally: `chore/fork-release-readiness` was created from `main` at `d415f0b`. `main` and `origin/main` remain at the original baseline; the maintenance branch is not pushed. The old repository and its published upstream feature branches are untouched.
-2. Completed locally: this canonical numbered plan and `tasks.md` record the baseline, remotes, existing PR links, supported-use-case boundaries and known live gaps. README links to this record. Files are staged for review, not committed or published; they become a durable public handoff only after separate commit/push approval. No ignored root file is the sole authority.
+1. Completed locally: `chore/fork-release-readiness` was created from `main` at `d415f0b`. `main` and `origin/main` remain at the original baseline. The reviewed M0 documentation was later committed/pushed as `911cecd`; M1 edits remain uncommitted. The old repository and its published upstream feature branches are untouched.
+2. Completed locally: this canonical numbered plan and `tasks.md` record the baseline, remotes, existing PR links, supported-use-case boundaries and known live gaps. README links to this record. The reviewed M0 files were committed/pushed as `911cecd` after separate approval; later M1 work is not covered by that commit approval. No ignored root file is the sole authority.
 3. Record the integration policy for the new `main`: reviewed maintenance work promotes there, while the old fork and upstream feature PR branches remain intact. The new repository's initial default-branch bootstrap was explicitly approved; this does not authorize changing the old repository's default branch or rewriting history. We need not wait for upstream merges to maintain our line.
 4. Approved: npm candidate `whatsapp-ng`, first prerelease `1.1.0-rc.1`, published only under `next` if M1–M5 pass and publication is explicitly approved. Stable `1.1.0`/`latest` is a separate later decision. No existing npm package was found at the M0 lookup, but registration eligibility and publishing rights remain M1 gates. A different package name does not automatically update existing `whatsapp-pi` installations.
 5. Approved: GitHub owner `jagaliano` is the initial maintainer; non-sensitive bugs go to the new repository's issues, best effort with no SLA. M1 must establish a private security-reporting channel before npm release. Initial qualification targets are macOS and Linux with Node 26.x / Pi 1.3.0, not yet certified artifact support; Windows is best effort/unverified. See the decision/matrix record below.
@@ -88,7 +88,7 @@ Serialize M1/M2 manifest and dependency-file edits; keep packaging, transport pi
 
 **Scope:** a packaging/documentation slice; no bundled PDF major upgrade or protocol patch.
 
-1. Verify the upstream MIT declaration's provenance and applicable original notices. Obtain authoritative license text/clarification where necessary; seek appropriate advice if the grant remains unclear. Preserve original attribution and relevant third-party notices. **Do not publish while this is unresolved.**
+1. Record upstream's MIT declaration and the owner's accepted licensing basis. Include MIT terms, the supplied 2026 owner notice and yearless upstream attribution; preserve history and relevant third-party notices. The owner has decided not to wait for issue #17; it is advisory, not a license gate.
 2. Verify the chosen npm name/scope and account permissions without exposing tokens. Update package name/version, repository, homepage and issue destinations to the maintained line, while crediting/linking upstream.
 3. Verify Pi's current host-provided dependency contract before changing TypeBox declarations. [Issue 12](https://github.com/RaphaCastelloes/whatsapp-pi/issues/12) proposes a wildcard peer plus a development dependency. Confirm this against the targeted host/loader and an actual packaged install; do not treat a donor manifest as self-validating.
 4. Keep storage/auth/archive identities unchanged. Document removal or disabling of the prior extension before enabling the maintained package, including persistent/headless services and how to return to the prior installation safely.
@@ -220,11 +220,11 @@ All unofficial personal-account transports retain platform-policy, account-restr
 
 ## 8. Immediate next action and open gates
 
-**Current gate:** M0 implementation and independent review are complete on `chore/fork-release-readiness`; separate commit/push and M1 implementation approval have now been received. Publish the reviewed M0 record, then execute only M1. Any unresolved license/rights check remains a stop condition for npm release. Do not start Phase 4 or patch Baileys. Upstream PR merges are not a prerequisite.
+**Current gate:** M0 implementation and independent review are complete on `chore/fork-release-readiness`; separate commit/push and M1 implementation approval have now been received. The M0 record was published as `911cecd`. Execute only M1. The owner has accepted upstream MIT and added notices; the remaining M1 gate is npm-account/registration verification. Publication still requires the later qualification and approval gates. Do not start Phase 4 or patch Baileys. Upstream PR merges are not a prerequisite.
 
 M0 decisions are recorded below. Remaining implementation gates include:
 
-- M1: authoritative license/provenance, npm registration/publishing rights, actual package metadata and private security channel.
+- M1: npm registration/publishing-account verification remains open; owner-accepted MIT, package metadata and private security channel are implemented.
 - M2: dependency/security remediation and owner-approved lockfile/reproducibility policy.
 - M3: actual artifact qualification, including Linux and architecture/patch-version evidence.
 - M4: separately authorized live backfill/receipt verification or truthful experimental disposition.
@@ -269,7 +269,7 @@ The owner selected the release, target matrix and support policies through expli
 | Linux | Node 26.x / Pi 1.3.0 | No Linux run supplied for this baseline. Existing Linux instructions are not test evidence. | M3 qualification required before supported-artifact claims. |
 | Windows | No initial qualification commitment | No Windows run supplied. Existing inherited instructions are not certification. | Best effort/unverified; no stable support promise. |
 
-The inherited README/manifest still describe the upstream package and broader prerequisites. The M0 status notice points out that distinction; M1 must align installation/support claims before publication. No dependencies are installed in this new checkout, and the old checkout's environment/results must not be relabeled as new clean-install results.
+**Historical M0 snapshot (before M1):** the inherited README/manifest still described the upstream package and broader prerequisites. The M0 status notice identified that distinction, and no dependencies were installed in the new checkout at that time. M1 later changed the packaging/docs and installed approved local validation dependencies, as section 11 records. The old checkout's evidence is not a new clean-install result.
 
 ### M0 implementation evidence and completion boundary
 
@@ -283,3 +283,57 @@ The inherited README/manifest still describe the upstream package and broader pr
 - Parent final checks additionally verified document anchors, staged content safety and the exact three-file documentation scope. No code/package/configuration side effects were introduced. M0 is ready for the separate owner commit/push decision, not an operational release approval.
 
 M0 completion means the local branch and reviewed, staged decision record are ready for owner approval to commit/push. It does not mean the decisions are implemented in package metadata, published publicly, or that any M1–M5 release gate has passed.
+
+## 11. M1 preparation and validation checkpoint
+
+**Status:** technical preparation/parent checks implemented; **M1 is not complete** because npm-account rights remain unresolved. The owner-accepted MIT basis resolves the earlier licensing gate. No M1 commit, npm publication, live operation or M2 upgrade is authorized/performed. M0 documentation alone was committed/pushed as `911cecd`.
+
+### Scope and requirement trace
+
+| Requirement | Preparation / evidence | Gate |
+|---|---|---|
+| R1 identity | `whatsapp-ng@1.1.0-rc.1`, new repository/issue/homepage metadata, original `author: Rapha` retained, fork maintainer credited | Implemented, unreleased. |
+| R2 host peers | Legacy SDK/TUI/TypeBox imports are wildcard peers, not runtime dependencies; dev copies retained | Pi 1.3.0 aliases verified; packed entry registers without host-peer warnings. |
+| R3 compatibility | Entry, runtime source, flags/commands/tools, auth/storage and scripts unchanged | Source-boundary checks passed. |
+| R4 publication safety | `private: true`; planned `publishConfig.tag: next`; inherited MIT metadata documented in `LICENSING.md` | MIT basis accepted by owner; LICENSE includes supplied 2026 owner notice and yearless upstream attribution. npm account verification remains open. |
+| R5 reporting | GitHub private vulnerability reporting enabled and GET-verified `enabled: true`; `SECURITY.md` documents route and best-effort support | Implemented setting; no real report or credentials submitted. |
+| R6 install/support docs | Maintained-fork README, source/future npm distinction, old-resource stop/disable and switchback guidance, external build prerequisites, unchanged storage names | Legacy systemd installer explicitly still installs upstream; it is not advertised as a fork installer. Linux/Windows qualification not claimed. |
+| R7 checks | 5 manifest/license regressions added; 402 tests/44 files, lint/typecheck and refreshed actual-packed-entry loader/RPC passed | Earlier results below; accepted-license rerun in section 12. M3 clean-install/platform certification remains pending. |
+| R8 boundaries | User approved local validation install without lifecycles; no runtime/global auth/configuration changes | M1 changes not committed/pushed; remote actions are the approved new-repo private-report setting and the later owner-requested upstream license inquiry. |
+
+### Provenance and validation setup
+
+- Upstream commit `49adbc3` and registry `whatsapp-pi@1.0.70` consistently declare MIT/Rapha. Published tarball bytes matched the registry SHA-512 integrity; no license/notice file or README license text was present. The Git history inspected supplied no license file. The owner subsequently accepted the declared MIT license as the basis for this continuation, superseding the earlier decision to wait for clarification. LICENSE now includes MIT terms, the supplied 2026 owner notice and yearless Rapha attribution. See `LICENSING.md`; [upstream issue #17](https://github.com/RaphaCastelloes/whatsapp-pi/issues/17) remains advisory. No upstream confirmation or unverified year range is claimed.
+- `npm whoami --json` failed authentication/verification. No login, token lookup or credential modification was attempted. An unclaimed-name lookup is not registration or proof of publishing rights.
+- The new root had no baseline lockfile. With explicit permission, generated an **ignored local validation lock** from the old checkout's installed-tree lock, adjusted root metadata and installed with `npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund`. This does not adopt/commit a lockfile policy.
+- Verified retained baseline versions: Baileys 7.0.0-rc14, LiteParse 1.5.3, legacy SDK/TUI 0.73.1 and TypeBox 0.27.12. No PDF major or transport upgrade. SDK `latest`, transitive/deprecation/security assessment and a durable lock policy remain M2 work.
+- Host: Darwin x86_64, Node v26.12.0, npm 12.2.0, Pi 1.3.0, system FFmpeg 9.0.2. Dependency lifecycle scripts were disabled; native/media tests used system `ffmpeg` on PATH. An initial forced `FFMPEG_PATH` run failed a fixture expecting the command name; removing that validation override produced the passing full rerun, without altering runtime or existing tests.
+
+### Earlier parent-run results (before accepted-license update)
+
+- `npm test`: **401 passed across 44 files**; real native Baileys/media/quote and codec suites ran.
+- `npm run lint`, `npm run typecheck`, `git diff --check`: passed with temporary `HOME` and `PI_CODING_AGENT_DIR`.
+- `npm pack --dry-run --ignore-scripts --json` and local `npm pack --ignore-scripts`: **34 entries**, with source/entry, README, security/licensing/changelog included; no credentials, auth/archive data, caches, tests or scripts/vendor payloads. Missing scripts/binaries are explicitly external/source-checkout prerequisites, not claimed bundled resources.
+- Pre-inquiry candidate tarball SHA-1: `d0bff2073ffed6af0c31112ddf5c539873c73e21`. It was generated locally, not published. The later inquiry changes packaged licensing documentation; its refreshed artifact check is recorded below.
+- Extracted the actual tarball into a temporary consumer and linked only its production dependencies to the validated local tree. **No physical host-peer copies** were present in the consumer. Pi's actual resource loader registered **7 tools and 1 command**, with **0 errors/0 warnings**.
+- Isolated Pi RPC against that packed entry returned successful `get_state`, with temporary HOME/agent directory, no ambient extensions/MCP, no auth or auto-connect flag.
+- This preliminary loader check **reuses validated dependencies**; it is not a fully independent clean install, registry artifact, Linux certification, complete native installation or M4 live validation. Full M3 gates remain open.
+- Historical documentation-only inquiry follow-up (licensing wait superseded by the later owner decision below): posted and read-back-verified [upstream issue #17](https://github.com/RaphaCastelloes/whatsapp-pi/issues/17), updated licensing status/tasks, and generated a refreshed 34-entry local tarball (SHA-1 `86c25d0c2c8d1bcbfad04747b61ca5e9f452d947`). Refreshed actual packed-entry loader again registered 7 tools/1 command with 0 errors/warnings, and isolated RPC `get_state` passed. Same reused-production-dependency limitation applies. Links/whitespace and unchanged runtime/HEAD checks passed; full test/lint/typecheck were not rerun for this documentation-only follow-up. The earlier 401-test result is historical evidence, not a new run. No final `LICENSE`, npm login/publication or commit/push occurred; T008 awaits upstream clarification and T009 remains unresolved.
+
+### Complexity tracking and next gate
+
+No constitutional deviation: packaging metadata/docs and a small typed manifest test only; no new runtime class, abstraction, framework or `any`. Existing OOP/service boundaries are untouched. Sensitive module-resolution behavior received an actual host-loader check. Independent read-only review used the retained exact `openai-codex/gpt-6.1-sol` model (runtime verified), run `70adfdc6-e2a5-494e-aa01-fbb0c606edfa`. Verdict: **OK with notes** for technical preparation; all five constitutional principles were confirmed. One P2 historical/current-state ambiguity was corrected by explicitly labeling the M0 snapshot and using past tense. No commands, tests, network checks or artifact executions were performed by the reviewer; parent evidence was not independently reproduced. This is not M1 completion or publication approval.
+
+To close M1: verify the npm publishing account/name eligibility without exposing credentials. The owner-accepted MIT basis has closed the earlier licensing gate. Any resulting content/package change must be revalidated. Do not remove the private guard, publish npm, run live accounts, start M2 or commit M1 automatically.
+
+## 12. Owner-accepted MIT licensing decision
+
+The owner instructed this continuation to rely on upstream's declared MIT license rather than wait for clarification. This supersedes the earlier licensing wait without claiming an upstream response or relying on another fork's choices.
+
+- Added standard MIT terms in LICENSE with the supplied `2026 José Antonio Galiano Sandoval` notice and yearless `Rapha Castelloes` attribution. No unverified upstream year range is asserted.
+- Updated packaged licensing/security/changelog/README and M1 requirements/tasks: T008 is satisfied on this recorded basis; issue #17 is advisory. Third-party licenses/notices remain applicable.
+- Added a focused license regression; baseline failed with ENOENT before LICENSE was added. Parent review confirms the typed test and documentation-only license addition introduce no constitutional deviation or runtime/module-boundary changes.
+- npm account verification, publication approval and later qualification gates are unchanged. No login/token changes, commits, publication, live operations or M2 work are authorized by this decision.
+- Validation rerun: `npm test` passed **402 tests across 44 files**; `npm run lint`, `npm run typecheck` and `git diff --check` passed with temporary HOME/agent directory and system FFmpeg on PATH. No build script is declared.
+- Refreshed local tarball: **35 entries**, SHA-1 `e86bcd585aea738d26f85392d15f84212cf71911`. LICENSE is included automatically and matches source byte-for-byte; packaged document links resolve. Private guard and runtime/source boundary are unchanged, with no credentials/state/caches/tests bundled.
+- Refreshed actual-packed-entry loader registered **7 tools/1 command, 0 errors/warnings**; isolated RPC `get_state` passed. Production dependencies were linked to the validated local tree, with no consumer host-peer copies. This is still preliminary reused-dependency evidence, not M3 independent clean-install/platform certification. No further independent review was dispatched for this license-text/typed-test update; the earlier packaging review remains historical.
