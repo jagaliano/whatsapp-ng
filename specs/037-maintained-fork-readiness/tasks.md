@@ -8,7 +8,7 @@
 
 **Status:** M0 published as `911cecd`; M1 packaging committed as `f90be5a`; M2 implemented, independently reviewed, validated and pushed as `759a47f`. The M1 npm-account check remains open; M3–M5 require separate authorization.
 
-**Scope:** M1/M2 implementation, exact Codex review, then separate commits/push are authorized. M3–M5 and npm publication require separate authorization. Phase 4 is undefined/deferred.
+**Scope:** M1/M2 implementation, exact Codex review, then separate commits/push are authorized. The later bounded installed-candidate/live validation was separately approved and is recorded below. Remaining M3–M5 work and npm publication need separate authorization. Phase 4 is undefined/deferred.
 
 ## M0: maintenance lane and decisions
 
@@ -48,7 +48,15 @@ The preparation checkboxes did not authorize publication. The owner subsequently
 - [x] T024 Run exact openai-codex/gpt-6.1-sol independent read-only review; correct stale authorization wording, recheck extracted M1 checkpoint and test discovery. Final verdict OK/No issues found; commands/evidence remain parent-verified.
 - [x] T025 Safety-check/stage explicit M1/M2 scope; created separate reviewed commits `f90be5a` and `759a47f`, pushed and verified `origin/chore/fork-release-readiness`. No npm publication or PR.
 
-## Later milestones: M2 authorized; M3–M5 separately gated
+## Approved post-M2 installed/live validation
+
+- [x] T026 Rerun all repository checks: 414 tests/45 files, lint/typecheck/whitespace, full and production audits zero.
+- [x] T027 Install the actual tarball and production dependencies in a temporary consumer; verify loader and synthetic offline restart, raw-data absence, account partitions, 0600 archive and corrupt-store preservation.
+- [x] T028 Perform the explicitly approved seven generated sends, six native quotes, generated-PDF network parse, restart and one history request capped at three; disconnect safely without logout. Transport calls succeeded, but history remained unknown with zero imports and receipts were not observed.
+- [x] T029 Ask for client confirmation and record the lack of confirmation without claiming delivery/rendering/playback. Preserve private detailed results outside Git; commit only [sanitized evidence](validation.md).
+- [ ] T030 Close remaining managed-install/platform/exclusivity and successful live backfill/receipt/client gaps under fresh scope, or preserve explicit prerelease/unverified limits. No full M3/M4 completion or npm release is claimed.
+
+## Later milestones: scoped validation recorded; remaining M3–M5 gates open
 
 - [ ] M1 Resolve licensing/provenance, npm rights, actual fork metadata, private security channel and Pi host packaging.
 - [x] M2 Implement owner-approved lock policy and scoped dependency/security migrations; clean reproduction, exact-model review and commit/push completed. Platform/native limits remain explicit.

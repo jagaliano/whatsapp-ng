@@ -1,0 +1,54 @@
+# Installed-candidate and controlled live validation
+
+## Scope and authorization
+
+The owner requested fresh repository checks and live testing after M2 delivery. The recipient was explicitly confirmed against a mismatched digit in the request. The owner approved the default saved linked-device session, generated text/media/native replies, receipt observation, a history request capped at three messages, normal credential refresh and disconnect without logout. The owner confirmed prior same-profile connections/services were stopped.
+
+No recipient number, account identifier, message/request IDs, credentials, raw archive, downloaded private content or logs are included here. Detailed results remain in the private temporary harness workspace. No remote message edit/delete, global configuration change or npm publication was performed.
+
+## Candidate and repository checks
+
+- Source checkpoint: `1f8034bb0ab5fa4ffb6000b0aaf0e1f78a3160e4`; this evidence-only follow-up does not change the tested runtime or package payload.
+- Actual `whatsapp-ng@1.1.0-rc.1` tarball SHA-1: `6fa8e2164c2c570b08ffa270a248cab87c21e02a`.
+- Fresh `npm test`: **414 passed across 45 files**. No skipped OCR/native contract was reported.
+- `npm run lint`, `npm run typecheck`, `git diff --check`: exit 0. No build script is declared.
+- Fresh full-tree and production-only npm audits: **0 vulnerabilities**. These are registry-advisory results, not a complete embedded/system native-library audit.
+- Temporary HOME/agent directory for repository checks; system FFmpeg and Tesseract were used, not production data.
+
+## Actual installation and synthetic isolation
+
+Unlike M2's preliminary linked-dependency probe, this run installed the local tarball and its dependencies into a fresh temporary consumer using `npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund`. It installed 92 production packages and no physical copies of the three host peers. Its own production audit reported zero findings.
+
+Resolved direct/native selections were Baileys 7.0.0-rc14, LiteParse 2.15.1 and the Darwin x64 LiteParse optional package 2.15.1. The actual Pi resource loader registered seven tools and `/whatsapp` with zero errors/warnings.
+
+Checks against the installed package's actual storage classes passed:
+
+- Synthetic archive persisted and was readable after offline restart.
+- Raw retry data was not persisted.
+- Switching synthetic accounts selected an empty separate partition.
+- Archive files had mode 0600.
+- A synthetic corrupt store remained degraded and unchanged after flush.
+
+These preflight checks accessed no real auth. They do not complete Pi-managed install/remove/reinstall, duplicate-process transport protection, every migration case or Linux/Windows qualification. M3 remains partially qualified, not closed.
+
+## Controlled live service results
+
+The harness loaded services from the actually installed package, used an isolated config/archive/media/log workspace and accessed the approved saved auth directory in place. Credentials were not copied into the consumer. The connected account matched the saved session. Only one harness connection was active at a time.
+
+| Check | Observed result |
+|---|---|
+| Generated sends | Seven send calls returned success: text anchor, text reply, PDF, image, beep voice note, short video and post-restart reply. This is transport API acceptance, not client delivery/read confirmation. |
+| Native quotes | All six intended replies contained the anchor's native quote stanza. |
+| PDF network round-trip | The harness downloaded/decrypted its own generated sent PDF through the actual incoming-media pipeline and confirmed the expected native text preview. This is not a contact-originated or agent-mediated inbound-turn test. |
+| Restart | Safe disconnect and offline re-open preserved the anchor and secret-free quote projection, with no raw retry data. A reply using the restored quote succeeded after reconnect. |
+| Archive safety | Mode 0600 and absence of media-key/URL/direct-path/thumbnail/context fields in the archived projection were verified. |
+| Explicit history | One request capped at three messages was submitted; final status **unknown**, with **0 imported messages**. Successful backfill is not demonstrated. |
+| Delivery/read receipts | None observed for the test messages. This neither proves delivery nor proves nondelivery. |
+| Client rendering/playback | Asked explicitly; the owner did not confirm receipt/checking. Receipt, PDF/image opening, quote rendering and audio/video playback remain unverified on a physical client. |
+| Shutdown | Disconnected without logout; saved credentials remained present. No automatic message retry was performed after the completed run. |
+
+## Remaining boundaries
+
+This is an installed-package, service-level live probe on the current Darwin x86_64 / Node 26.12.0 host, not a production certificate, group/participant receipt test, complete agent-mediated conversation test or full M3/M4 closure. Successful live history import and receipt reconciliation remain unverified. Client rendering/playback must not be inferred from send success or quote metadata.
+
+The package remains private/unpublished. M1 npm-account verification, remaining M3 qualification, M4 live gaps and M5 publication/stable promotion remain separately gated. No source fix was needed; only this sanitized evidence and the canonical progress record are committed by the follow-up.
