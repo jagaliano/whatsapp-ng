@@ -2,7 +2,7 @@
 
 **Baseline:** `d415f0b`; M0 documentation published as `911cecd`.
 
-**Scope:** M0 decisions, M1 packaging and owner-authorized M2 dependency/security changes, exact Codex review, then commit/push. A later owner-approved installed-candidate/live probe is recorded in [validation.md](validation.md); remaining M3–M5 gates are not closed by that probe.
+**Scope:** M0 decisions, M1 packaging and owner-authorized M2 dependency/security changes, exact Codex review, then commit/push. Later owner-approved installed-candidate/live probes and standalone M4 completion are recorded in [validation.md](validation.md). M4 live evidence and requested exact-model closure review are complete for the stated host/direct-chat scope; remaining M1/M3/M5 gates are not closed.
 
 **Status:** M1 packaging and accepted MIT are implemented; npm-account verification remains open. M2 implementation passed clean npm ci, 414 tests/45 files, lint/typecheck and zero-finding full/production audits; independent exact-model review and focused rechecks returned OK. Reviewed M1/M2 commits `f90be5a` and `759a47f` were pushed to the maintenance branch. No npm publication.
 
@@ -31,6 +31,6 @@ Metadata/peer/docs/security preparations may be implemented while R4's external 
 
 The official Pi 1.3.0 package guidance supplies host peers and suppresses peer installation for managed packages. Its installed loader maps the legacy `@mariozechner/*` and `@sinclair/typebox` imports used here. Runtime/module behavior must still be observed in the isolated artifact check.
 
-Initial qualification targets remain macOS/Linux, Node 26.x / Pi 1.3.0. Windows and successful live backfill/receipt reconciliation are unverified. Previous 397-test source-checkout evidence is not a new artifact result.
+Initial qualification targets remain macOS/Linux, Node 26.x / Pi 1.3.0. Windows remains unverified. Owner-approved M4 now demonstrates representative media/native-quote client behavior, persisted direct-chat READ/PLAYED updates and a correlated two-record backfill visible in a fresh offline reader. This is not group/per-participant, large-history, other-device or full agent-mediated inbound coverage; earlier unreadability and its undiagnosed cause remain recorded. Requested read-only openai-codex/gpt-6.1-sol closure review returned OK/No issues found; actual model/medium thinking were confirmed from child metadata. Previous 397-test source-checkout evidence is not a new artifact result.
 
 See [plan.md](plan.md) for staged gates, decisions and execution evidence, and [tasks.md](tasks.md) for the corresponding work items.
