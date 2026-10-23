@@ -12,7 +12,7 @@ Pi is a powerful agentic AI coding assistant that operates in your terminal. Thi
 
 Maintained continuation of [RaphaCastelloes/whatsapp-pi](https://github.com/RaphaCastelloes/whatsapp-pi), preserving original Git history and attribution for independent fixes and releases. Original author metadata remains **Rapha**; fork maintenance is led by **jagaliano**. This does not assert that upstream is abandoned.
 
-> **Unreleased candidate:** `whatsapp-ng@1.1.0-rc.1` is not published to npm. `private: true` keeps publication blocked pending npm-account verification and release qualification. The code is [MIT licensed](LICENSE); see [licensing and attribution](LICENSING.md). The intended first tag is `next`, not `latest`. See [approved maintenance plan](https://github.com/jagaliano/whatsapp-ng/blob/911cecd/specs/037-maintained-fork-readiness/plan.md), [changes](CHANGELOG.md) and [private security reporting](SECURITY.md).
+> **Unreleased candidate:** `whatsapp-ng@1.1.0-rc.1` is not published to npm. The npm account-readiness check passed; `private: true` still blocks publication pending remaining artifact qualification and separate release approval. The package name is not reserved. The code is [MIT licensed](LICENSE); see [licensing and attribution](LICENSING.md). The intended first tag is `next`, not `latest`. See [approved maintenance plan](https://github.com/jagaliano/whatsapp-ng/blob/chore/fork-release-readiness/specs/037-maintained-fork-readiness/plan.md), [changes](CHANGELOG.md) and [private security reporting](SECURITY.md).
 
 ## Features
 
