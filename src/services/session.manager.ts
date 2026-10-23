@@ -1,8 +1,10 @@
-import { useMultiFileAuthState } from 'baileys';
+import { useMultiFileAuthState, type SignalKeyStore, type SignalDataTypeMap } from 'baileys';
 import { basename, join, relative } from 'path';
-import { readFile, writeFile, mkdir, rm, rename, readdir } from 'fs/promises';
+import { readFile, writeFile, mkdir, rm, rename, readdir, chmod } from 'fs/promises';
 import { SessionStatus } from '../models/whatsapp.types.js';
 import { t } from '../i18n.js';
+import { TransportLease } from './transport-lease.service.js';
+import { AuthProfileService } from './auth-profile.service.js';
 import {
     getDefaultLegacyStorageRoot,
     getDefaultStorageRoot,
@@ -45,6 +47,7 @@ export class SessionManager {
     private visionModel: string = 'gpt-4o';
     private operatorJid: string = '';
     private configLoaded = false;
+    private authEpoch = 0;
 
     constructor(baseDir = getDefaultStorageRoot(), legacyBaseDir = baseDir === getDefaultStorageRoot() ? getDefaultLegacyStorageRoot() : baseDir) {
         this.storagePaths = createStoragePaths(baseDir, legacyBaseDir);
@@ -72,6 +75,8 @@ export class SessionManager {
         try {
             await this.ensureStorageDirectories();
             await this.migrateLegacyStorageIfNeeded();
+            try { await chmod(this.configPath, 0o600); }
+            catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
             await this.cleanupStaleConfigTempFiles();
             if (!this.configLoaded) {
                 await this.loadConfig();
@@ -191,14 +196,17 @@ export class SessionManager {
                 visionModel: this.visionModel,
                 operatorJid: this.operatorJid
             };
-            await mkdir(this.storagePaths.root, { recursive: true });
+            await mkdir(this.storagePaths.root, { recursive: true, mode: 0o700 });
+            await chmod(this.storagePaths.root, 0o700);
             const serialized = JSON.stringify(config, null, 2);
-            await writeFile(tempPath, serialized);
+            await writeFile(tempPath, serialized, { mode: 0o600 });
+            await chmod(tempPath, 0o600);
             try {
                 await rename(tempPath, this.configPath);
             } catch {
                 // Windows EPERM: atomic rename failed (file locked). Fall back to direct write.
-                await writeFile(this.configPath, serialized);
+                await writeFile(this.configPath, serialized, { mode: 0o600 });
+                await chmod(this.configPath, 0o600);
                 await this.removeConfigTempFile(tempPath);
             }
         } catch (error) {
@@ -432,9 +440,43 @@ export class SessionManager {
         }
     }
 
-    async getAuthState() {
-        await this.ensureStorageDirectories();
-        return await useMultiFileAuthState(this.authStateDir);
+    async getAuthState(lease: TransportLease) {
+        if (!lease?.isHeld) throw new Error(t('profile.ownerRequired'));
+        await lease.assertProfile(this.authStateDir);
+        const epoch = ++this.authEpoch;
+        const profile = new AuthProfileService(this.storagePaths, this.authStateDir, lease);
+        await profile.prepare();
+        const auth = await useMultiFileAuthState(lease.profileDir);
+        const assertCurrent = async () => {
+            if (epoch !== this.authEpoch) throw new Error(t('profile.authClosed'));
+            await lease.assertProfile(lease.profileDir);
+        };
+        // rc14 uses Promise.all internally: first rejection need not settle other file I/O.
+        // Single-entry calls keep every admitted operation fenced until all its I/O settles.
+        const keys: SignalKeyStore = {
+            get: async <T extends keyof SignalDataTypeMap>(type: T, ids: string[]) => {
+                await assertCurrent();
+                const result: { [id: string]: SignalDataTypeMap[T] } = {};
+                for (const id of ids) {
+                    await assertCurrent();
+                    Object.assign(result, await auth.state.keys.get(type, [id]));
+                }
+                return result;
+            },
+            set: async data => {
+                await assertCurrent();
+                for (const [category, values] of Object.entries(data)) {
+                    for (const [id, value] of Object.entries(values ?? {})) {
+                        await assertCurrent();
+                        await auth.state.keys.set({ [category]: { [id]: value } } as Parameters<SignalKeyStore['set']>[0]);
+                    }
+                }
+            }
+        };
+        return {
+            state: { creds: auth.state.creds, keys },
+            saveCreds: async () => { await assertCurrent(); await auth.saveCreds(); await profile.confirmSaved(); }
+        };
     }
 
     private async syncAuthStateFromDisk() {
@@ -451,24 +493,20 @@ export class SessionManager {
     }
 
     private async hasCredentialsFile(): Promise<boolean> {
-        try {
-            await readFile(join(this.authStateDir, 'creds.json'));
-            return true;
-        } catch {
-            return false;
-        }
+        return AuthProfileService.hasSavedState(this.storagePaths, this.authStateDir);
     }
 
-    async deleteAuthState() {
+    async deleteAuthState(owner?: TransportLease) {
+        const lease = owner ?? await TransportLease.acquire(this.authStateDir);
         try {
-            await rm(this.authStateDir, { recursive: true, force: true });
-            await mkdir(this.authStateDir, { recursive: true });
+            await lease.assertProfile(this.authStateDir);
+            if (lease.hasAuthScope) throw new Error(t('profile.retireRequired'));
+            this.authEpoch++;
+            await new AuthProfileService(this.storagePaths, this.authStateDir, lease).reset();
             this.status = 'logged-out';
             this.hasAuthState = false;
             await this.saveConfig();
-        } catch (error) {
-            console.error(t('session.manager.failedDeleteAuthState'), error);
-        }
+        } finally { if (!owner) await lease.release(); }
     }
 
     getStatus(): SessionStatus {

@@ -91,7 +91,17 @@ PDF previews use pinned LiteParse 2.15.1 and its matching optional native packag
 
 Stop the prior extension and every same-profile Pi/tmux/headless service before enabling this continuation. Use `/whatsapp > Disconnect WhatsApp`, stop the owning Pi process as needed, and disable the old package/resource with `pi config` or remove its exact source with `pi remove <source>` after checking `pi list`. Project-local installations need the corresponding local configuration too. Do not edit global settings or delete auth as an automatic migration step.
 
-Both names deliberately use the existing `~/.pi/agent/extensions/whatsapp-pi` storage/auth/profile layout. A package-name change alone does not require re-pairing. Archive locks do not prevent a second WhatsApp connection taking over the session. Do not run both packages against one profile.
+Both names deliberately use the existing `~/.pi/agent/extensions/whatsapp-pi` storage/auth/profile layout. A package-name change alone does not require re-pairing. A separate canonical-profile transport lease rejects competing cooperating instances before auth/socket work and remains held while admitted credential I/O settles. Archive locks alone do not provide this protection. Old clients that ignore the lease, copied credential directories and distributed/network-filesystem locking are outside this guarantee: stop prior instances first.
+
+### Auth adoption and recovery
+
+Offline startup/history may migrate config/history and discover saved-state metadata, but does not copy or read auth contents. Explicit Connect or a requested online start may adopt one complete matching legacy auth profile under source and destination ownership. Initialized auth is never merged with another legacy root; group profiles do not borrow default-profile credentials. Original legacy bytes are retained. Adoption uses private staged files and an atomic directory replacement.
+
+Each canonical auth directory has sibling `<auth-directory>.transport-lock` and `<auth-directory>.auth-profile.json` control files. The latter contains only a schema version and adoption/reset state, not keys or account identifiers. Logout resets only the current profile and prevents later resurrection from preserved legacy originals. Interrupted adoption/reset, malformed auth or unsupported metadata fails closed; it is not silently replaced with a fresh identity.
+
+Do not delete auth, config or archives to recover a lock. First stop every process using the profile, including old services. A lock is never automatically stolen merely because its PID appears dead; PID reuse is possible. Only after independently establishing that no owner remains may an operator explicitly remove that single stale transport-lock file. Corrupt/future/interrupted profile metadata and private orphan import/retired directories require separate explicit recovery after inspecting the preserved originals; do not attach their contents to an issue or blindly remove them. These are cooperative local-filesystem guards, not an OS sandbox.
+
+Storage/auth directories are private (`0700`); config, saved credentials, profile-control files and new archive snapshots use `0600`. Baileys can create additional key files with umask-derived leaf modes; the private auth directory is their confidentiality boundary. Filesystem permissions are not encryption.
 
 ### Candidate use and future registry installation
 

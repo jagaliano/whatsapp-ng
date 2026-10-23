@@ -3,6 +3,7 @@ import { RecentsService } from '../../src/services/recents.service.ts';
 
 const fsMocks = vi.hoisted(() => ({
     mkdir: vi.fn().mockResolvedValue(undefined),
+    chmod: vi.fn().mockResolvedValue(undefined),
     readFile: vi.fn(),
     writeFile: vi.fn().mockResolvedValue(undefined)
 }));
@@ -13,6 +14,7 @@ vi.mock('os', () => ({
 
 vi.mock('fs/promises', () => ({
     mkdir: fsMocks.mkdir,
+    chmod: fsMocks.chmod,
     readFile: fsMocks.readFile,
     writeFile: fsMocks.writeFile
 }));

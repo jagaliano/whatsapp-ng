@@ -5,6 +5,15 @@ type Params = Record<string, string | number | undefined>;
 let currentLocale: string | undefined;
 
 const fallback = {
+    "profile.inUse": "WhatsApp profile is already in use or has an unverified stale transport lock. Stop its owning process before reconnecting; do not clear auth.",
+    "profile.lockChanged": "WhatsApp profile lock ownership changed; no foreign lock was removed.",
+    "profile.authClosed": "WhatsApp auth operations belong to a closed session.",
+    "profile.changed": "WhatsApp auth profile changed while owned; stop before switching profiles.",
+    "profile.ownerRequired": "WhatsApp auth loading requires a held profile owner.",
+    "profile.invalidAuth": "WhatsApp auth is incomplete, corrupt or unsupported. Originals were preserved; stop the profile before explicit recovery.",
+    "profile.invalidMetadata": "WhatsApp auth-profile metadata is corrupt or unsupported. Originals were preserved; stop the profile before explicit recovery.",
+    "profile.interrupted": "WhatsApp auth adoption/reset was interrupted. Originals were preserved; stop the profile before explicit recovery.",
+    "profile.retireRequired": "Retire the active WhatsApp auth scope before resetting the profile.",
     "archive.lifecycle": "Observed lifecycle (missing receipts remain unknown)",
     "archive.unknownScope": "Unknown local history scope.",
     "archive.invalidCursor": "Invalid history cursor or page size for this conversation/scope.",

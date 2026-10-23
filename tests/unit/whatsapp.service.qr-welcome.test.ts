@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetI18n } from '../../src/i18n.ts';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { WhatsAppService as ServiceUnderTest } from '../../src/services/whatsapp.service.ts';
+
+let profileRoot: string;
+const liveServices = new Set<ServiceUnderTest>();
 
 const SELF_JID_NORMALIZED = '5511999998888@s.whatsapp.net';
 
@@ -53,6 +60,7 @@ vi.mock('baileys', async importOriginal => ({
 }));
 
 const createSessionManager = () => ({
+    getAuthStateDir: vi.fn().mockReturnValue(join(profileRoot, 'auth')),
     getAuthState: vi.fn().mockResolvedValue({
         state: { creds: {}, keys: {} },
         saveCreds: vi.fn().mockResolvedValue(undefined)
@@ -72,15 +80,24 @@ describe('WhatsAppService QR welcome message', () => {
     let logSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
+        profileRoot = mkdtempSync(join(tmpdir(), 'wa-qr-welcome-'));
         resetI18n();
         baileysMocks.reset();
+        const start = ServiceUnderTest.prototype.start;
+        vi.spyOn(ServiceUnderTest.prototype, 'start').mockImplementation(function (this: ServiceUnderTest, options) {
+            liveServices.add(this);
+            return start.call(this, options);
+        });
         vi.spyOn(console, 'error').mockImplementation(() => {});
         logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
         vi.spyOn(console, 'warn').mockImplementation(() => {});
     });
 
-    afterEach(() => {
+    afterEach(async () => {
+        await Promise.allSettled([...liveServices].map(service => service.stop()));
+        liveServices.clear();
         vi.useRealTimers();
+        rmSync(profileRoot, { recursive: true, force: true });
         vi.restoreAllMocks();
     });
 

@@ -1,4 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { WhatsAppService as ServiceUnderTest } from '../../src/services/whatsapp.service.ts';
+
+let profileRoot: string;
+const liveServices = new Set<ServiceUnderTest>();
 
 const baileysMocks = vi.hoisted(() => {
     const socket = {
@@ -30,10 +37,23 @@ vi.mock('baileys', () => ({
 
 describe('WhatsAppService console filtering', () => {
     beforeEach(() => {
+        profileRoot = mkdtempSync(join(tmpdir(), 'wa-console-'));
         vi.clearAllMocks();
+        const start = ServiceUnderTest.prototype.start;
+        vi.spyOn(ServiceUnderTest.prototype, 'start').mockImplementation(function (this: ServiceUnderTest, options) {
+            liveServices.add(this);
+            return start.call(this, options);
+        });
+    });
+    afterEach(async () => {
+        await Promise.allSettled([...liveServices].map(service => service.stop()));
+        liveServices.clear();
+        rmSync(profileRoot, { recursive: true, force: true });
+        vi.restoreAllMocks();
     });
 
     const createSessionManager = () => ({
+        getAuthStateDir: vi.fn().mockReturnValue(join(profileRoot, 'auth')),
         getAuthState: vi.fn().mockResolvedValue({
             state: {
                 creds: {},

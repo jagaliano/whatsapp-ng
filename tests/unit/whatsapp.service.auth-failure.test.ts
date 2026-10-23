@@ -1,5 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetI18n } from '../../src/i18n.ts';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { WhatsAppService as ServiceUnderTest } from '../../src/services/whatsapp.service.ts';
+
+let profileRoot: string;
+const liveServices = new Set<ServiceUnderTest>();
+
+async function settleStartedReconnect() {
+    // Advancing fake timers does not itself await the real filesystem lease work.
+    const result = vi.mocked(ServiceUnderTest.prototype.start).mock.results.at(-1);
+    if (result?.type === 'return') await result.value.catch(() => {});
+}
 
 const baileysMocks = vi.hoisted(() => {
     const sockets: any[] = [];
@@ -46,6 +59,7 @@ vi.mock('baileys', () => ({
 }));
 
 const createSessionManager = () => ({
+    getAuthStateDir: vi.fn().mockReturnValue(join(profileRoot, 'auth')),
     getAuthState: vi.fn().mockResolvedValue({
         state: {
             creds: {},
@@ -63,15 +77,24 @@ const createSessionManager = () => ({
 
 describe('WhatsAppService auth failure handling', () => {
     beforeEach(() => {
+        profileRoot = mkdtempSync(join(tmpdir(), 'wa-auth-failure-'));
         resetI18n();
         baileysMocks.reset();
+        const start = ServiceUnderTest.prototype.start;
+        vi.spyOn(ServiceUnderTest.prototype, 'start').mockImplementation(function (this: ServiceUnderTest, options) {
+            liveServices.add(this);
+            return start.call(this, options);
+        });
         vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.spyOn(console, 'log').mockImplementation(() => {});
         vi.spyOn(console, 'warn').mockImplementation(() => {});
     });
 
-    afterEach(() => {
+    afterEach(async () => {
+        await Promise.allSettled([...liveServices].map(service => service.stop()));
+        liveServices.clear();
         vi.useRealTimers();
+        rmSync(profileRoot, { recursive: true, force: true });
         vi.restoreAllMocks();
     });
 
@@ -158,6 +181,7 @@ describe('WhatsAppService auth failure handling', () => {
         expect(baileysMocks.makeWASocket).toHaveBeenCalledTimes(1);
 
         await vi.advanceTimersByTimeAsync(1);
+        await settleStartedReconnect();
         expect(baileysMocks.makeWASocket).toHaveBeenCalledTimes(2);
 
         await baileysMocks.sockets[1].handlers.get('connection.update')!({
@@ -174,6 +198,7 @@ describe('WhatsAppService auth failure handling', () => {
         expect(baileysMocks.makeWASocket).toHaveBeenCalledTimes(2);
 
         await vi.advanceTimersByTimeAsync(1);
+        await settleStartedReconnect();
         expect(baileysMocks.makeWASocket).toHaveBeenCalledTimes(3);
         expect(statusCallback).toHaveBeenCalledWith('| WhatsApp: Reconnecting...');
 
