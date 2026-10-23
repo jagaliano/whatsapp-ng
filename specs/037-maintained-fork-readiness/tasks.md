@@ -54,19 +54,25 @@ The preparation checkboxes did not authorize publication. The owner subsequently
 - [x] T027 Install the actual tarball and production dependencies in a temporary consumer; verify loader and synthetic offline restart, raw-data absence, account partitions, 0600 archive and corrupt-store preservation.
 - [x] T028 Perform the explicitly approved seven generated sends, six native quotes, generated-PDF network parse, restart and one history request capped at three; disconnect safely without logout. Transport calls succeeded, but history remained unknown with zero imports and receipts were not observed.
 - [x] T029 Ask for client confirmation and record the lack of confirmation without claiming delivery/rendering/playback. Preserve private detailed results outside Git; commit only [sanitized evidence](validation.md).
-- [ ] T030 Close remaining managed-install/platform/exclusivity and successful live backfill/receipt/client gaps under fresh scope, or preserve explicit prerelease/unverified limits. No full M3/M4 completion or npm release is claimed.
+- [ ] T030 Close remaining M3 managed-install/platform/exclusivity qualification. Later T036–T039 close the separately approved M4 live-evidence scope, not M3 or npm release.
 - [x] T031 Diagnose M4 topology without reconnecting: read-only saved-session metadata confirms the earlier recipient was the sender account (self-chat). Record the limited evidence and avoid speculative receipt/protocol fixes or another full media batch.
 - [x] T032 Obtain a distinct approved recipient and fresh same-profile exclusivity confirmation for the bounded follow-up; physical-client playback confirmation remains separate.
 - [x] T033 Run exactly two generated text calls and one history request capped at three. Record API acceptance/native quote, unknown/zero-import history, absent exposed receipt events, archive/offline checks and safe shutdown; retain the subsequent owner-reported unreadable placeholder as an unresolved client result.
 - [x] T034 Record owner-led Logoff/unlink/QR relinking and read-only verification of maintained-package selection/auth presence. Do not claim that metadata alone proves recovery or that the agent performed an auth reset.
-- [x] T035 Under fresh one-text approval, record the definite zero-attempt disconnected result, later readiness confirmation, one accepted send via the existing extension (one attempt), and the owner's explicit recipient-side normal readability confirmation. No competing harness/additional history/media send; full M4 remains open.
+- [x] T035 Under fresh one-text approval, record the definite zero-attempt disconnected result, later readiness confirmation, one accepted send via the existing extension (one attempt), and the owner's explicit recipient-side normal readability confirmation. No competing harness/additional history/media send in that checkpoint; final M4 continuation is recorded below.
 
-## Later milestones: scoped validation recorded; remaining M3–M5 gates open
+- [x] T036 Refresh the owning Pi without another auth reset/competing connection; verify restored quote/tool availability and that 30 local runtime/manifest files match the installed candidate.
+- [x] T037 Send exactly four generated media/native replies once each; obtain explicit PDF/image/audio/video and quoted-text client confirmation. Verify persisted direct-chat READ (4), voice PLAYED (5), quote anchors, 0600 and secret-field exclusion.
+- [x] T038 Respect the zero-fetch authorization denial. After the owner accepts incoming-agent access and manually allowlists the trusted account, make exactly one actual count-three fetch; require exact-ID explicit ON_DEMAND/100% completion and two distinct new imported records.
+- [x] T039 Reopen actual imported records/complete request in a fresh offline `ArchiveFiles.readScope` process without auth/writer/socket. Repeat full isolated 414/45 native/test/lint/typecheck/audit/startup checks; do not equate the reader restart with a post-fetch full-Pi restart.
+- [x] T040 Complete current model/config/cwd/lazy/provider preflight and requested read-only exact-model review. Run `b0a6e796-31b4-4a11-9ab7-5d54a9ebdc68` returned OK/No issues found; actual child metadata confirmed openai-codex/gpt-6.1-sol, medium thinking, correct cwd and no fallback. Final tests/docs/safety/artifact checks passed; reviewed closure is ready for the standing scoped commit/push approval, not npm publication.
+
+## Later milestones: scoped validation recorded; M4 live evidence complete; M3/M5 gates open
 
 - [ ] M1 Resolve licensing/provenance, npm rights, actual fork metadata, private security channel and Pi host packaging.
 - [x] M2 Implement owner-approved lock policy and scoped dependency/security migrations; clean reproduction, exact-model review and commit/push completed. Platform/native limits remain explicit.
 - [ ] M3 Qualify the actual distributable and targeted environments using synthetic data, including process/account isolation.
-- [ ] M4 Perform freshly authorized live verification or keep the unverified capabilities explicitly experimental.
+- [x] M4 Owner-approved current-host/direct-chat live evidence and exact-model closure review completed (T036–T040). No M3, production/stability or publication certificate.
 - [ ] M5 Publish only with separate approval; verify prerelease installation and make stable promotion a later decision.
 
 See [the plan](plan.md#4-ordered-implementation-milestones) for each prerequisite, deliverable and completion gate. External metadata, license findings and npm availability must be refreshed at their implementation gates.
