@@ -2,9 +2,9 @@
 
 **Baseline:** `d415f0b`; M0 documentation published as `911cecd`.
 
-**Scope:** M0 decisions, M1 packaging and owner-authorized M2 dependency/security changes, exact Codex review, then commit/push. Later owner-approved installed-candidate/live probes and standalone M4 completion are recorded in [validation.md](validation.md). M4 live evidence and requested exact-model closure review are complete for the stated host/direct-chat scope; remaining M1/M3/M5 gates are not closed.
+**Scope:** M0 decisions, M1 packaging and owner-authorized M2 dependency/security changes, exact Codex review, then commit/push. Later owner-approved installed-candidate/live probes and standalone M4 completion are recorded in [validation.md](validation.md). M4 live evidence and requested exact-model closure review are complete for the stated host/direct-chat scope; M1 pre-publication account readiness is now verified; remaining M3/M5 gates are not closed.
 
-**Status:** M1 packaging and accepted MIT are implemented; npm-account verification remains open. M2 implementation passed clean npm ci, 414 tests/45 files, lint/typecheck and zero-finding full/production audits; independent exact-model review and focused rechecks returned OK. Reviewed M1/M2 commits `f90be5a` and `759a47f` were pushed to the maintenance branch. No npm publication.
+**Status:** M1 packaging, accepted MIT and pre-publication npm account readiness are verified. First name registration/publication remains unperformed and separately gated in M5; no package ownership/reservation is claimed. M2 implementation passed clean npm ci, 414 tests/45 files, lint/typecheck and zero-finding full/production audits; independent exact-model review and focused rechecks returned OK. Reviewed M1/M2 commits `f90be5a` and `759a47f` were pushed to the maintenance branch. No npm publication.
 
 ## Requirements
 
@@ -27,7 +27,7 @@
 
 ## Acceptance and completion
 
-Metadata/peer/docs/security preparations may be implemented while R4's external gates remain blocked, but **M1 must not be marked complete** until the plan's remaining npm-account/rights and loader criteria are satisfied. The owner-accepted MIT basis satisfies the license criterion. Candidate publication must remain mechanically blocked until the approved gate is cleared.
+Metadata/peer/docs/security preparations may be implemented while R4's external gates remain blocked, but **M1 must not be marked complete** until the plan's remaining npm-account/rights and loader criteria are satisfied. The owner-accepted MIT basis satisfies the license criterion. The npm account-readiness check now verifies authenticated identity, verified email and write-protecting 2FA, with a current public-name lookup; it does not reserve an uncreated package or guarantee the registry's first-create decision. Existing loader evidence and the documentation refresh checks are recorded in the plan. Candidate publication must remain mechanically blocked until remaining qualification and explicit M5 approval are satisfied.
 
 The official Pi 1.3.0 package guidance supplies host peers and suppresses peer installation for managed packages. Its installed loader maps the legacy `@mariozechner/*` and `@sinclair/typebox` imports used here. Runtime/module behavior must still be observed in the isolated artifact check.
 

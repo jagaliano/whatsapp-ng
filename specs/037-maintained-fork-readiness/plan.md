@@ -14,7 +14,7 @@ baseline: d415f0ba7f392b15d5b635f5b3aa9f62ab58c25c
 
 **Decision:** continue the existing codebase as `jagaliano/whatsapp-ng`, with npm candidate name `whatsapp-ng`; do not migrate to another extension or Baileys fork.
 
-**Execution status:** M0 completed and independently source-reviewed. The owner subsequently authorized committing/pushing its documentation and continuing with M1. M0 was committed/pushed as `911cecd`. Safe M1 preparation and parent validation are implemented, but the owner has accepted upstream's MIT declaration and LICENSE has been added; M1 still awaits npm-account verification; M2 implementation, exact-model review and separate M1/M2 commit/push are completed (`f90be5a`, `759a47f`); M3–M5 remain separately gated. See section 13 for the approved M2 decisions. This numbered plan and [tasks](tasks.md) are the canonical repository artifacts; the ignored root strategy is only a navigation pointer. The later approval permits M0 documentation publication, not npm publication or stable promotion.
+**Execution status:** M0 completed and independently source-reviewed. The owner subsequently authorized committing/pushing its documentation and continuing with M1. M0 was committed/pushed as `911cecd`. Safe M1 preparation and parent validation are implemented, but the owner has accepted upstream's MIT declaration and LICENSE has been added; M1's pre-publication account-readiness check is now verified (section 16); M2 implementation, exact-model review and separate M1/M2 commit/push are completed (`f90be5a`, `759a47f`), as is the owner-approved reviewed M4 scope. Remaining M3 qualification and M5 publication stay separately gated. See section 13 for the approved M2 decisions. This numbered plan and [tasks](tasks.md) are the canonical repository artifacts; the ignored root strategy is only a navigation pointer. The later approval permits M0 documentation publication, not npm publication or stable promotion.
 
 ## 1. Direction and boundaries
 
@@ -220,15 +220,15 @@ All unofficial personal-account transports retain platform-policy, account-restr
 
 ## 8. Immediate next action and open gates
 
-**Current gate:** M0 implementation and independent review are complete on `chore/fork-release-readiness`; separate commit/push and M1 implementation approval have now been received. The M0 record was published as `911cecd`. M2 review and approved M1/M2 commit/push are complete. The owner subsequently authorized a bounded installed-candidate/live probe, recorded in section 14. Remaining M3–M5 implementation/release work must not start automatically. The owner has accepted upstream MIT and added notices; the remaining M1 gate is npm-account/registration verification. Publication still requires the later qualification and approval gates. Do not start Phase 4 or patch Baileys. Upstream PR merges are not a prerequisite.
+**Current gate:** M0/M2 and reviewed M4 live evidence are complete. The owner requested closing M1, performed local npm browser login, and the read-only identity/security/name checks passed (section 16). Existing M1 legal/packaging/loader work remains in place; final documentation/artifact refresh records the account closure without publishing. Next is remaining M3 artifact/platform/exclusivity qualification, then separately approved M5. Do not start Phase 4, patch Baileys or publish automatically. Upstream PR merges are not a prerequisite.
 
-M0 decisions are recorded below. Remaining implementation gates include:
+M0 decisions and historical checkpoints are recorded below. Current status:
 
-- M1: npm registration/publishing-account verification remains open; owner-accepted MIT, package metadata and private security channel are implemented.
-- M2: dependency/security remediation and owner-approved lockfile/reproducibility policy.
-- M3: actual artifact qualification, including Linux and architecture/patch-version evidence.
-- M4: separately authorized live backfill/receipt verification or truthful experimental disposition.
-- M5: separately authorized prerelease publication and later stable-promotion decision.
+- M1: pre-publication account readiness verified; no name reservation/ownership or first-create approval is claimed. Keep the private guard.
+- M2: dependency/security/reproducibility slice complete.
+- M3: actual artifact qualification, including managed installation/removal, process exclusivity and Linux/architecture evidence, remains open.
+- M4: owner-approved current-host/direct-chat live evidence and exact-model closure review complete.
+- M5: prerelease publication and later stable promotion require separate approval and fresh registry checks.
 
 Then execute **M1 → M2 → M3 → M4 → M5**, keeping each manifest/runtime change separately reviewable. Licensing investigation and dependency/security diagnosis may proceed in parallel, but no prerelease escapes the stated gates. A verified critical defect takes priority over this ordering; optional donor features stay deferred.
 
@@ -421,3 +421,15 @@ A history authorization denial occurred before any fetch. The agent did not bypa
 The final live calls used the Pi-managed local maintained checkout. Thirty runtime/manifest files match the previously installed candidate byte-for-byte; the exact tarball remains `6fa8e2164c2c570b08ffa270a248cab87c21e02a`. Separate credential-free installed-candidate loader/storage/RPC checks passed. Full isolated tests passed 414/45 with no pending cases, lint/typecheck/whitespace passed, and both audits returned zero findings. No M4 code/dependency/storage changes or additional transport were needed.
 
 M4 live evidence and independent closure review are complete for this host/direct-chat scope. Read-only run `b0a6e796-31b4-4a11-9ab7-5d54a9ebdc68` returned **OK — No issues found** after reviewing the full M4 range, relevant source/tests and sanitized verification summaries. Actual child-session metadata confirmed exact `openai-codex/gpt-6.1-sol`, medium thinking and the intended absolute project cwd; current/project/global/lazy/provider configuration was checked before the per-run override, without changing defaults or using fallback. The reviewer ran no commands/tests/live operations or edits. Final isolated checks passed 414/45 with no pending cases; receipt-only changes passed final document/safety/artifact checks. M1 account rights, remaining M3 qualification, group/large-history/other-device coverage and M5 publication remain open. The earlier unreadable run and operator-led reset are not erased or promoted to root-cause proof. See [the complete evidence](validation.md#final-m4-live-evidence-completion).
+
+## 16. M1 pre-publication account-readiness closure
+
+On 2026-10-23 UTC the owner requested closing M1 and completed npm browser login in their own terminal. Read-only checks against `https://registry.npmjs.org/` returned:
+
+- `npm whoami --registry=https://registry.npmjs.org/ --json`: exit 0, identity `jagaliano`.
+- `npm profile get --registry=https://registry.npmjs.org/ --json`: exit 0; only identity, verified-email boolean and 2FA metadata were retained. Email is verified and 2FA mode is `auth-and-writes`, with no pending setup. No email address, token, password or OTP is included in this record.
+- `npm view whatsapp-ng name version maintainers --registry=https://registry.npmjs.org/ --json`: expected E404/no public package found at the check time. This is not a reservation, ownership grant or guarantee that the registry will accept first creation.
+
+These checks close the pre-publication account-readiness prerequisite alongside the existing accepted MIT basis, packaging/private security channel, host-peer/loader checks and independent packaging review. They do not grant npm access through GitHub or authorize publication. New unscoped package creation/ownership is established only by a successful separately approved first publish in M5; recheck identity/name/policy there and stop on a registry refusal.
+
+The agent did not log in, inspect or print credential-file contents, change npm credentials, issue ownership grants, remove `private: true` or publish. Owner-performed browser login is distinguished from agent read-only verification. Current status notices and canonical tasks are being refreshed; runtime/manifest/dependency bytes remain unchanged. Packaged documentation changes produce a new candidate tarball identity, so earlier M4 artifact hashes remain historical evidence and M3 must qualify the refreshed artifact. Final refresh validation passed: `npm test` **414/45**, `npm run lint`, `npm run typecheck` and `git diff --check` exit 0 in temporary HOME/agent directories; document links/anchors and content-safety checks passed. A real 36-entry tarball has SHA-1 **`ad4721038a988104df9806aeefef24ff3496b2b3`**. Inspection confirmed current packaged notices/LICENSE, no auth/archive/cache/test payloads, and all **30 runtime/manifest files** unchanged. `private: true` and tag `next` remain. There is no build script; no fresh clean-install/platform claim or npm publication is inferred. M1's pre-publication gate is complete; M3 must qualify this documentation-refreshed artifact, and M5 remains separately approved work. The owner approved this closure's Git commit/push only and explicitly prohibited npm package creation/registration/publication until all prerequisite migration and release-readiness work is finished and a separate publication approval is given. Keep `private: true`; do not treat Git delivery or account authentication as npm authorization.

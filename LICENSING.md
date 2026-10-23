@@ -18,4 +18,4 @@ This owner decision supersedes the earlier choice to wait for upstream clarifica
 
 ## Publication boundaries
 
-The candidate remains `private: true`. npm-account/name eligibility, dependency/artifact qualification and separate publication approval remain required under the [maintenance plan](https://github.com/jagaliano/whatsapp-ng/blob/911cecd/specs/037-maintained-fork-readiness/plan.md). Accepting MIT does not authorize login/token changes, npm publication or removal of the private-package guard.
+The candidate remains `private: true`. Pre-publication npm account readiness is verified; the new package name is not reserved and first registration remains an M5 registry operation. Remaining artifact qualification and separate publication approval are still required under the [maintenance plan](https://github.com/jagaliano/whatsapp-ng/blob/chore/fork-release-readiness/specs/037-maintained-fork-readiness/plan.md). Accepting MIT does not authorize login/token changes, npm publication or removal of the private-package guard.

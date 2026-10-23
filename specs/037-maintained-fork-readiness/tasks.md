@@ -6,9 +6,9 @@
 
 **Canonical decisions/gates:** [plan.md](plan.md)
 
-**Status:** M0 published as `911cecd`; M1 packaging committed as `f90be5a`; M2 implemented, independently reviewed, validated and pushed as `759a47f`. The M1 npm-account check remains open; M3–M5 require separate authorization.
+**Status:** M0, M2 and reviewed M4 live evidence are complete. M1's packaging/license/loader work and npm account-readiness gate are complete; the documentation/artifact refresh passed the final checks below. Remaining M3 qualification and separately approved M5 publication are next; the package remains private/unpublished.
 
-**Scope:** M1/M2 implementation, exact Codex review, then separate commits/push are authorized. The later bounded installed-candidate/live validation was separately approved and is recorded below. Remaining M3–M5 work and npm publication need separate authorization. Phase 4 is undefined/deferred.
+**Scope:** M1/M2 implementation, exact Codex review, then separate commits/push are authorized. The later bounded installed-candidate/live validation was separately approved and is recorded below. Remaining M3 qualification and M5 publication need separate authorization. The owner approved the M1 closure Git commit/push only: no npm package creation/registration/publication until prerequisite migration/readiness work is finished and release is separately approved. Keep `private: true`. Phase 4 is undefined/deferred.
 
 ## M0: maintenance lane and decisions
 
@@ -22,10 +22,10 @@
 
 M0 is local and review-ready only after T006–T007. No commit, push or PR is authorized by these checkboxes. The owner has now supplied that separate approval for this decision record and for M1 work, not for npm publication.
 
-## M1: licensing accepted, npm-account gate still open
+## M1: licensing and pre-publication account readiness verified
 
 - [x] T008 Record owner acceptance of upstream's declared MIT license; add LICENSE with the supplied 2026 owner notice and yearless Rapha attribution. [Upstream issue #17](https://github.com/RaphaCastelloes/whatsapp-pi/issues/17) is advisory, not a blocker. `LICENSING.md` records the decision without claiming upstream confirmation.
-- [ ] T009 Verify npm account/registration rights. Name lookup found no package, but account verification failed; no login or credential edits attempted.
+- [x] T009 After the owner performs local browser login, verify public-registry identity `jagaliano`, verified email and 2FA `auth-and-writes`. Current package lookup returns E404. This closes account readiness, not name reservation, ownership or guaranteed first-create permission; registration/publication stays in M5. No agent credential edit or publication.
 - [x] T010 Prepare fork identity/version/URLs, retained author and private publish guard with selected future `next` tag.
 - [x] T011 Declare host wildcard peers and development copies; verify official host aliases and retained baseline dependency versions.
 - [x] T012 Enable and verify private GitHub vulnerability reporting; document safe private reporting and best-effort support.
@@ -33,7 +33,7 @@ M0 is local and review-ready only after T006–T007. No commit, push or PR is au
 - [x] T014 Add 5 manifest/license tests; rerun 402 tests/44 files, lint, typecheck and whitespace checks in isolation after adding LICENSE.
 - [x] T015 Inspect/pack refreshed 35-entry local artifact, verify LICENSE/source equality and document links; actual packed-entry loader/RPC: 7 tools, 1 command, no errors/peer warnings. Reused-dependency limitations remain explicit.
 - [x] T016 Obtain independent packaging review and resolve notes. Exact Codex reviewer returned OK with notes; historical M0 paragraph corrected, constitution checks confirmed. Source-only, no independently rerun commands.
-- [ ] T017 Close M1 after remaining npm-account verification (T009) and any resulting revalidation. T008's licensing gate is resolved. Keep private guard and no-publication boundary.
+- [x] T017 Close M1 after fresh 414 tests/45 files, lint/typecheck/whitespace and document/link/safety checks. The 36-entry documentation-refreshed tarball preserves all 30 runtime/manifest files byte-for-byte and `private: true`/`next`. T008/T009 are resolved; first package creation still needs fresh registry checks and explicit M5 approval.
 
 The preparation checkboxes did not authorize publication. The owner subsequently approved scoped M2 work and reviewed M1/M2 commit/push; npm publication and live operations remain unauthorized. See [the execution checkpoint](plan.md#11-m1-preparation-and-validation-checkpoint).
 
@@ -69,7 +69,7 @@ The preparation checkboxes did not authorize publication. The owner subsequently
 
 ## Later milestones: scoped validation recorded; M4 live evidence complete; M3/M5 gates open
 
-- [ ] M1 Resolve licensing/provenance, npm rights, actual fork metadata, private security channel and Pi host packaging.
+- [x] M1 Licensing/packaging/loader work, pre-publication npm account readiness and documentation/artifact refresh verified (T008–T017). No name reservation, package ownership or publication is claimed.
 - [x] M2 Implement owner-approved lock policy and scoped dependency/security migrations; clean reproduction, exact-model review and commit/push completed. Platform/native limits remain explicit.
 - [ ] M3 Qualify the actual distributable and targeted environments using synthetic data, including process/account isolation.
 - [x] M4 Owner-approved current-host/direct-chat live evidence and exact-model closure review completed (T036–T040). No M3, production/stability or publication certificate.
