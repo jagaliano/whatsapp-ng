@@ -1,6 +1,6 @@
-import { access, mkdir, readdir, cp, stat } from 'fs/promises';
+import { access, mkdir, readdir, cp, stat, chmod } from 'fs/promises';
 import { homedir } from 'os';
-import { join } from 'path';
+import { basename, join } from 'path';
 
 export function getDefaultStorageRoot(): string {
     return join(homedir(), '.pi', 'agent', 'extensions', 'whatsapp-pi');
@@ -39,10 +39,10 @@ export function createStoragePaths(root = getDefaultStorageRoot(), legacyRoot = 
 }
 
 export async function ensureStorageDirectories(paths: Pick<StoragePaths, 'root' | 'authStateDir' | 'recentsDir' | 'logDir'>) {
-    await mkdir(paths.root, { recursive: true });
-    await mkdir(paths.authStateDir, { recursive: true });
-    await mkdir(paths.recentsDir, { recursive: true });
-    await mkdir(paths.logDir, { recursive: true });
+    for (const directory of new Set([paths.root, paths.authStateDir, paths.recentsDir, paths.logDir])) {
+        await mkdir(directory, { recursive: true, mode: 0o700 });
+        await chmod(directory, 0o700);
+    }
 }
 
 export async function pathExists(targetPath: string): Promise<boolean> {
@@ -72,10 +72,17 @@ async function copyEntry(source: string, target: string) {
     await cp(source, target, { force: false, preserveTimestamps: true });
 }
 
-export async function migrateLegacyStorage(paths: Pick<StoragePaths, 'root' | 'legacyRoot'>): Promise<boolean> {
-    const legacyRoots = [paths.legacyRoot, join(homedir(), '.pi', 'whatsapp-pi')]
+function legacyStorageRoots(paths: Pick<StoragePaths, 'root' | 'legacyRoot'>): string[] {
+    return [paths.legacyRoot, join(homedir(), '.pi', 'whatsapp-pi')]
         .filter((root, index, roots) => root && roots.indexOf(root) === index && root !== paths.root);
+}
 
+export function legacyAuthProfiles(paths: Pick<StoragePaths, 'root' | 'legacyRoot'>, profile: string): string[] {
+    return legacyStorageRoots(paths).map(root => join(root, basename(profile)));
+}
+
+export async function migrateLegacyStorage(paths: Pick<StoragePaths, 'root' | 'legacyRoot'>): Promise<boolean> {
+    const legacyRoots = legacyStorageRoots(paths);
     let migrated = false;
 
     await mkdir(paths.root, { recursive: true });
@@ -88,6 +95,8 @@ export async function migrateLegacyStorage(paths: Pick<StoragePaths, 'root' | 'l
         const entries = await readdir(legacyRoot, { withFileTypes: true });
 
         for (const entry of entries) {
+            // Offline config/history reads must not adopt auth or another process's control files.
+            if (/^\.?auth(?:[._-]|$)/.test(entry.name)) continue;
             await copyEntry(join(legacyRoot, entry.name), join(paths.root, entry.name));
         }
 

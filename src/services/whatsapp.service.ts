@@ -11,7 +11,8 @@ import {
     type MessageUpsertType,
     type AnyMessageContent,
     type BaileysEventMap,
-    type MiscMessageGenerationOptions
+    type MiscMessageGenerationOptions,
+    type SignalKeyStore
 } from 'baileys';
 import P from 'pino';
 import { SessionManager } from './session.manager.js';
@@ -26,6 +27,7 @@ import type { RecentsService } from './recents.service.js';
 import { JidResolver } from './jid-resolver.service.js';
 import { MessageStore } from './message-store.service.js';
 import { HistorySyncService } from './history-sync.service.js';
+import { TransportLease, type AuthOperationScope } from './transport-lease.service.js';
 import type { LifecycleUpdate } from '../models/message-archive.types.js';
 
 const LOG_FILE = createStoragePaths().logPath;
@@ -124,6 +126,11 @@ export class WhatsAppService {
     private onIncomingMessageRecorded?: (message: IncomingMessage) => void | Promise<void>;
     private saveCreds?: () => Promise<void>;
     private startPromise?: Promise<void>;
+    private startGeneration = 0;
+    private lifecycle: Promise<void> = Promise.resolve();
+    private transportLease?: TransportLease;
+    private authScope?: AuthOperationScope;
+    private rawSaveCreds?: () => Promise<void>;
     private restoreBaileysConsoleFilter?: () => void;
     private reconnectTimeout?: ReturnType<typeof setTimeout>;
     private intentionalStop = false;
@@ -490,17 +497,21 @@ export class WhatsAppService {
         this.socket = socket;
     }
 
-    private registerSocketListeners(socket: WhatsAppSocketLike, options: WhatsAppStartOptions, saveCreds: () => Promise<void>) {
+    private registerSocketListeners(socket: WhatsAppSocketLike, options: WhatsAppStartOptions) {
+        const scope = this.authScope;
+        const saveCreds = this.rawSaveCreds;
         socket.ev.on('creds.update', async () => {
             if (socket !== this.socket || this.intentionalStop) return;
-            await saveCreds();
-            if (socket === this.socket && !this.intentionalStop) await this.sessionManager.markAuthStateAvailable();
+            await scope?.run(async () => {
+                await saveCreds?.();
+                if (socket === this.socket && !this.intentionalStop) await this.sessionManager.markAuthStateAvailable();
+            });
         });
 
-        socket.ev.on('connection.update', async (update) => {
+        socket.ev.on('connection.update', update => this.runLifecycle(async () => {
             if (socket !== this.socket || this.intentionalStop) return;
             await this.handleConnectionUpdate(update, options);
-        });
+        }));
 
         socket.ev.on('messages.upsert', (payload) => {
             if (socket !== this.socket || this.intentionalStop) return;
@@ -557,19 +568,74 @@ export class WhatsAppService {
         });
     }
 
-    private async createSocket(): Promise<WhatsAppSocketLike> {
-        const { state, saveCreds } = await this.sessionManager.getAuthState();
-        this.saveCreds = saveCreds;
+    private runLifecycle<T>(operation: () => Promise<T>): Promise<T> {
+        const work = this.lifecycle.then(operation, operation);
+        this.lifecycle = work.then(() => {}, () => {});
+        return work;
+    }
+
+    private async ensureTransportLease(): Promise<TransportLease> {
+        const profile = this.sessionManager.getAuthStateDir();
+        if (this.transportLease) {
+            try {
+                await this.transportLease.assertProfile(profile);
+                return this.transportLease;
+            } catch {
+                await this.releaseTransportLease();
+            }
+        }
+        this.transportLease = await TransportLease.acquire(profile);
+        return this.transportLease;
+    }
+
+    private async releaseTransportLease(): Promise<void> {
+        const lease = this.transportLease;
+        this.transportLease = undefined;
+        await lease?.release();
+    }
+
+    private async retireAuthScope(persist: boolean): Promise<void> {
+        const scope = this.authScope;
+        const save = this.rawSaveCreds;
+        this.authScope = undefined;
+        this.rawSaveCreds = undefined;
+        this.saveCreds = undefined;
+        await scope?.close();
+        if (persist) await save?.();
+    }
+
+    private async closeTransportState(persist: boolean): Promise<void> {
+        this.cleanupSocket();
+        try { await this.retireAuthScope(persist); }
+        finally { await this.messageStore.close(); }
+    }
+
+    private async createSocket(generation: number): Promise<WhatsAppSocketLike | undefined> {
+        const lease = await this.ensureTransportLease();
+        if (generation !== this.sessionGeneration || this.intentionalStop) return;
+        const profile = this.sessionManager.getAuthStateDir();
+        const scope = lease.createScope(profile);
+        this.authScope = scope;
+        const { state, saveCreds } = await scope.run(() => this.sessionManager.getAuthState(lease));
+        if (generation !== this.sessionGeneration || this.intentionalStop) return;
+        const save = async () => { await lease.assertProfile(profile); await saveCreds(); };
+        this.rawSaveCreds = save;
+        this.saveCreds = () => scope.run(save);
 
         const logger = P({ level: this.verboseMode ? 'trace' : 'silent' });
-
+        const keys = makeCacheableSignalKeyStore(state.keys, logger);
+        const guardedKeys: SignalKeyStore = {
+            get: (type, ids) => scope.run(() => keys.get(type, ids)),
+            set: data => scope.run(() => keys.set(data)),
+            ...(keys.clear ? { clear: () => scope.run(() => keys.clear?.()) } : {})
+        };
         const groupMetadataCache = this.groupMetadataCache;
 
         const socket: WhatsAppSocketLike = makeWASocket({
             printQRInTerminal: false,
             auth: {
                 creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, logger)
+                keys: guardedKeys
             },
             syncFullHistory: this.fullHistorySync,
             logger,
@@ -583,14 +649,20 @@ export class WhatsAppService {
             }
         }) as WhatsAppSocketLike;
 
+        if (generation !== this.sessionGeneration || this.intentionalStop) {
+            socket.end(undefined);
+            return;
+        }
         return socket;
     }
 
     async start(options: WhatsAppStartOptions = {}) {
-        if (this.startPromise) return this.startPromise;
+        const generation = this.sessionGeneration;
+        if (this.startPromise && this.startGeneration === generation) return this.startPromise;
 
-        const startPromise = this.startSocket(options);
+        const startPromise = this.runLifecycle(() => this.startSocket(options, generation));
         this.startPromise = startPromise;
+        this.startGeneration = generation;
         try {
             await startPromise;
         } finally {
@@ -600,7 +672,8 @@ export class WhatsAppService {
         }
     }
 
-    private async startSocket(options: WhatsAppStartOptions) {
+    private async startSocket(options: WhatsAppStartOptions, generation = this.sessionGeneration) {
+        if (generation !== this.sessionGeneration) return;
         fileLog(`[start] Starting WhatsApp service, isReconnecting=${this.isReconnecting}`);
         this.intentionalStop = false;
         if (this.isReconnecting) {
@@ -623,15 +696,19 @@ export class WhatsAppService {
         }
 
         try {
-            const socket = await this.createSocket();
+            await this.retireAuthScope(true);
+            if (generation !== this.sessionGeneration || this.intentionalStop) return;
+            const socket = await this.createSocket(generation);
+            if (!socket) return;
             this.setSocket(socket);
-            this.registerSocketListeners(socket, options, this.saveCreds ?? (async () => {}));
+            this.registerSocketListeners(socket, options);
             socketInitialized = true;
         } catch (error) {
-            if (!this.verboseMode) {
-                console.log = originalConsoleLog;
-                console.warn = originalConsoleWarn;
-                console.error = originalConsoleError;
+            try {
+                if (this.transportLease) await this.sessionManager.setStatus('disconnected');
+                await this.closeTransportState(false);
+            } finally {
+                await this.releaseTransportLease();
             }
             throw error;
         } finally {
@@ -790,13 +867,18 @@ export class WhatsAppService {
             this.onStatusUpdate?.(t('service.whatsapp.sessionErrorBadMac'));
             await this.sessionManager.setStatus('disconnected');
             this.onStatusUpdate?.(t('service.whatsapp.disconnected'));
+            try { await this.closeTransportState(true); }
+            finally { await this.releaseTransportLease(); }
             return;
         }
 
         if (isAuthRejected) {
+            const generation = this.sessionGeneration;
             this.cleanupSocket();
             this.isReconnecting = false;
             this.reconnectAttempts = 0;
+            await this.retireAuthScope(false);
+            if (this.intentionalStop || generation !== this.sessionGeneration) return;
 
             if (allowPairingOnAuthFailure) {
                 if (this.verboseMode) {
@@ -804,8 +886,12 @@ export class WhatsAppService {
                 }
                 this.onStatusUpdate?.(t('service.whatsapp.sessionRejected', { statusCode: statusCode ?? 'unknown' }));
                 this.clearIdentityState();
-                await this.sessionManager.deleteAuthState();
-                await this.start({ ...options, allowPairingOnAuthFailure: false });
+                const restartGeneration = this.sessionGeneration;
+                await this.transportLease?.assertProfile(this.sessionManager.getAuthStateDir());
+                await this.sessionManager.deleteAuthState(this.transportLease);
+                if (!this.intentionalStop && restartGeneration === this.sessionGeneration) {
+                    await this.startSocket({ ...options, allowPairingOnAuthFailure: false }, restartGeneration);
+                }
                 return;
             }
 
@@ -815,6 +901,8 @@ export class WhatsAppService {
             this.onStatusUpdate?.(t('service.whatsapp.sessionInvalidOrLoggedOut', { statusCode: statusCode ?? 'unknown' }));
             await this.sessionManager.setStatus('logged-out');
             this.onStatusUpdate?.(t('service.whatsapp.disconnected'));
+            try { await this.closeTransportState(false); }
+            finally { await this.releaseTransportLease(); }
             return;
         }
 
@@ -827,6 +915,8 @@ export class WhatsAppService {
             this.reconnectAttempts = 0;
             await this.sessionManager.setStatus('disconnected');
             this.onStatusUpdate?.(t('service.whatsapp.conflict'));
+            try { await this.closeTransportState(true); }
+            finally { await this.releaseTransportLease(); }
             return;
         }
 
@@ -835,8 +925,8 @@ export class WhatsAppService {
                 fileLog('[handleConnectionClosed] Reconnect already in progress, skipping duplicate');
             } else {
                 fileLog('[handleConnectionClosed] Initiating reconnect sequence');
-                await this.saveCreds?.();
                 this.cleanupSocket();
+                await this.retireAuthScope(true);
                 this.scheduleReconnect(options);
             }
         } else {
@@ -844,6 +934,8 @@ export class WhatsAppService {
             this.reconnectAttempts = 0;
             await this.sessionManager.setStatus('logged-out');
             this.onStatusUpdate?.(t('service.whatsapp.disconnected'));
+            try { await this.closeTransportState(true); }
+            finally { await this.releaseTransportLease(); }
         }
     }
 
@@ -1202,12 +1294,27 @@ export class WhatsAppService {
         fileLog('[logout] Logging out - setting intentional stop');
         this.intentionalStop = true;
         this.sessionGeneration++;
-        await this.socket?.logout();
-        this.cleanupSocket();
-        this.isReconnecting = false;
-        this.clearIdentityState();
-        await this.messageStore.close();
-        await this.sessionManager.deleteAuthState();
+        this.clearReconnectTimeout();
+        return this.runLifecycle(async () => {
+            const lease = await this.ensureTransportLease();
+            let loggedOut = false;
+            try {
+                await this.socket?.logout();
+                loggedOut = true;
+            } finally {
+                try {
+                    await this.closeTransportState(false);
+                    this.isReconnecting = false;
+                    this.clearIdentityState();
+                    if (loggedOut) {
+                        await lease.assertProfile(this.sessionManager.getAuthStateDir());
+                        await this.sessionManager.deleteAuthState(lease);
+                    } else {
+                        await this.sessionManager.setStatus('disconnected');
+                    }
+                } finally { await this.releaseTransportLease(); }
+            }
+        });
     }
 
     async stop() {
@@ -1215,20 +1322,20 @@ export class WhatsAppService {
         fileLog('[stop] Stopping WhatsApp service - setting intentional stop');
         this.intentionalStop = true;
         this.sessionGeneration++;
-        try {
-            await this.saveCreds?.();
-        } catch (error) {
-            if (this.verboseMode) {
-                console.error(t('service.whatsapp.failedPersistAuthState'), error);
-            }
-            fileLog(`[stop] Failed to save credentials: ${error instanceof Error ? error.message : String(error)}`);
-        }
-
-        this.cleanupSocket();
-        await this.messageStore.close();
-        this.messageStore.clear();
-        this.isReconnecting = false;
-        await this.sessionManager.setStatus('disconnected');
-        this.onStatusUpdate?.(t('service.whatsapp.disconnected'));
+        this.clearReconnectTimeout();
+        return this.runLifecycle(async () => {
+            try {
+                try { await this.closeTransportState(true); }
+                catch (error) {
+                    if (this.verboseMode) console.error(t('service.whatsapp.failedPersistAuthState'), error);
+                    fileLog(`[stop] Failed to save credentials: ${error instanceof Error ? error.message : String(error)}`);
+                }
+                this.messageStore.clear();
+                this.isReconnecting = false;
+                // A denied/non-owning instance must not overwrite the active owner's config.
+                if (this.transportLease) await this.sessionManager.setStatus('disconnected');
+                this.onStatusUpdate?.(t('service.whatsapp.disconnected'));
+            } finally { await this.releaseTransportLease(); }
+        });
     }
 }

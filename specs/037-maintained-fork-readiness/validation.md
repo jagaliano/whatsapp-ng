@@ -107,4 +107,69 @@ The final full gate passed after drafting the closure; receipt-only updates then
 
 The final evidence qualifies one direct chat on Darwin x86_64 / Node 26.12.0, not production stability, group/per-participant receipts, large-history behavior, every device/privacy setting or a complete agent-mediated inbound conversation. Earlier unknown/unreadable outcomes remain recorded; relinking preceded fresh readability but does not diagnose the old failure or repair old placeholders. Client confirmation and observed protocol/storage results are reported separately.
 
-The package remains private/unpublished. At M4 closure, M1 npm-account readiness, remaining M3 managed-install/removal/exclusivity/platform qualification and M5 publication/stable promotion remained separately gated. Subsequent M1 account verification is recorded in plan section 16; M3/M5 remain open. M4 live evidence and independent closure review are complete in the stated scope. No source fix or publication authorization is implied.
+The package remains private/unpublished. At M4 closure, M1 npm-account readiness, remaining M3 managed-install/removal/exclusivity/platform qualification and M5 publication/stable promotion remained separately gated. Subsequent M1 account verification is recorded in plan section 16. This paragraph describes the historical M4 checkpoint; subsequent M3 work is recorded below. M4 live evidence and its review do not attest new runtime bytes or authorize publication.
+
+## M3 qualification closure — 2026-10-23
+
+The owner authorized a dedicated guarded-profile reliability slice, guarded connect-time legacy-auth adoption and disposable Linux image/dependency downloads. All M3 auth/history data were synthetic. No real profile was migrated/reset/reloaded, no real WhatsApp socket/send/fetch was started, and no global configuration, credentials or host packages were edited. Temporary Pi installation settings were confined to synthetic HOME/agent directories. Public package-registry/image downloads and the authorized reviewer model calls are distinct from the network-blocked WhatsApp fixture.
+
+### Reliability findings and corrections
+
+- The original two-process actual Pi RPC reproduction constructed two transports for one synthetic profile. The fixed reproduction loads the real entry with `-e`, keeps both Pi processes alive, records exactly **one auth-opening/socket process**, explicitly rejects the competitor, attempts **zero networking**, and leaves **zero transport locks** after shutdown.
+- The same real-Pi fixture originally copied legacy keys into the owned destination during the competitor's offline initialization. It now preserves the initialized destination without merging. Standalone synthetic probes also exposed copied process locks; offline migration now excludes auth/control entries.
+- Auth adoption now requires destination/source ownership and a complete matching profile, uses private atomic staging, and retains legacy originals. Private non-secret metadata prevents re-adoption after reset and blocks interrupted/future states. Credential/key shapes are validated against pinned rc14 before native loading; validity of signatures/account ownership is not cryptographically certified.
+- The actual pinned native store was characterized with an owned FIFO child: one rejected write can leave another write pending. One-key adapter calls and retired-scope fencing avoid that hidden fan-out. Fault fixtures cover adoption commit/final-marker/reset interruption and preserve explicit recovery state rather than guessing.
+
+### Final platform/artifact checks
+
+| Check | macOS x86_64 | Linux amd64 |
+|---|---|---|
+| Runtime | Darwin, Node 26.12.0, Pi 1.3.0 | Disposable Node 26.12.1 / Pi 1.3.0 container; FFmpeg 5.1.9, Tesseract 5.3.0; zero host mounts |
+| Repository/native tests | **466 passed / 49 files** | **466 passed / 49 files** |
+| Declared checks | `npm run lint`, `npm run typecheck`, `git diff --check`: exit 0 | `npm run lint`, `npm run typecheck`: exit 0 |
+| Actual private tarball | **38 entries**, source/manifest/doc bytes checked | Same actual tarball and source-byte checks |
+| Pi-managed lifecycle | `pi install npm:whatsapp-ng@file:<local-tarball>`, `pi remove`, reinstall: exit 0 | Same lifecycle: exit 0 |
+| Host/schema discovery | **7 tools / 1 command / 0 errors or warnings**; all tool schemas are objects; no physical host-peer shadow copies | Same checks passed |
+| Automatic managed startup | Successful real RPC `get_state`, no explicit `-e`, online flag or auth creation | Same check passed |
+| Installed native auth | Fresh unlinked native credentials generated/saved under the installed package, private 0700/0600, no socket; fixture removed afterward | Same check passed |
+| Registry advisory audits | Source full/production and actual consumer: **0 vulnerabilities** | Source full/production and actual consumer: **0 vulnerabilities** |
+
+Final local tarball SHA-1: **`78257d468111fbff53f17d99e986741143a0380e`**. `private: true` and the intended future `next` tag remain unchanged. The 38-entry package contains no tests, caches, auth, archives, dependency tree or service installer. No build script is declared. The first Linux payload lacked the `.gitignore` required by a manifest test; it was supplied and the entire final suite rerun, not skipped. No native/OCR suite was skipped in the final runs.
+
+### Independent source review
+
+Exact read-only `openai-codex/gpt-6.1-sol`, medium, first run `2dfbc244-b43d-4315-a04c-85269942c5c6` returned **BLOCK** for one P1: syntactically valid but incomplete credential objects could reach native loading. Two current/legacy failing regressions were captured before correction; valid fixtures now contain the full pinned structural schema, and actual fresh native credentials have positive save coverage. Focused run `d1bdddf4-bb29-436d-871d-c8a71e70af38` returned **OK — No issues found.** Actual child metadata confirms the exact provider/model, medium thinking and target cwd for both runs, without fallback. Reviewers edited nothing and ran no commands/tests; platform and package results above are parent-verified evidence, not independent execution claims.
+
+### Remaining release boundaries
+
+M3 is complete for this artifact and the stated local CLI/RPC environments, not production stability, Windows/ARM support, arbitrary Linux distributions, legacy systemd installers, distributed locking or old/uncooperative clients. The earlier unreadable-message cause remains undiagnosed; the migration fixture is not evidence of that cause. Existing M4 direct-chat results remain historical: the new auth/lifecycle runtime requires separately authorized bounded real-account revalidation before publication. M3 Git commit/push and all M5 npm package creation/registration/publication still require explicit approval. No commit, push or npm publication was performed by this closure.
+
+## Final-runtime M4 refresh — attempts and recovery
+
+The owner subsequently approved a saved-session check with at most two generated texts to the same separate recipient, one safe stop/reconnect, normal credential refresh and no reset/logout/media/history fetch. Other WhatsApp connections were disconnected. The exact installed final artifact was byte-checked against the 38-entry tarball and source.
+
+Two controller attempts each constructed one socket but stopped at archive readiness before any send: **zero test texts**, no automatic reconnect/resend, authentication files retained, stable profile metadata and transport lease released. The first encountered the current Pi's still-live archive writer. The owner then approved an isolated test archive without taking over that lock. The second revealed invalid harness archive options: the required private `legacyPath` was missing. These are not evidence that the old unreadable-message issue was diagnosed or that the final client check passed.
+
+The controller also omitted production's `SessionManager.ensureInitialized()` step, allowing status persistence to write default extension configuration. The agent disclosed this error and stopped testing. A saved session-state snapshot recovered all three original allowed contacts; the owner confirmed those were the only custom settings. Atomic restoration was verified against that snapshot, with mode 0600. Authentication files were not copied/reset/deleted for recovery; their presence alone is not a new client-readability proof.
+
+The corrected controller initializes session state, suppresses production configuration writes, supplies a nonexistent private legacy-recents path, and waits for the actual processed connection-ready callback rather than persisted status. A no-network synthetic regression reproduced the configuration overwrite and missing-path degradation, then passed configuration-preservation, archive-writability, real-ready-event gating and mocked stop/reconnect/restored-quote assertions. It used no real user data or authentication.
+
+At that checkpoint, no further live attempt had been made. The owner explicitly approved force-stop/resume instructions to avoid cached pre-upgrade authentication callbacks. The resumed process was verified offline: the old process had exited, all three restored contacts still matched, configuration mode was 0600 and no auth transport lease existed. The no-network fixture passed again before a new controlled run. These failed attempts and recovery are not erased by the subsequent success below.
+
+## Final-runtime M4 completion
+
+The owner resumed and requested continuation of the same bounded scope. The exact already-qualified installed artifact, source and 38-entry tarball were byte-checked again: SHA-1 **`78257d468111fbff53f17d99e986741143a0380e`**. Production code/dependencies were not changed. The harness used the real default saved credentials in place, normal refresh, a private test archive and the existing production account marker only as a read-only identity check. It did not take over or write the owning Pi's production archive.
+
+| Final check | Observed result |
+|---|---|
+| Readiness | **2 actual processed connection-ready callbacks**; registered sender distinct from the approved recipient and matched the prior account marker. Persisted status alone was not accepted. |
+| Sends | Exactly **2 generated text sends**, each API-accepted in **1 attempt**. No delivery-unknown result, unplanned reconnect, automatic resend, extra text, media or history fetch. |
+| Safe stop/reconnect | Transport lease removed between connections; credentials retained; old context invalid while stopped and after reconnect; a fresh owner token under the same account scope. |
+| Restored native reply | After reconnect the first text's archived safe quote was available, and the second actual native message contained that anchor. |
+| Physical client | The owner explicitly confirmed **both labeled texts readable and the quoted text visible** on the separate recipient phone. This is operator evidence, separate from API acceptance. |
+| Isolated persistence | After stop, a new read-only `ArchiveFiles` instance reopened **2 records**, the quote anchor, mode **0600**, and no transport-secret fields. This reader ran in the same controller process, not a new full-Pi restart. |
+| Numeric status evidence | Both observed/persisted aggregate statuses were **SERVER_ACK (2)**. This is not a fresh READ/PLAYED or comprehensive receipt-event result; earlier direct-chat READ/PLAYED evidence remains historical. |
+| Configuration preservation | Correct initialization loaded **3 allowed contacts**; **6 attempted configuration saves were suppressed**. The production configuration digest was unchanged, and a separate comparison again matched all restored contact data. No configuration backup containing keys was created. |
+| Final cleanup | Safe stop completed; owned transport and isolated archive locks absent, saved credentials retained and profile metadata stable. The controller exited **0**. No pairing/reset/logout or credential copy. |
+
+T049's final-runtime saved-session ownership/lifecycle/readability gate is complete. Together with the earlier approved media/history scope and reviewed M3 candidate, **M1–M4 are complete for the documented prerelease qualification scope**. The current two-text run does not newly qualify default-archive coexistence, Linux live accounts, media/backfill, group/per-participant receipts, old unreadable placeholders or full agent-mediated inbound behavior. No new production source review is claimed for these documentation-only receipts. The unchanged candidate retains prior M3 466/49-per-platform validation; the subsequent isolated Git-delivery preflight also reran `npm test` (466 passed/49 files, zero pending), `npm run lint`, `npm run typecheck` and `git diff --check`, all exit 0. No build script is declared. After this closure the owner explicitly authorized Git commit/push to the maintained repository and explicitly prohibited publication. npm package creation/publication and stable promotion remain separately gated; the package remains private/unpublished.
