@@ -80,7 +80,8 @@ export default function (pi: ExtensionAPI) {
     const router = new ConversationRouter(
         canonicalConversation,
         routingScope,
-        key => whatsappService.markIncomingProcessing(key, 'consumed')
+        key => whatsappService.markIncomingProcessing(key, 'consumed'),
+        (target, state) => logger.log(`[WhatsApp-NG] Suppressed final text to ${target}: inFlight=${state.inFlight} confirmed=${state.confirmed} unknown=${state.unknown}`)
     );
 
     pi.on('input', event => { router.observeInput(event); });
@@ -456,7 +457,7 @@ export default function (pi: ExtensionAPI) {
         name: 'send_wa_media',
         label: t('media.toolLabel'),
         description: t('media.toolDescription'),
-        promptSnippet: 'send_wa_media({path,type,jid?,caption?,voiceNote?,quote?}) - Explicit local attachment upload only. Mentioned paths are not upload instructions. Do not resend a delivery-unknown outcome; it may still arrive.',
+        promptSnippet: 'send_wa_media({path,type,jid?,caption?,voiceNote?,quote?}) - Explicit local attachment upload only. Mentioned paths are not upload instructions. Do not resend a delivery-unknown outcome; it may still arrive. Accepted, in-flight, or delivery-unknown media sends to the owning conversation suppress the automatic WhatsApp final reply; definite failures do not. Put any summary in the last caption or send it with send_wa_message.',
         parameters: Type.Object({
             path: Type.String({ minLength: 1, description: 'Local file under the current workspace or WhatsApp media directory. No URLs or base64.' }),
             type: Type.Union([Type.Literal('document'), Type.Literal('image'), Type.Literal('audio'), Type.Literal('video')]),

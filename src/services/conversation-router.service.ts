@@ -43,7 +43,8 @@ export class ConversationRouter {
     constructor(
         private readonly canonical: (jid: string) => string | undefined = jid => jid,
         private readonly scope: () => string = () => 'default',
-        private readonly onConsumed: (key: WAMessageKey) => void = () => {}
+        private readonly onConsumed: (key: WAMessageKey) => void = () => {},
+        private readonly onSuppress: (target: string, state: SendState) => void = () => {}
     ) {}
 
     public getRuntimeId(): string {
@@ -150,7 +151,10 @@ export class ConversationRouter {
         const target = this.canonical(buffered.snapshot.target);
         if (!target) return undefined;
         for (const [jid, state] of buffered.snapshot.epoch.sends) {
-            if (this.canonical(jid) === target && (state.inFlight > 0 || state.confirmed || state.unknown)) return undefined;
+            if (this.canonical(jid) === target && (state.inFlight > 0 || state.confirmed || state.unknown)) {
+                this.onSuppress(target, state);
+                return undefined;
+            }
         }
         return { snapshot: buffered.snapshot, text: buffered.text };
     }
