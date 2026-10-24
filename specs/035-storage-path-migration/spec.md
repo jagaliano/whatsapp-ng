@@ -1,15 +1,18 @@
 # Feature Specification: Migrate Extension Storage Path
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Feature Branch**: `[035-storage-path-migration]`  
 **Created**: 2026-06-02  
 **Status**: Draft  
-**Input**: User description: "The adequate folder for extensions in .pi is in /.pi/agent/extension. Is it possible to change all the codes that is using /.pi/whatsapp-pi to /.pi/agent/extension/whatsapp-pi folder?"
+**Input**: User description: "The adequate folder for extensions in .pi is in /.pi/agent/extension. Is it possible to change all the codes that is using /.pi/whatsapp-ng to /.pi/agent/extension/whatsapp-ng folder?"
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Use New Storage Location (Priority: P1)
 
-As a WhatsApp-Pi user, I want the extension to use the agent extension storage location as its home, so new data is saved in the approved place.
+As a WhatsApp-NG user, I want the extension to use the agent extension storage location as its home, so new data is saved in the approved place.
 
 **Why this priority**: This is the core goal of the change and affects every persisted file.
 
@@ -64,8 +67,8 @@ As a user or maintainer, I want the move to happen automatically, so no one has 
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST use the approved agent extension storage location (`~/.pi/agent/extension/whatsapp-pi`) as the default home for all WhatsApp-Pi local persistence.
-- **FR-002**: The system MUST read existing user data from the legacy storage location (`~/.pi/whatsapp-pi`) when upgrading from older installs.
+- **FR-001**: The system MUST use the approved agent extension storage location (`<legacy-previous-data-root>`) as the default home for all WhatsApp-NG local persistence.
+- **FR-002**: The system MUST read existing user data from the legacy storage location (`<legacy-original-data-root>`) when upgrading from older installs.
 - **FR-003**: The system MUST preserve user-authored and user-generated data during the move, including connection state, settings, conversation history, and stored files.
 - **FR-004**: The system MUST create the new storage location automatically when it does not already exist.
 - **FR-005**: The system MUST keep legacy data available until the new storage copy is usable.
@@ -90,8 +93,8 @@ As a user or maintainer, I want the move to happen automatically, so no one has 
 
 ## Assumptions
 
-- The approved storage home is `~/.pi/agent/extension/whatsapp-pi`.
-- Some users already have data in the legacy `~/.pi/whatsapp-pi` folder.
+- The approved storage home is `<legacy-previous-data-root>`.
+- Some users already have data in the legacy `<legacy-original-data-root>` folder.
 - Migration happens automatically on startup or first access.
 - Local storage is the only concern; no cloud sync or remote backup is introduced.
 - If both locations contain valid data, the system prefers the newest usable state and keeps older data recoverable.

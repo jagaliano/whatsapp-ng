@@ -5,7 +5,7 @@ vi.mock('../../src/services/whatsapp.service.js', () => ({ WhatsAppService: clas
     getSessionContext() { return { accountScope: 'test', generation: 0 }; }
     requestHistory = mocks.request; getHistoryStatus = mocks.status;
 } }));
-import extension from '../../whatsapp-pi.ts';
+import extension from '../../whatsapp-ng.ts';
 
 interface Tool { name: string; execute(id: string, args: Record<string, unknown>): Promise<{ isError: boolean; content: Array<{ text: string }> }> }
 function tool() {

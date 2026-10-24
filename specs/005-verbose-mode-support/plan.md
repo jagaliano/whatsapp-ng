@@ -1,5 +1,8 @@
 # Implementation Plan: Verbose Mode Support
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Branch**: `005-verbose-mode-support` | **Date**: 2026-04-10 | **Spec**: [spec.md](spec.md)
 **Input**: Feature specification from `specs/005-verbose-mode-support/spec.md`
 
@@ -12,7 +15,7 @@ Implement a verbose logging mode triggered by the `-v` or `--verbose` command-li
 **Language/Version**: TypeScript 5.x / Node.js 20+
 **Primary Dependencies**: `@whiskeysockets/baileys`, `pi-agent-sdk`, `pino`
 **Storage**: Memory-based configuration
-**Testing**: Manual verification using `pi -e ./whatsapp-pi.ts -v`
+**Testing**: Manual verification using `pi -e ./whatsapp-ng.ts -v`
 **Target Platform**: Pi Code Agent CLI
 **Project Type**: Pi Code Agent Extension
 **Performance Goals**: Instant flag detection at startup; no performance impact in non-verbose mode.
@@ -46,7 +49,7 @@ specs/005-verbose-mode-support/
 ### Source Code (repository root)
 
 ```text
-whatsapp-pi.ts           # Update for flag registration and detection
+whatsapp-ng.ts           # Update for flag registration and detection
 src/
 └── services/
     └── whatsapp.service.ts   # Update to handle dynamic logger levels

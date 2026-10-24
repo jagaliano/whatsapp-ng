@@ -18,7 +18,7 @@ $env:LC_ALL = 'pt_BR.UTF-8'
 Set-Location $PSScriptRoot
 Set-Location ..
 
-$entryPoint = Join-Path (Get-Location) 'whatsapp-pi.ts'
+$entryPoint = Join-Path (Get-Location) 'whatsapp-ng.ts'
 
 & pi -e $entryPoint @args
 exit $LASTEXITCODE

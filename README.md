@@ -7,12 +7,34 @@
 
 A WhatsApp integration extension for the **[Pi Coding Agent](https://pi.dev)**. 
 
-Pi is a powerful agentic AI coding assistant that operates in your terminal. This extension lets you chat and pair-program with your Pi agent through WhatsApp, with message filtering, allowed contacts/groups, recents/history browsing, message detail/reply, group-only binding, and reliable message delivery.
+Pi is a powerful agentic AI coding assistant that operates in your terminal. This extension lets you chat and pair-program with your Pi agent through WhatsApp, with message filtering, allowed contacts/groups, recents/history browsing, message detail/reply, group-only binding, and explicit message-send outcomes.
 
 
 Maintained continuation of [RaphaCastelloes/whatsapp-pi](https://github.com/RaphaCastelloes/whatsapp-pi), preserving original Git history and attribution for independent fixes and releases. Original author metadata remains **Rapha**; fork maintenance is led by **jagaliano**. This does not assert that upstream is abandoned.
 
-> **Unreleased candidate:** `whatsapp-ng@1.1.0-rc.1` is not published to npm. The npm account-readiness check passed; `private: true` still blocks publication pending remaining artifact qualification and separate release approval. The package name is not reserved. The code is [MIT licensed](LICENSE); see [licensing and attribution](LICENSING.md). The intended first tag is `next`, not `latest`. See [approved maintenance plan](https://github.com/jagaliano/whatsapp-ng/blob/chore/fork-release-readiness/specs/037-maintained-fork-readiness/plan.md), [changes](CHANGELOG.md) and [private security reporting](SECURITY.md).
+> **Unreleased:** `whatsapp-ng@1.1.0-rc.1` is not available on npm yet. Use the source-checkout instructions below. The first npm prerelease is planned for the `next` tag, after final package checks and maintainer approval. See the [changelog](CHANGELOG.md), [MIT license](LICENSE) and [security policy](SECURITY.md).
+
+## Fork and legacy names
+
+Legacy project identifier: `whatsapp-pi`. This is an independently maintained fork, not an upstream rename. Original Git history, Rapha Castelloes attribution and MIT notices remain intact. Historical documents use the labels below instead of falsely renaming their original artifacts.
+
+| Historical label | Original name/path | Current counterpart |
+| --- | --- | --- |
+| `<legacy-entrypoint>` | `whatsapp-pi.ts` | `whatsapp-ng.ts` |
+| Legacy online flag | `--whatsapp-pi-online` | `--whatsapp-ng-online` |
+| `<legacy-current-data-root>` | `~/.pi/agent/extensions/whatsapp-pi` | `~/.pi/agent/extensions/whatsapp-ng` |
+| `<legacy-previous-data-root>` | `~/.pi/agent/extension/whatsapp-pi` | Explicit migration source only |
+| `<legacy-original-data-root>` | `~/.pi/whatsapp-pi` | Explicit migration source only |
+
+The [upstream project](https://github.com/RaphaCastelloes/whatsapp-pi), [legacy contribution fork](https://github.com/jagaliano/whatsapp-pi), [published upstream package 1.0.70](https://www.npmjs.com/package/whatsapp-pi/v/1.0.70) and [advisory licensing inquiry](https://github.com/RaphaCastelloes/whatsapp-pi/issues/17) are historical references, not installation targets for this fork. Upstream commit `49adbc3` and that package declare MIT; no upstream endorsement or unverified copyright dates are asserted.
+
+## Status and known limits
+
+- Development targets Node 26.x and Pi 1.4.0. Recorded source validation on macOS passed 585 tests across 58 files, lint and typecheck. See [dependency and test details](DEPENDENCIES.md).
+- Live direct-chat tests cover messages, media, native replies, saved-session reconnects and selected history/receipt behavior. A real WhatsApp voice note was transcribed by Groq and received by Pi.
+- Earlier Linux amd64 package tests used Pi 1.3.0; the updated Pi 1.4.0 package still needs fresh testing there. Windows, service installers and broader group/receipt behavior remain unverified.
+- Known advisories remain in Pi's SDK/host HTTP dependency. The extension's production-only npm audit does not cover host-supplied packages. See the [current security assessment](DEPENDENCIES.md#latest-audit-refresh).
+- This is experimental software, not a production-stability guarantee. A successful send means API acceptance, not confirmed recipient delivery or reading.
 
 ## Features
 
@@ -30,7 +52,7 @@ Maintained continuation of [RaphaCastelloes/whatsapp-pi](https://github.com/Raph
 - **Group-Only Mode**: Bind the agent to a single WhatsApp group with `--whatsapp-group`
 - **Media Support**: 
   - **Vision Analysis**: Automatically forwards WhatsApp images to Pi for analysis.
-  - **Audio Transcription**: Transcribes voice notes locally with Whisper.cpp (`whisper-cpp-node`); `ffmpeg` is used to convert WhatsApp audio to 16 kHz mono WAV first.
+  - **Audio Transcription**: Transcribes voice notes locally with Whisper.cpp or through an explicitly configured OpenAI-compatible remote STT endpoint; FFmpeg converts audio to 16 kHz mono WAV first.
   - **Document Handling**: Downloads and stores documents (PDF, text) for agent access; PDFs include a bounded text preview when readable.
 
 ## Prerequisites
@@ -44,9 +66,9 @@ Install Pi from [pi.dev](https://pi.dev):
 curl -fsSL https://pi.dev/install.sh | sh
 ```
 
-**Or via npm (initial qualification target: Node.js 26.x and Pi 1.3.0):**
+**Or via npm (current development target: Node.js 26.x and Pi 1.4.0):**
 ```bash
-npm install -g @earendil-works/pi-coding-agent@1.3.0
+npm install -g @earendil-works/pi-coding-agent@1.4.0
 ```
 
 Then authenticate or set an API key before starting:
@@ -61,29 +83,90 @@ export GEMINI_API_KEY=...
 
 See the [Pi documentation](https://pi.dev/docs/latest) for full setup, providers, and model configuration details.
 
+### System media tools
+
+Install and update native tools yourself; the extension does not ship or download FFmpeg or build Whisper.cpp. For a new macOS setup with Homebrew:
+
+```bash
+brew install ffmpeg whisper-cpp tesseract
+```
+
+FFmpeg is needed for audio/video conversion and applicable image/video preparation. Local transcription additionally needs `whisper-cli` and a compatible GGML model; remote transcription does not need Whisper.cpp. PDF OCR needs Tesseract and its language data. Install only the tools needed for your features. On other systems, follow each tool's installation instructions.
+
+Verify discovery in the shell that launches Pi:
+
+```bash
+ffmpeg -version
+whisper-cli --version
+tesseract --version
+tesseract --list-langs
+```
+
+Use `FFMPEG_PATH` or `WHISPER_CLI_PATH` for an executable outside `PATH`. The executable must also be accessible to the user/service running Pi. Keep system tools updated independently of this package.
+
 ### Audio Transcription
 
-Audio transcription uses local Whisper.cpp: a native binding when available on macOS/Windows, with CLI fallback; Linux uses the CLI. FFmpeg converts input audio. No transcription API key is required.
+Local Whisper.cpp is the default. To use remote STT, apply all three fields below with `configure_wa_stt`. Alternatively, stop Pi and merge them into your existing `~/.pi/agent/extensions/whatsapp-ng/config.json`, preserving the other settings:
 
-Install dependencies and build the Whisper CLI:
+```json
+{
+  "sttEndpoint": "https://api.groq.com/openai/v1",
+  "sttModel": "whisper-large-v3-turbo",
+  "sttEnv": "GROQ_API_KEY"
+}
+```
 
-**Linux/macOS:**
+`sttEnv` is the **name** of the environment variable containing the selected provider's API key, never the key itself. Export that variable securely in the environment that launches Pi, then restart Pi. The names are provider-neutral: choose your provider's base URL, transcription model and key-variable name. No vision key, Pi provider credential or other environment variable is used as a fallback.
+
+**Configuring remote STT opts into uploading admitted WhatsApp voice-note audio to that provider.** Its billing, rate limits and data-retention policy apply. The client appends `/audio/transcriptions` to the HTTPS base URL and posts multipart `file` (16 kHz mono WAV), `model` and `response_format=json`, expecting a JSON `text` string. Verify that the particular endpoint/model supports this transcription API: OpenAI-compatible **chat** support alone (including a routing service's chat API) is not sufficient. No provider-specific/chat-audio adapters are implied.
+
+FFmpeg is still required for conversion, but remote mode never initializes Whisper.cpp or downloads a local model. Partial/invalid settings, a missing `sttEnv` variable or a provider error fail rather than silently falling back to another backend. Tool updates preserve omitted fields and validate the combined configuration before saving; initial remote setup requires all three fields. Pass `configure_wa_stt({})` (or all three empty strings) to select local mode. Endpoint credentials/query strings/fragments and redirects are rejected; input/upload limits are 25 MiB, response limit is 1 MiB, conversion and remote-request timeouts are 60 seconds each, with no automatic upload retry. Providers can impose stricter limits. Account/session changes prevent stale uploads before sending and best-effort abort in-flight requests; already-uploaded audio cannot be recalled. Newly created private audio scratch files are cleaned on success/error, not on abrupt process death; previously saved media is not deleted.
+
+With remote STT unconfigured, audio transcription prefers an installed Whisper.cpp CLI. A compatible macOS/Windows native addon can provide a fallback when no CLI is available. `whisper-cpp-node` packages its own native Whisper.cpp engine and does not require a separate CLI installation, but still needs a model. Its platform support is limited; an installed system CLI works independently of the addon. FFmpeg converts input audio; transcription runs on CPU and requires no transcription API key.
+
+If Whisper.cpp already works locally, reuse it and your existing light model—no rebuild is necessary:
+
 ```bash
-npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
-./scripts/build-whisper-cli.sh
+export WHISPER_CLI_PATH="$(command -v whisper-cli)"  # optional when already on PATH
+export WHISPER_MODEL_PATH="/absolute/path/to/ggml-tiny.bin"
+export WHISPER_LANGUAGE="auto"                      # or en, es, pt, ...
+pi --no-extensions -e ./whatsapp-ng.ts
 ```
 
-**Windows (PowerShell):**
-```powershell
-npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
-./scripts/build-whisper-cli.ps1
+Choose the actual path of your installed GGML model; the example does not download one. Set these variables in the shell that launches Pi, then restart/reload the extension. Invalid explicit CLI/model paths fail rather than silently substituting a different backend/model. Without a model override, the existing fallback downloads `ggml-base.bin` into the extension's `whisper/models/` directory on first transcription if missing.
+
+Local CLI preparation/transcription has a shared 10-minute budget. Cancellation or a session change aborts model preparation and kills the CLI child; scratch cleanup waits for child closure. Default model downloads use private temporary files and atomic publication, so failed downloads are not reused as complete models. This process-cancellation guarantee does not apply to the in-process native addon.
+
+Incoming image/video/document downloads are limited to 25 MiB, including when the advertised size is absent or incorrect. Newly created media/document directories use `0700`; new files use unique names, exclusive creation and `0600`. Existing downloads/directories are not deleted or retroactively re-permissioned.
+
+CLI lookup uses an explicit `WHISPER_CLI_PATH`, otherwise `PATH`; repository vendor directories are not searched. Install/build Whisper.cpp using its [upstream instructions](https://github.com/ggml-org/whisper.cpp), not extension-maintained build scripts. The CLI uses `--no-gpu`; the native fallback uses `use_gpu: false`. `WHISPER_MODEL_PATH` and `WHISPER_LANGUAGE` apply to both backends; language defaults to `auto`.
+
+### PDF previews and OCR
+
+PDF previews use pinned LiteParse 2.17.0 and its matching optional native package. Local OCR requires Tesseract and language data; native text can still be extracted without OCR. PDF support loads only when needed, and failure retains the saved file/fallback notice. Each PDF parser is closed afterward, with a 60-second parse-only deadline (not an initialization deadline). See [dependency/native-tool policy](DEPENDENCIES.md) for reviewed versions, native prerequisites and security evidence.
+
+To verify OCR on your macOS installation, first confirm `eng` appears in `tesseract --list-langs`. For Spanish, also check for `spa`; missing additional language data can be installed with `brew install tesseract-lang`. No reinstall is needed when the data is already present.
+
+From this checkout, run the direct Tesseract and LiteParse integration tests:
+
+```bash
+TEST_HOME="$(mktemp -d)"
+HOME="$TEST_HOME" PI_CODING_AGENT_DIR="$TEST_HOME/agent" PI_OFFLINE=1 \
+  npm test -- tests/unit/tesseract.contract.test.ts tests/unit/incoming-pdf.contract.test.ts --maxWorkers=2
 ```
 
-The CLI is expected at `vendor/whisper.cpp/build/bin/whisper-cli` (or `.exe` on Windows). To use another location, set `WHISPER_CLI_PATH`.
+The temporary HOME keeps these checks separate from your WhatsApp settings and history.
 
-These build scripts require a source checkout; they are not included in the candidate npm tarball. For an installed package, provide an external Whisper CLI through `WHISPER_CLI_PATH`. FFmpeg is also required for applicable media features. Native dependency installation/downloads and platform availability are separate from extension runtime behavior.
+They recognize a generated `HELLO WORLD` image and a scanned PDF with no text layer, verify native PDF text extraction and OCR-disabled behavior, and check corrupt-file fallback and worker cleanup. Tesseract-dependent tests skip when the executable is absent; check the test output rather than treating a skipped test as success.
 
-PDF previews use pinned LiteParse 2.15.1 and its matching optional native package. Local OCR requires Tesseract and language data; native text can still be extracted without OCR. PDF support loads only when needed, and failure retains the saved file/fallback notice. Each PDF parser is closed afterward, with a 60-second parse-only deadline (not an initialization deadline). See [dependency/native-tool policy](DEPENDENCIES.md) for reviewed versions, native prerequisites and security evidence.
+To try your own image locally:
+
+```bash
+tesseract "/absolute/path/to/scan.png" stdout -l eng --psm 6
+# For Spanish text, use -l spa; for mixed text, use -l eng+spa.
+```
+
+Tesseract accepts images, not PDFs directly. LiteParse renders PDF pages before local OCR. Neither OCR path requires uploading the document to an OCR server.
 
 ## Quick Start
 
@@ -91,11 +174,23 @@ PDF previews use pinned LiteParse 2.15.1 and its matching optional native packag
 
 Stop the prior extension and every same-profile Pi/tmux/headless service before enabling this continuation. Use `/whatsapp > Disconnect WhatsApp`, stop the owning Pi process as needed, and disable the old package/resource with `pi config` or remove its exact source with `pi remove <source>` after checking `pi list`. Project-local installations need the corresponding local configuration too. Do not edit global settings or delete auth as an automatic migration step.
 
-Both names deliberately use the existing `~/.pi/agent/extensions/whatsapp-pi` storage/auth/profile layout. A package-name change alone does not require re-pairing. A separate canonical-profile transport lease rejects competing cooperating instances before auth/socket work and remains held while admitted credential I/O settles. Archive locks alone do not provide this protection. Old clients that ignore the lease, copied credential directories and distributed/network-filesystem locking are outside this guarantee: stop prior instances first.
+This fork now uses its own `~/.pi/agent/extensions/whatsapp-ng` data namespace. It does not probe or import legacy roots automatically. Preserve your saved login/history with the explicit full-state migration below; do not treat an empty new namespace as a request to re-pair. A separate canonical-profile transport lease rejects competing cooperating instances before auth/socket work and remains held while admitted credential I/O settles. Archive locks alone do not provide this protection. Old clients that ignore the lease, copied credential directories and distributed/network-filesystem locking are outside this guarantee: stop prior instances first.
 
 ### Auth adoption and recovery
 
-Offline startup/history may migrate config/history and discover saved-state metadata, but does not copy or read auth contents. Explicit Connect or a requested online start may adopt one complete matching legacy auth profile under source and destination ownership. Initialized auth is never merged with another legacy root; group profiles do not borrow default-profile credentials. Original legacy bytes are retained. Adoption uses private staged files and an atomic directory replacement.
+Stop **all owning Pi processes and services**, not only their WhatsApp connections, before migrating. Then start the new entry once with an explicit source:
+
+```bash
+pi --no-extensions -e ./whatsapp-ng.ts --whatsapp-ng-migrate-from "$HOME/.pi/agent/extensions/whatsapp-pi"
+```
+
+A private pending request can also be queued by the operator and will run before normal initialization on the next cold start. The destination must not already exist, even empty. The migration checks ownership/runtime locks and directory identity, then atomically renames the entire state root on the same filesystem; no credentials are copied, merged or recreated. Settings, default/group auth, media, relative profile bindings and archive UUID/account identities remain together. The derived old root log is renamed without changing its contents. Old transcripts/log contents remain historical.
+
+Migration requests and exclusive migration locks are private sibling files outside the moved root. Interrupted moves resume only when directory identity proves the destination is the original source. Unknown/future metadata, runtime locks, symlinks, destination/log conflicts and cross-filesystem moves fail closed. No PID-based lock stealing or copy fallback occurs. After a crash, verified stale migration locks require separate explicit operator recovery; do not delete auth/config/archive data. Do not start the old client alongside the new one.
+
+Remove the migration flag from future cold-start commands after completion. Within the same process, `/new`, resume, fork or extension recreation cannot replay the initial migration. A failed attempt or a newly queued request requires a fresh process; session replacement is not a migration retry. File logging, including shutdown logging, remains blocked while startup migration is incomplete.
+
+Generic profile adoption remains available only for an explicitly supplied source; initialized auth is never merged and group profiles never borrow default-profile credentials. Pi session metadata and shutdown hooks use the new namespace; old session entries do not silently replace the migrated configuration.
 
 Each canonical auth directory has sibling `<auth-directory>.transport-lock` and `<auth-directory>.auth-profile.json` control files. The latter contains only a schema version and adoption/reset state, not keys or account identifiers. Logout resets only the current profile and prevents later resurrection from preserved legacy originals. Interrupted adoption/reset, malformed auth or unsupported metadata fails closed; it is not silently replaced with a fresh identity.
 
@@ -110,61 +205,63 @@ For now, inspect a source checkout and use its explicit entry only after stoppin
 ```bash
 git clone https://github.com/jagaliano/whatsapp-ng.git
 cd whatsapp-ng
-# Use the reviewed maintenance ref; main may still contain the pre-M1 baseline.
+# Candidate development branch:
 git checkout chore/fork-release-readiness
 npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
-pi --no-extensions -e ./whatsapp-pi.ts
+pi --no-extensions -e ./whatsapp-ng.ts
 ```
 
-Use the reviewed maintenance commit, not uncommitted local work. The owner-approved lockfile reproduces maintainer dependencies with the flags above. Lifecycle scripts are disabled; provide system FFmpeg and, for OCR, Tesseract. Normal installs without that flag can run native downloads/builds. The lock does not freeze every future consumer install; see [DEPENDENCIES.md](DEPENDENCIES.md).
+Use the reviewed maintenance commit, not uncommitted local work. The lockfile reproduces maintainer dependencies with the flags above. Lifecycle scripts are disabled; provide system FFmpeg and, for OCR, Tesseract. Normal installs without that flag can run native downloads/builds. The lock does not freeze every future consumer install; see [DEPENDENCIES.md](DEPENDENCIES.md).
 
-Only **after** a reviewed prerelease is actually published under separate authorization, its pinned registry form will be:
+Once the prerelease is published, you will be able to install the exact version with:
 
 ```bash
 # Future command, not currently available on npm:
 pi install npm:whatsapp-ng@1.1.0-rc.1
 ```
 
-Do not install `npm:whatsapp-pi` expecting this fork. A registry name lookup does not reserve `whatsapp-ng`. Standard flags, `/whatsapp`, tool names, the `whatsapp-pi.ts` entry and existing storage names remain unchanged for compatibility.
+Do not install `npm:whatsapp-pi` expecting this fork. This migration changes the entry, online flag and state root; `/whatsapp`, group/history flags and existing messaging/history tool names remain unchanged.
 
 After an approved installation is enabled, start Pi:
 ```bash
 pi
 ```
 
-3. Open `/whatsapp` and choose **Connect / Reconnect WhatsApp**.
+1. Open `/whatsapp` and choose **Connect / Reconnect WhatsApp**.
    - QR appears only on first pair or after logoff.
 
-4. Add the chat you will use with Pi to **Allowed Contacts** or **Allowed Groups**.
+2. Add the chat you will use with Pi to **Allowed Contacts** or **Allowed Groups**.
 
-5. Send a message from that allowed chat to Pi.
+3. Send a message from that allowed chat to Pi.
    - Pi replies in same thread.
    - Use **Recents** only to browse history or reply manually.
 
 After first pairing, you can start Pi with auto-connect enabled:
 ```bash
-pi --whatsapp-pi-online
+pi --whatsapp-ng-online
 ```
 
 ### Headless services and switchback
 
-The inherited `scripts/install-whatsapp-pi-service.sh` still installs the **upstream** npm package. It is not a validated whatsapp-ng installer and is intentionally not advertised for enabling this fork. Scripts/systemd templates require a source checkout and are not in the candidate tarball. Linux service qualification belongs to M3.
+The renamed `scripts/install-whatsapp-ng-service.sh` targets this maintained source, not upstream. It remains an unqualified installer; inspect it and finish explicit state migration before enabling a service. Scripts/systemd templates require a source checkout and are not in the candidate tarball. The qualified Linux CLI/RPC container scope does not certify these installers or systemd deployment.
 
-An existing installation may use the legacy names below. Review these commands on your own host; no service was stopped or modified by M1:
+An existing installation may still use the legacy service name. Check it before switching; these commands are manual instructions, not an automatic service migration:
 
 ```bash
 systemctl --user status whatsapp-pi.service
-# Stop/disable the prior service before using this fork:
+# Stop/disable the legacy service before migrating or enabling the new one:
 systemctl --user disable --now whatsapp-pi.service
 ```
 
-To switch back, stop this candidate and any same-profile processes first, then restore only the previously recorded package/source configuration. Preserve auth and the new archive; do not select Logoff or delete storage to change package names. Older code/old recents will omit post-migration records from its view. This is not a lossless data downgrade, and M1 performs no real rollback.
+To switch back, stop this candidate and any same-profile processes first, then restore only the previously recorded package/source configuration. Preserve auth and the new archive; do not select Logoff or delete storage to change package names. Older code/old recents will omit post-migration records from its view. This is not a lossless data downgrade, and there is no automatic rollback.
 
 ## Development / Testing
 
-The maintained source repository is [jagaliano/whatsapp-ng](https://github.com/jagaliano/whatsapp-ng). macOS and Linux with Node 26.x / Pi 1.3.0 are initial qualification targets; only tested OS/architecture/patch combinations can become supported artifact claims. Windows remains best effort/unverified.
+For operator-led live testing, use the [prerelease acceptance walkthrough](tests/manual/prerelease-acceptance.md). It separates automated evidence, small approved live batches, platform checks and final-package verification.
 
-1. Clone and install dependencies:
+The source repository is [jagaliano/whatsapp-ng](https://github.com/jagaliano/whatsapp-ng). Use Node 26.x and Pi 1.4.0. Source checks have run on macOS; earlier Linux package tests used Pi 1.3.0 and do not establish support for the updated package. Windows remains unverified.
+
+**Install dependencies:**
 ```bash
 git clone https://github.com/jagaliano/whatsapp-ng.git
 cd whatsapp-ng
@@ -172,11 +269,19 @@ git checkout chore/fork-release-readiness
 npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
 ```
 
-2. Run the extension:
+**Run the declared checks:**
+
+```bash
+npm test
+npm run lint
+npm run typecheck
+```
+
+**Run the extension:**
 
 **Linux/macOS:**
 ```bash
-pi -e whatsapp-pi.ts
+pi -e whatsapp-ng.ts
 ```
 
 **Windows (PowerShell):**
@@ -186,12 +291,12 @@ pi -e whatsapp-pi.ts
 
 For verbose mode (shows Baileys trace logs and audio timing logs for debugging):
 ```bash
-pi -e whatsapp-pi.ts --verbose
+pi -e whatsapp-ng.ts --verbose
 ```
 
 To test startup auto-connect locally after you have already paired WhatsApp:
 ```bash
-pi -e whatsapp-pi.ts --whatsapp-pi-online
+pi -e whatsapp-ng.ts --whatsapp-ng-online
 ```
 
 ## How It Works
@@ -232,6 +337,7 @@ The extension registers the following tools that the Pi agent can call:
 | `get_wa_conversation_history` | read-only | Get the most recent messages with a given `senderNumber` (accepts `+E164`, raw digits, or a JID). Supports `limit`. |
 | `check_wa_new_messages` | read-only | List conversations whose most recent message is incoming (i.e. waiting for a reply). Supports `sinceTimestamp` (ms epoch) and local `scope`. |
 | `request_wa_history` | explicit network / local status | `{mode:"request",jid,count?}` requests at most 100 older messages for an allowed/bound chat; `{mode:"status",requestId?}` reads retained status locally. |
+| `configure_wa_stt` | configuration | Set `sttEndpoint`, `sttModel` and `sttEnv` for remote audio transcription. Pass the key's environment-variable name, never its value. |
 
 The three inbox read tools use the selected local archive projection. They never fetch network history or mark messages as read. Defaults remain 20 items; `scope` selects a known local profile/account or `legacy-unassigned`. `list_wa_conversations` returns available scope IDs. `get_wa_conversation_history` also accepts an opaque `cursor` and returns `nextCursor` for older local pages, including equal-timestamp records.
 
@@ -246,7 +352,7 @@ The three inbox read tools use the selected local archive projection. They never
 - Files must resolve under the current Pi workspace (`ctx.cwd`) or the extension's `whatsapp-medias` directory. Symlink escapes, ancestor replacement, URLs/base64, empty/nonregular files, credential/auth folders, `.env*`, private-key names and detected private-key headers are rejected. Opened descriptor identity, non-symlink ancestry and file stability are checked before and after copying; nonblocking open rejects FIFO replacement without wedging a worker. This is an egress policy, not an OS sandbox or general secret scanner.
 - The application limit is **25 MiB**, checked on the source, bounded snapshot copy and converted output. Only owned temporary snapshots are removed; originals are never edited or deleted. Local paths inside Baileys' payload refer to these snapshots and are streamed from disk. Tool results contain metadata, not attachment bytes.
 - Documents include PDF, XLSX, Markdown and other regular files with filename/MIME metadata (unknown extensions use `application/octet-stream`). Images support JPEG and PNG signatures.
-- Images, audio and video require FFmpeg for bounded thumbnail generation or codec inspection, even when payload conversion is unnecessary. Resolution uses `FFMPEG_PATH`, otherwise the system executable, then the existing `ffmpeg-static` path if available. The extension does not install tools at runtime; normal dependency installs may run the FFmpeg-static downloader unless lifecycle scripts are disabled.
+- Images, audio and video require FFmpeg for bounded thumbnail generation or codec inspection, even when payload conversion is unnecessary. Resolution uses `FFMPEG_PATH`, otherwise the system executable on `PATH`. No FFmpeg binary, bundled fallback or FFmpeg downloader is supplied; users install and maintain their own build.
 - MP3, AAC-in-MP4 and Ogg/Opus audio send directly when compatible. WAV/FLAC and other supported binary audio containers convert to AAC/M4A. `voiceNote: true` sends Ogg/Opus with the PTT flag, converting when necessary. Audio captions are rejected instead of silently dropped.
 - Compatible MP4/H.264/yuv420p with optional AAC audio sends directly. Other supported MP4/MOV, AVI or Matroska/WebM video converts to MP4/H.264/AAC. Text playlists and network input protocols are not accepted. Codec support depends on the installed FFmpeg build.
 - Probe, conversion and thumbnail generation share a **60-second budget**. Duration and JPEG thumbnails are prepared explicitly so Baileys does not recreate plaintext in a shared temp directory or launch an unbounded thumbnail child. PTT waveform data is explicitly unavailable instead of invoking Baileys' unowned audio decoder. Abort/timeout terminates the child, escalates to a forced kill if necessary, and waits for child exit before cleanup. Baileys receives `mediaUploadTimeoutMs: 60000`; it has no caller abort signal.
@@ -269,7 +375,7 @@ The history/detail/reply UI sends native quotes and displays unavailable targets
 
 New ignored live senders retain at most 20 memory-only summary previews for 24 hours, scoped to the current account. Their content is not admitted to the new durable/quotable archive or raw retry cache.
 
-The authoritative archive is under `~/.pi/agent/extensions/whatsapp-pi/archive/`. Each relative auth-directory profile has a random storage-profile ID and a last-verified account marker. Offline reads use that known account without a socket. A different login opens a separate partition before ingestion; an empty new account never falls back to someone else's legacy history. `/whatsapp > Local history scope` selects another known account or the legacy view locally without changing the live ingestion account. Recents remain available while disconnected.
+The authoritative archive is under `~/.pi/agent/extensions/whatsapp-ng/archive/`. Each relative auth-directory profile has a random storage-profile ID and a last-verified account marker. Offline reads use that known account without a socket. A different login opens a separate partition before ingestion; an empty new account never falls back to someone else's legacy history. `/whatsapp > Local history scope` selects another known account or the legacy view locally without changing the live ingestion account. Recents remain available while disconnected.
 
 Legacy `recents/recents.json` is not attributed to the next login. A one-time read-only `legacy-unassigned` import preserves existing labels/time/direction and an untouched `recents.json.pre-archive-backup`. The original recents file is not rewritten by the archive-backed projection. Legacy missing keys/content stay unknown and cannot supply quote/retry payloads.
 
@@ -301,7 +407,7 @@ Up to 5,000 content-free tombstones protect deletions for the accepted history w
 ### Main Menu Options
 - **Connect / Reconnect WhatsApp** - Start WhatsApp connection using saved credentials when available; QR code appears only if pairing is required
 - **Disconnect WhatsApp** - Stop WhatsApp connection
-- **Logoff (Delete Session)** - Remove all credentials and session data
+- **Logoff (Delete Session)** - Reset the current authentication profile; configuration and conversation archives remain
 - **Recents** - Open recent conversations, view history, and reply
 - **Allowed Contacts** - Manage contacts that can interact with Pi
 - **Allowed Groups** - Manage WhatsApp groups that can interact with Pi
@@ -343,21 +449,18 @@ tests/
 
 Report ordinary non-sensitive bugs to [whatsapp-ng issues](https://github.com/jagaliano/whatsapp-ng/issues). Use [private vulnerability reporting](SECURITY.md) for security concerns. Support is owner-led and best effort, with no SLA. Do not attach real credentials or private conversation data.
 
-The maintained line includes the existing identity/routing, media/quotes and conversation-fidelity work through `d415f0b`; M1 does not add new messaging capabilities. Successful live backfill import and delivery/read receipt reconciliation remain unverified. Socket acceptance is not proof of recipient delivery or rendering. Unofficial transport/platform/account risks remain.
+History availability and delivery/read receipts depend on WhatsApp, device availability and privacy settings. A successful socket send does not prove recipient delivery or rendering. The unofficial transport can break when WhatsApp changes its protocol or account policies.
 
 Licensed under [MIT](LICENSE), retaining attribution to Rapha Castelloes and fork contributions by José Antonio Galiano Sandoval. See [LICENSING.md](LICENSING.md) for the accepted upstream licensing basis. This does not imply upstream maintainer endorsement.
 
-## Development
+## Specifications and decision records
 
-Run tests:
-```bash
-npm test
-```
+See the [development records](specs/README.md) for design decisions, migration details and historical validation results. Those records describe the software versions tested at the time.
 
 ## Notes
 
-- `--whatsapp-pi-online` auto-connects when credentials already exist.
+- `--whatsapp-ng-online` auto-connects when credentials already exist.
 - `--whatsapp-group <jid>` binds Pi to one WhatsApp group.
-- Media handling is local; images for vision, audio via external Whisper CLI + FFmpeg. Runtime/storage layout remains unchanged by the package rename.
-- Normalized history is under `~/.pi/agent/extensions/whatsapp-pi/archive/`; the old recents file is a legacy migration input, not a parallel authority. See the archive section above.
+- FFmpeg and PDF/OCR tools run locally. Audio uses local Whisper.cpp or the configured remote STT service; images can be forwarded to Pi's vision model. Migrating from the old data directory requires the explicit full-state move described above.
+- Normalized history is under `~/.pi/agent/extensions/whatsapp-ng/archive/`; the old recents file is a legacy migration input, not a parallel authority. See the archive section above.
 - Session state, allow lists, and startup reconnects are persisted locally.

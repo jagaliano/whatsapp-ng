@@ -1,9 +1,12 @@
 # Feature Specification: Implement Document Message Support
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Feature Branch**: `008-document-message-support`  
 **Created**: 2026-04-13  
 **Status**: Draft  
-**Input**: User description: "Implement the documentMessage feature. @whatsapp-pi.ts, line 155, around. Only receive the PDF, save in somewhere and pass to agent, similar to image."
+**Input**: User description: "Implement the documentMessage feature. @whatsapp-ng.ts, line 155, around. Only receive the PDF, save in somewhere and pass to agent, similar to image."
 
 ## User Scenarios & Testing *(mandatory)*
 

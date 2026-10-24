@@ -233,8 +233,8 @@ describe('MenuHandler', () => {
         ]);
         expect(ctx.ui.notify).toHaveBeenCalledWith('+5511999998888', 'info');
         expect(ctx.ui.notify).toHaveBeenCalledWith('+5511999998888\n+553291297719', 'info');
-        expect(logSpy).toHaveBeenCalledWith('[WhatsApp-Pi] Allowed contacts\n  • +5511999998888');
-        expect(logSpy).toHaveBeenCalledWith('[WhatsApp-Pi] Allowed contacts\n  • +5511999998888\n  • +553291297719');
+        expect(logSpy).toHaveBeenCalledWith('[WhatsApp-NG] Allowed contacts\n  • +5511999998888');
+        expect(logSpy).toHaveBeenCalledWith('[WhatsApp-NG] Allowed contacts\n  • +5511999998888\n  • +553291297719');
     });
 
     it('sorts allowed groups and adds a valid group JID', async () => {

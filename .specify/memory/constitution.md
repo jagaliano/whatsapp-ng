@@ -1,6 +1,6 @@
 <!--
 Sync Impact Report:
-- Version change: [CONSTITUTION_VERSION] → 1.0.0
+- Version change: 1.0.0 → 1.1.0 (project namespace only; core principles unchanged)
 - List of modified principles:
     - [PRINCIPLE_1_NAME] → I. Object Oriented Programming (OOP)
     - [PRINCIPLE_2_NAME] → II. Clean Code
@@ -16,7 +16,7 @@ Sync Impact Report:
 - Follow-up TODOs: None
 -->
 
-# whatsapp-pi Constitution
+# whatsapp-ng Constitution
 
 ## Core Principles
 
@@ -61,4 +61,4 @@ Use `.specify/memory/constitution.md` as the source of truth.
 2. All code reviews MUST check against these 5 principles.
 3. Any deviation MUST be documented in the "Complexity Tracking" section of the plan.
 
-**Version**: 1.0.0 | **Ratified**: 2026-04-09 | **Last Amended**: 2026-04-09
+**Version**: 1.1.0 | **Ratified**: 2026-04-09 | **Last Amended**: 2026-10-23

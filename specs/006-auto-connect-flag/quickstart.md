@@ -1,17 +1,20 @@
 # Quickstart Update: Auto-Connect Flag
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 ## Automatic Startup
 To have the WhatsApp extension connect as soon as you launch Pi, use the `--whatsapp` or `-w` flag:
 
 ```bash
-pi -e ./whatsapp-pi.ts --whatsapp
+pi -e ./whatsapp-ng.ts --whatsapp
 ```
 
 ## Manual Mode (Default)
 Standard launch requires you to manually connect via the `/whatsapp` menu:
 
 ```bash
-pi -e ./whatsapp-pi.ts
+pi -e ./whatsapp-ng.ts
 ```
 
 ## Behavior Notes

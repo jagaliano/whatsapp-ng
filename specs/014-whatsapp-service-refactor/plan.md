@@ -1,5 +1,8 @@
 # Implementation Plan: WhatsApp Service Refactor
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Branch**: `014-whatsapp-service-refactor` | **Date**: 2026-04-20 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `/specs/014-whatsapp-service-refactor/spec.md`
 
@@ -11,7 +14,7 @@ Refactor `src/services/whatsapp.service.ts` to separate connection lifecycle han
 
 **Language/Version**: TypeScript 5.x on Node.js 20+  
 **Primary Dependencies**: `@whiskeysockets/baileys`, `pino`, `vitest`, `qrcode-terminal`, existing Pi extension APIs  
-**Storage**: Existing local file-based auth/config state under `.pi-data/` and `~/.pi/whatsapp-pi/`  
+**Storage**: Existing local file-based auth/config state under `.pi-data/` and `<legacy-original-data-root>/`
 **Testing**: Vitest unit tests and TypeScript compiler checks  
 **Target Platform**: Pi Code Agent extension running on desktop Node.js  
 **Project Type**: Extension/CLI-style service module  

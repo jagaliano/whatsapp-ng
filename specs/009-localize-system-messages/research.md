@@ -1,10 +1,13 @@
 # Research: Localize System Messages to en-US
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 ## Findings: Portuguese Strings for Localization
 
 The following strings have been identified for translation/replacement:
 
-### 1. `whatsapp-pi.ts`
+### 1. `<legacy-entrypoint>`
 - `Mensagem de` -> `Message from`
 - `[Áudio Transcrito]` -> `[Transcribed Audio]`
 - `"Sessão compactada com sucesso! ✅"` -> `"Session compacted successfully! ✅"`

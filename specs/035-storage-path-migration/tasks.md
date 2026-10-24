@@ -1,5 +1,8 @@
 # Tasks: Migrate Extension Storage Path
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Input**: Design documents from `/specs/035-storage-path-migration/`
 **Prerequisites**: plan.md (required), spec.md (required), research.md, data-model.md, quickstart.md
 
@@ -28,13 +31,13 @@
 
 ## Phase 3: User Story 1 - Use New Storage Location (Priority: P1) 🎯 MVP
 
-**Goal**: New writes land only in `~/.pi/agent/extension/whatsapp-pi`.
+**Goal**: New writes land only in `<legacy-previous-data-root>`.
 
 **Independent Test**: Clean install creates only the new storage root, and new auth/config/recents/log files appear there.
 
 - [X] T004 [P] [US1] Refactor src/services/session.manager.ts to resolve auth state and config paths through src/services/storage-path.ts
 - [X] T005 [P] [US1] Refactor src/services/recents.service.ts to persist recents under the new storage root via src/services/storage-path.ts
-- [X] T006 [P] [US1] Refactor src/services/whatsapp-pi.logger.ts, src/services/message.sender.ts, and src/services/whatsapp.service.ts to write log files through src/services/storage-path.ts
+- [X] T006 [P] [US1] Refactor src/services/whatsapp-ng.logger.ts, src/services/message.sender.ts, and src/services/whatsapp.service.ts to write log files through src/services/storage-path.ts
 
 **Checkpoint**: Fresh runs should write only to the new extension storage home.
 
@@ -44,11 +47,11 @@
 
 **Goal**: Existing local data remains usable after upgrade, with no manual file moves.
 
-**Independent Test**: Seed legacy `~/.pi/whatsapp-pi` data, start app, and confirm auth/config/recents/logs remain available from new storage.
+**Independent Test**: Seed legacy `<legacy-original-data-root>` data, start app, and confirm auth/config/recents/logs remain available from new storage.
 
-- [X] T007 [P] [US2] Add automatic legacy auth/config migration in src/services/session.manager.ts so readable data from ~/.pi/whatsapp-pi is copied into new storage on startup
+- [X] T007 [P] [US2] Add automatic legacy auth/config migration in src/services/session.manager.ts so readable data from <legacy-original-data-root> is copied into new storage on startup
 - [X] T008 [P] [US2] Add legacy recents-store import in src/services/recents.service.ts so existing conversation history remains available after first launch
-- [X] T009 [P] [US2] Add legacy log-file carry-forward in src/services/whatsapp-pi.logger.ts so old log output is preserved under the new storage root
+- [X] T009 [P] [US2] Add legacy log-file carry-forward in src/services/whatsapp-ng.logger.ts so old log output is preserved under the new storage root
 
 **Checkpoint**: Existing users should keep their data after upgrade without manual migration.
 
@@ -60,7 +63,7 @@
 
 **Independent Test**: Upgrade from legacy install with zero manual file moves; docs point to new home and fallback behavior.
 
-- [X] T010 [P] [US3] Remove remaining `~/.pi/whatsapp-pi` literals from src/**/*.ts and tests/**/*.ts by replacing them with storage helper usage
+- [X] T010 [P] [US3] Remove remaining `<legacy-original-data-root>` literals from src/**/*.ts and tests/**/*.ts by replacing them with storage helper usage
 - [X] T011 [P] [US3] Update README.md and specs/035-storage-path-migration/quickstart.md to document the new storage home and automatic legacy fallback
 
 **Checkpoint**: User-facing guidance and code references should no longer point users to the legacy folder.
@@ -105,7 +108,7 @@
 ```bash
 Task: "Refactor src/services/session.manager.ts to resolve auth state and config paths through src/services/storage-path.ts"
 Task: "Refactor src/services/recents.service.ts to persist recents under the new storage root via src/services/storage-path.ts"
-Task: "Refactor src/services/whatsapp-pi.logger.ts, src/services/message.sender.ts, and src/services/whatsapp.service.ts to write log files through src/services/storage-path.ts"
+Task: "Refactor src/services/whatsapp-ng.logger.ts, src/services/message.sender.ts, and src/services/whatsapp.service.ts to write log files through src/services/storage-path.ts"
 ```
 
 ---
@@ -116,7 +119,7 @@ Task: "Refactor src/services/whatsapp-pi.logger.ts, src/services/message.sender.
 
 1. Finish Phase 1 and Phase 2.
 2. Complete Phase 3.
-3. Validate clean install writes only to `~/.pi/agent/extension/whatsapp-pi`.
+3. Validate clean install writes only to `<legacy-previous-data-root>`.
 4. Stop if MVP is enough.
 
 ### Incremental Delivery

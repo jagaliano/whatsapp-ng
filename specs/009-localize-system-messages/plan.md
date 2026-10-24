@@ -1,11 +1,14 @@
 # Implementation Plan: Localize System Messages to en-US
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Branch**: `009-localize-system-messages` | **Date**: 2026-04-13 | **Spec**: [specs/009-localize-system-messages/spec.md]
 **Input**: Feature specification from `/specs/009-localize-system-messages/spec.md`
 
 ## Summary
 
-The goal is to perform a full audit and localization of all user-facing and agent-facing system messages to US English (`en-US`). This involves replacing Portuguese strings in `whatsapp-pi.ts` and service files with English equivalents to ensure consistency with the Pi Code Agent environment.
+The goal is to perform a full audit and localization of all user-facing and agent-facing system messages to US English (`en-US`). This involves replacing Portuguese strings in `<legacy-entrypoint>` and service files with English equivalents to ensure consistency with the Pi Code Agent environment.
 
 ## Technical Context
 
@@ -50,7 +53,7 @@ src/
 ├── services/
 │   ├── audio.service.ts
 │   └── whatsapp.service.ts
-└── whatsapp-pi.ts
+└── whatsapp-ng.ts
 ```
 
 **Structure Decision**: Standard structure. Only text literals will be modified.

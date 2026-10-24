@@ -1,5 +1,5 @@
 import { SessionManager } from '../../src/services/session.manager.ts';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -9,11 +9,12 @@ describe('SessionManager', () => {
     let dataDir: string;
 
     beforeEach(async () => {
-        dataDir = await mkdtemp(join(tmpdir(), 'whatsapp-pi-session-'));
+        dataDir = await mkdtemp(join(tmpdir(), 'whatsapp-ng-session-'));
         sessionManager = new SessionManager(dataDir);
     });
 
     afterEach(async () => {
+        vi.unstubAllEnvs();
         await rm(dataDir, { recursive: true, force: true });
     });
 
@@ -88,6 +89,37 @@ describe('SessionManager', () => {
         expect(sessionManager.getStatus()).toBe('disconnected');
         const rewrittenConfig = await readFile(configPath, 'utf-8');
         expect(() => JSON.parse(rewrittenConfig)).not.toThrow();
+    });
+
+    it('round-trips STT endpoint/model/env names without persisting the environment value', async () => {
+        const stt = {
+            sttEndpoint: 'https://speech.example.test/openai/v1',
+            sttModel: 'fixture-model',
+            sttEnv: 'WHATSAPP_NG_TEST_STT_KEY'
+        };
+        vi.stubEnv(stt.sttEnv, 'fixture-secret-value-not-for-config');
+        await writeFile(join(dataDir, 'config.json'), JSON.stringify(stt));
+        await sessionManager.ensureInitialized();
+        expect(sessionManager.getSttConfig()).toEqual(stt);
+        await sessionManager.setStatus('disconnected');
+        const saved = JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8'));
+        expect(saved).toMatchObject(stt);
+        expect(JSON.stringify(saved)).not.toContain('fixture-secret-value-not-for-config');
+        const reopened = new SessionManager(dataDir);
+        await reopened.ensureInitialized();
+        expect(reopened.getSttConfig()).toEqual(stt);
+    });
+
+    it('returns an isolated STT config snapshot and can explicitly disable remote mode', async () => {
+        await sessionManager.ensureInitialized();
+        await sessionManager.setSttConfig({ sttEndpoint: 'https://speech.example.test/v1', sttModel: 'fixture', sttEnv: 'STT_KEY' });
+        const snapshot = sessionManager.getSttConfig();
+        snapshot.sttEnv = 'DIFFERENT_KEY';
+        expect(sessionManager.getSttConfig().sttEnv).toBe('STT_KEY');
+        await sessionManager.setSttConfig({});
+        const reopened = new SessionManager(dataDir);
+        await reopened.ensureInitialized();
+        expect(reopened.getSttConfig().sttEndpoint).toBeUndefined();
     });
 
     it('should clean up stale config temp files during initialization', async () => {

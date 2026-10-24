@@ -1,13 +1,15 @@
 import { access, mkdir, readdir, cp, stat, chmod } from 'fs/promises';
 import { homedir } from 'os';
 import { basename, join } from 'path';
+import { StateMigrationService } from './state-migration.service.js';
 
 export function getDefaultStorageRoot(): string {
-    return join(homedir(), '.pi', 'agent', 'extensions', 'whatsapp-pi');
+    return join(homedir(), '.pi', 'agent', 'extensions', 'whatsapp-ng');
 }
 
 export function getDefaultLegacyStorageRoot(): string {
-    return join(homedir(), '.pi', 'agent', 'extension', 'whatsapp-pi');
+    // Legacy sources are explicit constructor/operator input, never an implicit namespace probe.
+    return getDefaultStorageRoot();
 }
 
 export interface StoragePaths {
@@ -33,12 +35,13 @@ export function createStoragePaths(root = getDefaultStorageRoot(), legacyRoot = 
         recentsPath: join(root, 'recents', 'recents.json'),
         archiveDir: join(root, 'archive'),
         logDir: root,
-        logPath: join(root, 'whatsapp-pi.log'),
+        logPath: join(root, 'whatsapp-ng.log'),
         mediaDir: join(root, 'whatsapp-medias')
     };
 }
 
 export async function ensureStorageDirectories(paths: Pick<StoragePaths, 'root' | 'authStateDir' | 'recentsDir' | 'logDir'>) {
+    StateMigrationService.assertReady(paths.root);
     for (const directory of new Set([paths.root, paths.authStateDir, paths.recentsDir, paths.logDir])) {
         await mkdir(directory, { recursive: true, mode: 0o700 });
         await chmod(directory, 0o700);
@@ -73,7 +76,7 @@ async function copyEntry(source: string, target: string) {
 }
 
 function legacyStorageRoots(paths: Pick<StoragePaths, 'root' | 'legacyRoot'>): string[] {
-    return [paths.legacyRoot, join(homedir(), '.pi', 'whatsapp-pi')]
+    return [paths.legacyRoot]
         .filter((root, index, roots) => root && roots.indexOf(root) === index && root !== paths.root);
 }
 
@@ -82,6 +85,7 @@ export function legacyAuthProfiles(paths: Pick<StoragePaths, 'root' | 'legacyRoo
 }
 
 export async function migrateLegacyStorage(paths: Pick<StoragePaths, 'root' | 'legacyRoot'>): Promise<boolean> {
+    StateMigrationService.assertReady(paths.root);
     const legacyRoots = legacyStorageRoots(paths);
     let migrated = false;
 

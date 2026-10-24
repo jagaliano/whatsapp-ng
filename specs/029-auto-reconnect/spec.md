@@ -1,5 +1,8 @@
 # Feature Specification: Auto-Reconnect on Unexpected Disconnect
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Feature Branch**: `029-auto-reconnect`  
 **Created**: 2026-05-15  
 **Status**: Draft  
@@ -56,9 +59,9 @@ As a user who has deleted their WhatsApp session from the `/whatsapp` menu, I wa
 ### Edge Cases
 
 - Connection drops during an active reconnect attempt: the agent does not spawn duplicate reconnect processes.
-- The agent is started with `--whatsapp-pi-online` flag and the connection drops: auto-reconnect still applies as the user has not explicitly disconnected.
+- The agent is started with `--whatsapp-ng-online` flag and the connection drops: auto-reconnect still applies as the user has not explicitly disconnected.
 - A session is invalidated server-side (e.g., logged out from WhatsApp on another device): the agent detects auth rejection and does not auto-reconnect (treats it as an auth-related stop, not an unexpected drop).
-- The agent restarts from scratch while in a manually-stopped state: the stopped state is not persisted across restarts, so the agent does not auto-connect on startup unless the `--whatsapp-pi-online` flag is used.
+- The agent restarts from scratch while in a manually-stopped state: the stopped state is not persisted across restarts, so the agent does not auto-connect on startup unless the `--whatsapp-ng-online` flag is used.
 
 ## Requirements *(mandatory)*
 
@@ -93,4 +96,4 @@ As a user who has deleted their WhatsApp session from the `/whatsapp` menu, I wa
 - The `/whatsapp` menu is the only surface through which users intentionally disconnect or delete authentication.
 - A session invalidated server-side (auth rejection) is treated the same as a user-initiated removal and does not trigger auto-reconnect.
 - The existing exponential backoff mechanism for reconnect delays is acceptable and does not need to change.
-- Auto-reconnect state does not need to be persisted across process restarts; on restart, the agent follows the existing startup behavior (manual connect or `--whatsapp-pi-online` flag).
+- Auto-reconnect state does not need to be persisted across process restarts; on restart, the agent follows the existing startup behavior (manual connect or `--whatsapp-ng-online` flag).

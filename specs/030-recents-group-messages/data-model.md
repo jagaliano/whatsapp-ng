@@ -1,5 +1,8 @@
 # Data Model: Recents — Group Messages by Same Text and Time
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 ## Overview
 
 This feature introduces one new **display-only** entity, `GroupedRecentEntry`. No persistent storage is changed.
@@ -64,6 +67,6 @@ key(conversation) =
 
 | Store | Changed? | Notes |
 |-------|----------|-------|
-| `~/.pi/whatsapp-pi/recents/recents.json` | No | Raw `RecentConversationSummary` records remain as-is. |
-| `~/.pi/whatsapp-pi/config.json` | No | Allowed list entries added via this feature use the existing `addNumber()` / `addAllowedGroup()` path with no format changes. |
+| `<legacy-original-data-root>/recents/recents.json` | No | Raw `RecentConversationSummary` records remain as-is. |
+| `<legacy-original-data-root>/config.json` | No | Allowed list entries added via this feature use the existing `addNumber()` / `addAllowedGroup()` path with no format changes. |
 | Auth state files | No | Unaffected. |

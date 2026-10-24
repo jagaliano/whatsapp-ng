@@ -1,5 +1,8 @@
 # Quickstart: Send WhatsApp Message Tool (JID + Text)
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Feature**: 013-send-wa-message  
 **Date**: 2026-04-15
 
@@ -54,7 +57,7 @@ On failure:
 
 ## Implementation location
 
-All changes are in `whatsapp-pi.ts`. A `registerTool` call is added inside the existing extension factory function, after the `registerCommand("whatsapp", ...)` block:
+All changes are in `<legacy-entrypoint>`. A `registerTool` call is added inside the existing extension factory function, after the `registerCommand("whatsapp", ...)` block:
 
 ```typescript
 pi.registerTool({
@@ -101,5 +104,5 @@ Tests cover:
 
 | File | Change |
 |------|--------|
-| `whatsapp-pi.ts` | Add `pi.registerTool(...)` block + `Type` import from `@sinclair/typebox` |
+| `<legacy-entrypoint>` | Add `pi.registerTool(...)` block + `Type` import from `@sinclair/typebox` |
 | `tests/unit/send-wa-message.tool.test.ts` | New unit test file |

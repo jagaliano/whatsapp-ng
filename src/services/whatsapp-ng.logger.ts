@@ -1,22 +1,27 @@
 import { appendFileSync, mkdirSync } from 'fs';
 import { createStoragePaths } from './storage-path.js';
+import { StateMigrationService } from './state-migration.service.js';
 
-export class WhatsAppPiLogger {
+export class WhatsAppNgLogger {
     private logFile: string;
 
-    constructor(private verbose = false) {
-        const { logDir, logPath } = createStoragePaths();
-        try { mkdirSync(logDir, { recursive: true }); } catch {
-            // File logging is best-effort.
-        }
-        this.logFile = logPath;
+    constructor(private verbose = false, private fileLogging = true) {
+        this.logFile = createStoragePaths().logPath;
     }
+
+    enableFileLogging(): void { this.fileLogging = true; }
 
     setVerbose(verbose: boolean) {
         this.verbose = verbose;
     }
 
     private writeToFile(level: string, message: string, args: unknown[]) {
+        if (!this.fileLogging) return;
+        try {
+            const paths = createStoragePaths();
+            StateMigrationService.assertReady(paths.root);
+            mkdirSync(paths.logDir, { recursive: true, mode: 0o700 });
+        } catch { return; }
         const timestamp = new Date().toISOString();
         const extra = args.length ? ' ' + args.map(a => String(a)).join(' ') : '';
         const line = `[${timestamp}] [${level}] ${message}${extra}\n`;

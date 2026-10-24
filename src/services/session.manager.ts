@@ -2,9 +2,11 @@ import { useMultiFileAuthState, type SignalKeyStore, type SignalDataTypeMap } fr
 import { basename, join, relative } from 'path';
 import { readFile, writeFile, mkdir, rm, rename, readdir, chmod } from 'fs/promises';
 import { SessionStatus } from '../models/whatsapp.types.js';
+import type { SttConfig } from './audio-transcriber.js';
 import { t } from '../i18n.js';
 import { TransportLease } from './transport-lease.service.js';
 import { AuthProfileService } from './auth-profile.service.js';
+import { StateMigrationService } from './state-migration.service.js';
 import {
     getDefaultLegacyStorageRoot,
     getDefaultStorageRoot,
@@ -45,6 +47,7 @@ export class SessionManager {
     private hasAuthState = false;
     private openaiKey: string = '';
     private visionModel: string = 'gpt-4o';
+    private sttConfig: SttConfig = {};
     private operatorJid: string = '';
     private configLoaded = false;
     private authEpoch = 0;
@@ -71,7 +74,10 @@ export class SessionManager {
         });
     }
 
+    public assertStorageReady(): void { StateMigrationService.assertReady(this.storagePaths.root); }
+
     public async ensureInitialized() {
+        this.assertStorageReady();
         try {
             await this.ensureStorageDirectories();
             await this.migrateLegacyStorageIfNeeded();
@@ -119,6 +125,7 @@ export class SessionManager {
             this.hasAuthState = Boolean(config.hasAuthState);
             this.openaiKey = config.openaiKey || '';
             this.visionModel = config.visionModel || 'gpt-4o';
+            this.sttConfig = { sttEndpoint: config.sttEndpoint, sttModel: config.sttModel, sttEnv: config.sttEnv };
             this.operatorJid = config.operatorJid || '';
 
             if (recovered) {
@@ -183,6 +190,7 @@ export class SessionManager {
     }
 
     public async saveConfig() {
+        this.assertStorageReady();
         const tempPath = `${this.configPath}.${process.pid}.${Date.now()}.tmp`;
         try {
             this.hasAuthState = this.hasAuthState || await this.hasCredentialsFile();
@@ -194,6 +202,7 @@ export class SessionManager {
                 hasAuthState: this.hasAuthState,
                 openaiKey: this.openaiKey,
                 visionModel: this.visionModel,
+                ...this.sttConfig,
                 operatorJid: this.operatorJid
             };
             await mkdir(this.storagePaths.root, { recursive: true, mode: 0o700 });
@@ -441,6 +450,7 @@ export class SessionManager {
     }
 
     async getAuthState(lease: TransportLease) {
+        this.assertStorageReady();
         if (!lease?.isHeld) throw new Error(t('profile.ownerRequired'));
         await lease.assertProfile(this.authStateDir);
         const epoch = ++this.authEpoch;
@@ -524,6 +534,15 @@ export class SessionManager {
 
     async setOpenaiKey(key: string) {
         this.openaiKey = key;
+        await this.saveConfig();
+    }
+
+    getSttConfig(): SttConfig {
+        return { ...this.sttConfig };
+    }
+
+    async setSttConfig(config: SttConfig) {
+        this.sttConfig = { sttEndpoint: config.sttEndpoint, sttModel: config.sttModel, sttEnv: config.sttEnv };
         await this.saveConfig();
     }
 

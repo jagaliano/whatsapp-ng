@@ -1,5 +1,8 @@
 # Implementation Plan: PDF Document Parsing
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Branch**: `027-pdf-document-parsing` | **Date**: 2026-05-11 | **Spec**: `specs/027-pdf-document-parsing/spec.md`  
 **Input**: Feature specification from `/specs/027-pdf-document-parsing/spec.md`
 
@@ -59,9 +62,9 @@ src/
 tests/
 └── unit/
     ├── incoming-media.service.test.ts
-    └── whatsapp-pi.extension.test.ts
+    └── whatsapp-ng.extension.test.ts
 
-whatsapp-pi.ts
+whatsapp-ng.ts
 ```
 
 **Structure Decision**: Keep implementation inside `src/services/incoming-media.service.ts` and add/adjust unit tests in `tests/unit/`. No new public contract surface is required.

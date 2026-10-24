@@ -1,8 +1,11 @@
 # Contract: Agent Notification for Documents
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 ## Interface: Pi Agent Message
 
-When a document is received, the WhatsApp-Pi extension sends a user message to the Pi agent using the following text format.
+When a document is received, the WhatsApp-NG extension sends a user message to the Pi agent using the following text format.
 
 ### Format
 ```text

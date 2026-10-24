@@ -1,5 +1,8 @@
 # Implementation Tasks: Localize System Messages to en-US
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Branch**: `009-localize-system-messages`
 **Feature**: Localize System Messages to en-US
 **Spec**: [specs/009-localize-system-messages/spec.md]
@@ -21,7 +24,7 @@ We will proceed with a direct replacement strategy for all hardcoded strings ide
 **Goal**: Ensure all interactive feedback in the Pi TUI is in US English.
 **Independent Test**: Trigger `/compact` and `/abort` commands and verify English confirmation messages.
 
-- [x] T002 [P] [US1] Replace "/compact" and "/abort" success messages with US English in `whatsapp-pi.ts`
+- [x] T002 [P] [US1] Replace "/compact" and "/abort" success messages with US English in `<legacy-entrypoint>`
 - [x] T003 [P] [US1] Update Portuguese code comments to US English in `src/ui/menu.handler.ts`
 
 ## Phase 3: User Story 2 - Localized Agent Communication [US2]
@@ -29,8 +32,8 @@ We will proceed with a direct replacement strategy for all hardcoded strings ide
 **Goal**: Ensure the Pi agent receives all context and metadata in US English.
 **Independent Test**: Send a message and an audio file to the bot; verify the agent's received headers are in English.
 
-- [x] T004 [P] [US2] Translate "Mensagem de" forwarding headers to "Message from" in `whatsapp-pi.ts`
-- [x] T005 [P] [US2] Translate "[Áudio Transcrito]" prefix to "[Transcribed Audio]" in `whatsapp-pi.ts`
+- [x] T004 [P] [US2] Translate "Mensagem de" forwarding headers to "Message from" in `<legacy-entrypoint>`
+- [x] T005 [P] [US2] Translate "[Áudio Transcrito]" prefix to "[Transcribed Audio]" in `<legacy-entrypoint>`
 - [x] T006 [P] [US2] Translate transcription status and error strings in `src/services/audio.service.ts`
 
 ## Phase 4: User Story 3 - Clean English Logging [US3]
@@ -38,7 +41,7 @@ We will proceed with a direct replacement strategy for all hardcoded strings ide
 **Goal**: Standardize all console and trace logs to US English.
 **Independent Test**: Enable `--verbose` mode and verify all startup and message logs are in English.
 
-- [x] T007 [P] [US3] Audit and replace internal console log strings with US English equivalents in `whatsapp-pi.ts`
+- [x] T007 [P] [US3] Audit and replace internal console log strings with US English equivalents in `<legacy-entrypoint>`
 - [x] T008 [P] [US3] Verify and standardize status update strings in `src/services/whatsapp.service.ts`
 
 ## Phase 5: Polish & Integration

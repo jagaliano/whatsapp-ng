@@ -1,5 +1,8 @@
 # Feature Specification: Auto-Connect CLI Flag
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Feature Branch**: `006-auto-connect-flag`  
 **Created**: 2026-04-10  
 **Status**: Draft  
@@ -21,7 +24,7 @@ As a Software Engineer using the WhatsApp extension, I want to skip the manual m
 
 **Why this priority**: High. Improves developer productivity and enables smoother workflow integration.
 
-**Independent Test**: Run `pi -e ./whatsapp-pi.ts --whatsapp` and verify that the "WhatsApp: Connected" status appears in the Pi footer without any manual interaction.
+**Independent Test**: Run `pi -e ./whatsapp-ng.ts --whatsapp` and verify that the "WhatsApp: Connected" status appears in the Pi footer without any manual interaction.
 
 **Acceptance Scenarios**:
 
@@ -36,7 +39,7 @@ As a security-conscious user, I want the extension to remain disconnected by def
 
 **Why this priority**: Medium. Maintains user control and prevents unintended resource usage.
 
-**Independent Test**: Run `pi -e ./whatsapp-pi.ts` (without `--whatsapp`) and verify that the status remains "WhatsApp: Disconnected" until changed via the menu.
+**Independent Test**: Run `pi -e ./whatsapp-ng.ts` (without `--whatsapp`) and verify that the status remains "WhatsApp: Disconnected" until changed via the menu.
 
 **Acceptance Scenarios**:
 

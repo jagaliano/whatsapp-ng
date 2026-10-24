@@ -1,5 +1,8 @@
 # Tasks: Verbose Mode Support
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Input**: Design documents from `specs/005-verbose-mode-support/`
 **Prerequisites**: plan.md (required), spec.md (required)
 
@@ -36,10 +39,10 @@
 
 **Goal**: As a user, I want to use the `-v` flag to see trace data or omit it for clean output.
 
-**Independent Test**: Run `pi -e ./whatsapp-pi.ts -v` and verify socket traces appear; then run without `-v` and verify they are hidden.
+**Independent Test**: Run `pi -e ./whatsapp-ng.ts -v` and verify socket traces appear; then run without `-v` and verify they are hidden.
 
-- [X] T005 Register the `verbose` flag using `pi.registerFlag` in `whatsapp-pi.ts`.
-- [X] T006 Implement flag detection logic using `pi.getFlag("--verbose")` (or `-v`) during the extension activation in `whatsapp-pi.ts`.
+- [X] T005 Register the `verbose` flag using `pi.registerFlag` in `<legacy-entrypoint>`.
+- [X] T006 Implement flag detection logic using `pi.getFlag("--verbose")` (or `-v`) during the extension activation in `<legacy-entrypoint>`.
 - [X] T007 Pass the detected verbosity state to the `WhatsAppService` initialization.
 - [X] T008 Update internal custom logging in `src/services/message.sender.ts` to respect the verbosity state (optional but recommended for consistency).
 

@@ -25,12 +25,19 @@ Thumbs.db
 /PR2.md
 /PR3.md
 
+# Local Pi settings, runtime state, review evidence and test caches
+/.pi/agent/
+/.pi/cache/
+/.pi/hindsight/
+/.pi/loops/
+/.vitest/
+/*.tgz
+/bug.txt
+
 # Pi Extension Data
 .pi/extensions/whatsapp/auth/
 .pi-data/
 .playwright-mcp
-.pi/loops/
 
 # Tesseract OCR (auto-downloaded by LiteParse)
 *.traineddata
-.pi/loops/

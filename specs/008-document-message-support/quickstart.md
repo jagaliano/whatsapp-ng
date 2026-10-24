@@ -1,14 +1,17 @@
 # Quickstart: Testing Document Support
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 ## Setup
-1. Ensure `whatsapp-pi` is running and connected (`/whatsapp` to check).
+1. Ensure `whatsapp-ng` is running and connected (`/whatsapp` to check).
 2. Ensure `pdftotext` is installed on your system.
 
 ## Test Flow
 
 ### 1. Basic Reception
 1. Send a PDF file named `test.pdf` to your WhatsApp bot.
-2. Check the TUI logs for: `[WhatsApp-Pi] Received document: test.pdf`.
+2. Check the TUI logs for: `[WhatsApp-NG] Received document: test.pdf`.
 3. Verify the file exists in `.pi-data/whatsapp/documents/`.
 
 ### 2. Agent Processing
@@ -19,7 +22,7 @@
 
 ## Expected Log Output
 ```text
-[WhatsApp-Pi] Downloading document from User...
-[WhatsApp-Pi] Document saved to ./.pi-data/whatsapp/documents/123456789_test.pdf
-[WhatsApp-Pi] Notifying agent about document...
+[WhatsApp-NG] Downloading document from User...
+[WhatsApp-NG] Document saved to ./.pi-data/whatsapp/documents/123456789_test.pdf
+[WhatsApp-NG] Notifying agent about document...
 ```

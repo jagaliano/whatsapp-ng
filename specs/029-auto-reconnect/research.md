@@ -1,10 +1,13 @@
 # Research: Auto-Reconnect on Unexpected Disconnect
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 ## 1) Distinguishing intentional stops from unexpected disconnects
 
 - **Decision**: Introduce an `intentionalStop` boolean flag on `WhatsAppService`. Set it to `true` in `stop()` and `logout()`; clear it to `false` at the start of any user-initiated `start()` call.
 - **Rationale**: The existing `handleConnectionClosed` logic already decodes the Baileys status code to detect server-side auth rejections (401, bad session, bad MAC). The only missing piece is signalling when the user itself triggered the disconnect via the menu. A flag on the service is the minimal, in-process solution — no persistence needed since the spec explicitly states this state does not survive restarts.
-- **Alternatives considered**: Deriving intent from `SessionStatus` (unreliable — status can be 'disconnected' for multiple reasons); persisting the flag to disk (overkill — on restart, `--whatsapp-pi-online` controls startup behaviour).
+- **Alternatives considered**: Deriving intent from `SessionStatus` (unreliable — status can be 'disconnected' for multiple reasons); persisting the flag to disk (overkill — on restart, `--whatsapp-ng-online` controls startup behaviour).
 
 ## 2) What happens when `start()` throws during an auto-reconnect attempt
 

@@ -1,10 +1,13 @@
 # Quickstart: Message Detail View
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 ## Purpose
 Verify that a user can click a message, read the full text in a dedicated layout, and return to the previous screen.
 
 ## Prerequisites
-- Existing WhatsApp-Pi feature branch checked out.
+- Existing WhatsApp-NG feature branch checked out.
 - Dependencies installed.
 - A recent conversation or message list with at least one message containing multiple lines or long text.
 
@@ -17,7 +20,7 @@ Verify that a user can click a message, read the full text in a dedicated layout
    ```
 
 2. **Start the extension in Pi**
-   - Launch Pi with the WhatsApp-Pi extension enabled.
+   - Launch Pi with the WhatsApp-NG extension enabled.
    - Open the `/whatsapp` menu.
 
 3. **Open a recent conversation or message list**

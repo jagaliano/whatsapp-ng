@@ -1,5 +1,8 @@
 # Implementation Plan: Refactor WhatsApp message sending
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Branch**: `003-whatsapp-messaging-refactor` | **Date**: 2026-04-10 | **Spec**: [specs/003-whatsapp-messaging-refactor/spec.md](spec.md)
 **Input**: Feature specification from `/specs/003-whatsapp-messaging-refactor/spec.md`
 
@@ -16,7 +19,7 @@ The feature aims to improve the reliability of WhatsApp message delivery by refa
 **Target Platform**: Node.js
 **Project Type**: Pi Code Agent extension  
 **Performance Goals**: Message delivery under 5s, 99% success rate  
-**Constraints**: Must adhere to `whatsapp-pi` Constitution (OOP, SOLID, Clean Code)  
+**Constraints**: Must adhere to `whatsapp-ng` Constitution (OOP, SOLID, Clean Code)
 **Scale/Scope**: Refactor core messaging method in `WhatsAppService` and introduce `MessageSender`.
 
 ## Constitution Check

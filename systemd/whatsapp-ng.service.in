@@ -1,0 +1,20 @@
+[Unit]
+Description=WhatsApp-NG Coding Agent (tmux)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+Environment=PATH=__PI_DIR__/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PI_COMMAND=__PI_BIN__
+Environment=PI_ENTRYPOINT=__PROJECT_DIR__/whatsapp-ng.ts
+Environment=WHATSAPP_NG_TMUX_SESSION=whatsapp-ng
+Environment=WHATSAPP_NG_WORKING_DIRECTORY=__PI_DIR__
+WorkingDirectory=__PI_DIR__
+ExecStart=__PROJECT_DIR__/scripts/whatsapp-ng-tmux.sh
+ExecStop=__TMUX_BIN__ kill-session -t whatsapp-ng
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

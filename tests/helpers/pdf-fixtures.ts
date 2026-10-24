@@ -33,7 +33,7 @@ export function textPdf(text = 'Synthetic PDF preview'): Buffer {
 }
 
 /** Raster-only HELLO WORLD: no embedded text layer, font file or private document. */
-export function scannedPdf(): Buffer {
+function scannedRaster() {
     const glyphs: Record<string, string[]> = {
         H: ['10001', '10001', '10001', '11111', '10001', '10001', '10001'],
         E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
@@ -61,6 +61,17 @@ export function scannedPdf(): Buffer {
             }
         }
     }
+    return { width, height, pixels };
+}
+
+/** PGM image containing the same raster-only text used by scannedPdf. */
+export function scannedImage(): Buffer {
+    const { width, height, pixels } = scannedRaster();
+    return Buffer.concat([Buffer.from(`P5\n${width} ${height}\n255\n`), pixels]);
+}
+
+export function scannedPdf(): Buffer {
+    const { width, height, pixels } = scannedRaster();
     return pdf([
         Buffer.from('<< /Type /Catalog /Pages 2 0 R >>'),
         Buffer.from('<< /Type /Pages /Kids [3 0 R] /Count 1 >>'),

@@ -38,7 +38,7 @@ describe('RecentsService', () => {
 
         expect(fsMocks.mkdir).toHaveBeenCalled();
         expect(fsMocks.mkdir.mock.calls.some((call: any) => 
-            call[0].includes('whatsapp-pi') && call[1]?.recursive === true
+            call[0].includes('whatsapp-ng') && call[1]?.recursive === true
         )).toBe(true);
         await expect(service.getRecentConversations()).resolves.toEqual([]);
     });

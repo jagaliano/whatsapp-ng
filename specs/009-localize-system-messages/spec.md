@@ -1,5 +1,8 @@
 # Feature Specification: Localize System Messages to en-US
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Feature Branch**: `009-localize-system-messages`  
 **Created**: 2026-04-13  
 **Status**: Draft  
@@ -64,7 +67,7 @@ As a developer, I want the console logs and trace messages to be in English, so 
 - **FR-002**: System MUST replace "[Áudio Transcrito]" with "[Transcribed Audio]" in the audio service callback.
 - **FR-003**: System MUST replace "[Transcrição vazia]" and transcription error messages in `audio.service.ts` with English equivalents.
 - **FR-004**: System MUST translate all TUI feedback messages (e.g., "Sessão compactada com sucesso", "Abortado") to US English.
-- **FR-005**: System MUST ensure all console log strings in `whatsapp-pi.ts` use US English.
+- **FR-005**: System MUST ensure all console log strings in `<legacy-entrypoint>` use US English.
 - **FR-006**: System MUST verify that all status updates (e.g., "Connecting...", "Connected") follow a consistent English format.
 
 ### Key Entities *(include if feature involves data)*
@@ -75,7 +78,7 @@ As a developer, I want the console logs and trace messages to be in English, so 
 
 ### Measurable Outcomes
 
-- **SC-001**: 100% of hardcoded Portuguese strings identified in `whatsapp-pi.ts` and `src/` are replaced with US English.
+- **SC-001**: 100% of hardcoded Portuguese strings identified in `<legacy-entrypoint>` and `src/` are replaced with US English.
 - **SC-002**: No Portuguese-prefixed messages are sent to the Pi agent during normal operation.
 
 ## Assumptions

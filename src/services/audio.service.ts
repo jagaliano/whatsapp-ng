@@ -1,71 +1,83 @@
 import { downloadContentFromMessage } from 'baileys';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir, mkdtemp, chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { existsSync } from 'node:fs';
 import { getFfmpegCommands } from './ffmpeg-path.js';
 import { createStoragePaths } from './storage-path.js';
-import { WhatsAppPiLogger } from './whatsapp-pi.logger.js';
+import { WhatsAppNgLogger } from './whatsapp-ng.logger.js';
 import { tryCreateWhisperCppAudioTranscriber, type AudioTranscriber } from './whisper-cpp-audio.transcriber.js';
 import { t } from '../i18n.js';
+import { createRemoteAudioTranscriber, REMOTE_STT_MAX_BYTES } from './remote-audio.transcriber.js';
+import type { AudioTranscriptionOptions, SttConfig } from './audio-transcriber.js';
 
 const execFileAsync = promisify(execFile);
 
-type AudioLogger = Pick<WhatsAppPiLogger, 'log' | 'error'>;
-type AudioPhase = 'download' | 'write' | 'convert' | 'whisper' | 'total';
+type AudioLogger = Pick<WhatsAppNgLogger, 'log' | 'error'>;
+type AudioPhase = 'download' | 'write' | 'convert' | 'whisper' | 'remote' | 'total';
 
 export class AudioService {
     private readonly mediaDir = createStoragePaths().mediaDir;
     private readonly logger: AudioLogger;
-    private readonly whisperCppTranscriber: AudioTranscriber | null;
+    private whisperCppTranscriber: AudioTranscriber | null | undefined;
     private readonly ffmpegCommands = getFfmpegCommands();
 
-    constructor(logger: AudioLogger = new WhatsAppPiLogger(false), whisperCppTranscriber?: AudioTranscriber | null) {
+    constructor(
+        logger: AudioLogger = new WhatsAppNgLogger(false),
+        whisperCppTranscriber?: AudioTranscriber | null,
+        private readonly getSttConfig: () => SttConfig = () => ({})
+    ) {
         this.logger = logger;
-        this.whisperCppTranscriber = whisperCppTranscriber === undefined
-            ? tryCreateWhisperCppAudioTranscriber(logger)
-            : whisperCppTranscriber;
-
-        if (!existsSync(this.mediaDir)) {
-            mkdir(this.mediaDir, { recursive: true }).catch(() => {});
-        }
+        // Select only after settings load. Remote mode never initializes local Whisper.
+        this.whisperCppTranscriber = whisperCppTranscriber;
     }
 
-    async transcribe(audioMessage: any): Promise<string> {
+    async transcribe(audioMessage: any, options?: AudioTranscriptionOptions): Promise<string> {
         const totalStart = Date.now();
-
+        let scratchDir: string | undefined;
+        const checkCurrent = () => {
+            options?.signal?.throwIfAborted();
+            if (options?.isCurrent && !options.isCurrent()) throw new Error('Audio transcription session changed');
+        };
         try {
-            const filename = `audio_${Date.now()}`;
-            const inputPath = join(this.mediaDir, `${filename}.ogg`);
-            const wavPath = join(this.mediaDir, `${filename}.wav`);
+            checkCurrent();
+            const remote = createRemoteAudioTranscriber(this.getSttConfig());
+            if (!remote && this.whisperCppTranscriber === undefined) {
+                this.whisperCppTranscriber = tryCreateWhisperCppAudioTranscriber(this.logger);
+            }
+            const transcriber = remote ?? this.whisperCppTranscriber;
+            if (!transcriber) throw new Error('Whisper.cpp unavailable: install whisper-cli on PATH or set WHISPER_CLI_PATH');
+            if (remote) this.logger.log(t('audio.remoteNotice', { host: remote.hostname }));
+            await mkdir(this.mediaDir, { recursive: true, mode: 0o700 });
+            scratchDir = await mkdtemp(join(this.mediaDir, 'audio-'));
+            const inputPath = join(scratchDir, 'input.ogg');
+            const wavPath = join(scratchDir, 'audio.wav');
 
             const buffer = await this.measurePhase('download', async () => {
                 const stream = await downloadContentFromMessage(audioMessage, 'audio');
-                let output = Buffer.from([]);
-
+                const chunks: Buffer[] = [];
+                let size = 0;
                 for await (const chunk of stream) {
-                    output = Buffer.concat([output, chunk]);
+                    checkCurrent();
+                    size += chunk.length;
+                    if (size > REMOTE_STT_MAX_BYTES) throw new Error('Audio download exceeds the 25 MiB limit');
+                    chunks.push(chunk);
                 }
-
-                return output;
+                return Buffer.concat(chunks, size);
             });
-
+            checkCurrent();
             await this.measurePhase('write', async () => {
-                await writeFile(inputPath, buffer);
+                await writeFile(inputPath, buffer, { mode: 0o600, flag: 'wx' });
             });
-
+            checkCurrent();
             await this.measurePhase('convert', async () => {
-                await this.convertToWav(inputPath, wavPath);
+                await this.convertToWav(inputPath, wavPath, options, Boolean(remote));
+                await chmod(wavPath, 0o600);
             });
-
-            const whisperCppTranscriber = this.whisperCppTranscriber;
-            if (!whisperCppTranscriber) {
-                throw new Error('whisper-cpp-node unavailable');
-            }
-
-            return await this.measurePhase('whisper', async () => {
-                const transcription = await whisperCppTranscriber.transcribe(wavPath);
+            checkCurrent();
+            return await this.measurePhase(remote ? 'remote' : 'whisper', async () => {
+                const transcription = options ? await transcriber.transcribe(wavPath, options) : await transcriber.transcribe(wavPath);
+                checkCurrent();
                 const text = String(transcription ?? '').trim();
                 return text || t('audio.emptyTranscription');
             });
@@ -73,6 +85,10 @@ export class AudioService {
             console.error(t('audio.transcriptionError'), error);
             return t('audio.transcriptionErrorResult', { error: error instanceof Error ? error.message : String(error) });
         } finally {
+            if (scratchDir) {
+                try { await rm(scratchDir, { recursive: true, force: true }); }
+                catch { this.logger.error('[WhatsApp-NG] Audio temporary-file cleanup failed'); }
+            }
             this.logger.log(t('audio.phaseTiming', { phase: t('audio.phase.total'), duration: Date.now() - totalStart }));
         }
     }
@@ -97,16 +113,19 @@ export class AudioService {
                 return t('audio.phase.convert');
             case 'whisper':
                 return t('audio.phase.whisper');
+            case 'remote':
+                return t('audio.phase.remote');
         }
     }
 
-    private async convertToWav(inputPath: string, outputPath: string): Promise<void> {
-        const args = ['-y', '-i', inputPath, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', outputPath];
+    private async convertToWav(inputPath: string, outputPath: string, options?: AudioTranscriptionOptions, remote = false): Promise<void> {
+        const args = ['-y', '-i', inputPath, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le',
+            ...(remote ? ['-fs', String(REMOTE_STT_MAX_BYTES + 1)] : []), outputPath];
         let lastError: unknown;
 
         for (const command of this.ffmpegCommands) {
             try {
-                await execFileAsync(command, args, { windowsHide: true });
+                await execFileAsync(command, args, { windowsHide: true, timeout: 60_000, signal: options?.signal });
                 return;
             } catch (error) {
                 lastError = error;

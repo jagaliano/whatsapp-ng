@@ -1,5 +1,8 @@
 # Feature Specification: Reaction Message Support
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Feature Branch**: `034-reaction-message-support`  
 **Created**: 2026-05-20  
 **Status**: Draft  
@@ -9,7 +12,7 @@
 
 ### User Story 1 - Display Emoji Reactions (Priority: P1)
 
-As a WhatsApp-Pi user, when someone reacts to a message with an emoji, I want to see a clear description of the reaction (e.g., "👍 Reacted to message") instead of "[Unsupported Message Type: reactionMessage]", so I can understand what happened without confusion.
+As a WhatsApp-NG user, when someone reacts to a message with an emoji, I want to see a clear description of the reaction (e.g., "👍 Reacted to message") instead of "[Unsupported Message Type: reactionMessage]", so I can understand what happened without confusion.
 
 **Why this priority**: This is the core value of the feature. Currently, reaction messages appear as confusing unsupported message types, degrading the user experience. This directly addresses the issue described in the feature request.
 
@@ -25,7 +28,7 @@ As a WhatsApp-Pi user, when someone reacts to a message with an emoji, I want to
 
 ### User Story 1b - Agent Sends Reactions (Priority: P1)
 
-As a WhatsApp-Pi user, I want the agent to be able to react to incoming messages with emojis, so I can acknowledge or express sentiment about messages without typing a full reply.
+As a WhatsApp-NG user, I want the agent to be able to react to incoming messages with emojis, so I can acknowledge or express sentiment about messages without typing a full reply.
 
 **Why this priority**: This provides a natural, lightweight interaction pattern that mirrors how humans use WhatsApp. It allows the agent to quickly acknowledge messages, express agreement, or show emotional response without verbose text.
 
@@ -41,7 +44,7 @@ As a WhatsApp-Pi user, I want the agent to be able to react to incoming messages
 
 ### User Story 2 - Handle Removed Reactions (Priority: P2)
 
-As a WhatsApp-Pi user, when someone removes a reaction they previously made, I want to see a clear indication that the reaction was removed, so I understand the conversation history accurately.
+As a WhatsApp-NG user, when someone removes a reaction they previously made, I want to see a clear indication that the reaction was removed, so I understand the conversation history accurately.
 
 **Why this priority**: While less common than adding reactions, removed reactions are part of normal WhatsApp behavior. Handling this provides completeness and prevents confusion when reactions disappear.
 
@@ -55,7 +58,7 @@ As a WhatsApp-Pi user, when someone removes a reaction they previously made, I w
 
 ### User Story 3 - Reaction Metadata Display (Priority: P3)
 
-As a WhatsApp-Pi user, when viewing reaction messages, I want to optionally see which message was reacted to (when context is available), so I can better understand conversation flow.
+As a WhatsApp-NG user, when viewing reaction messages, I want to optionally see which message was reacted to (when context is available), so I can better understand conversation flow.
 
 **Why this priority**: This provides additional context that can be helpful in group chats or fast-moving conversations, but is not essential for basic functionality.
 

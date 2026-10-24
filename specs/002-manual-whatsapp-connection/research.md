@@ -1,7 +1,10 @@
 # Research: Manual WhatsApp Connection
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 ## Decision 1: Disabling Auto-Connect
-- **Decision**: Remove the auto-connection logic from the `session_start` event handler in `whatsapp-pi.ts`.
+- **Decision**: Remove the auto-connection logic from the `session_start` event handler in `<legacy-entrypoint>`.
 - **Rationale**: Directly required by FR-001 to avoid socket conflicts between multiple agent instances.
 - **Alternatives considered**: 
     - Checking for existing lock files (rejected as it's less reliable than manual control).

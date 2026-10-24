@@ -153,7 +153,7 @@ const createMockContext = () => ({
 
 const loadExtension = async () => {
     vi.resetModules();
-    const module = await import('../../whatsapp-pi.ts');
+    const module = await import('../../whatsapp-ng.ts');
     return module.default;
 };
 
@@ -201,10 +201,10 @@ const finalTurn = async (pi: MockPi, ctx: ReturnType<typeof createMockContext>, 
     await pi.handlers.get('turn_end')!({ ...event, toolResults: [] }, ctx);
 };
 
-describe('whatsapp-pi owned turn delivery', () => {
+describe('whatsapp-ng owned turn delivery', () => {
     beforeEach(() => {
         resetI18n();
-        vi.stubEnv('WHATSAPP_PI_LOCALE', '');
+        vi.stubEnv('WHATSAPP_NG_LOCALE', '');
         mocks.reset();
         vi.clearAllMocks();
         vi.spyOn(console, 'log').mockImplementation(() => {});

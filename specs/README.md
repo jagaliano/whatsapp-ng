@@ -1,0 +1,21 @@
+# Specifications and decision records
+
+This directory is a design/history archive, not a list of features still waiting to be implemented. Use current source, tests and `package.json` for runtime/API truth. Historical checkboxes and dependency lists describe their original checkpoint; they are not the current release checklist.
+
+## Navigation
+
+| Records | Status / use |
+| --- | --- |
+| 001–034 feature folders | Historical feature proposals, contracts and implementation notes. Retain for provenance; completion must be checked against current source/tests rather than inferred from the folder name or checkbox. |
+| [035 storage-path migration](035-storage-path-migration/plan.md) | Historical storage design, superseded for current namespace operations by 038. Do not run its old migration instructions as current setup. |
+| [036 capability roadmap](036-baileys-capability-roadmap/plan.md) | Foundation, media/quotes and archive/history/lifecycle design and review decisions. Optional Phase 4 remains deferred; it is not implied authorization. |
+| [037 maintained-fork readiness](037-maintained-fork-readiness/plan.md) | Maintenance/release governance; [validation](037-maintained-fork-readiness/validation.md). Earlier milestone evidence is dated and artifact-scoped. Publication/stable promotion remain separately gated. |
+| [038 namespace migration](038-whatsapp-ng-namespace/plan.md) | Independent namespace and guarded whole-state migration; [validation and review dispositions](038-whatsapp-ng-namespace/validation.md). Real migration is verified offline; post-rename live connectivity is not certified. |
+
+## Cleanup policy
+
+- Keep current release gates, validation evidence, review findings and migration/recovery decisions.
+- Prefer this index over another root strategy document. The canonical maintenance plan is 037.
+- A sensible later consolidation is to archive 001–035 in a dedicated historical subtree, with a manifest and updated incoming links. Do not mass-move/delete them as part of a transcription bug fix: README, AGENTS, templates and other plans refer to these paths.
+- Separate an evidence-preserving archive change from code changes so broken links, obsolete instructions and retained context can be reviewed independently.
+- Never add credentials, real message dumps, machine-local handoff files or `.pi/cache` evidence to this public history.

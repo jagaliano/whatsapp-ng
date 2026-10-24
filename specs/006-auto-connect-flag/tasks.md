@@ -1,5 +1,8 @@
 # Tasks: Auto-Connect CLI Flag
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Input**: Design documents from `specs/006-auto-connect-flag/`
 **Prerequisites**: plan.md (required), spec.md (required), research.md (required)
 
@@ -18,7 +21,7 @@
 
 **Purpose**: Verify the environment and existing services are ready for the new flag.
 
-- [X] T001 Verify `whatsapp-pi.ts` is ready for additional flag registrations and event logic updates.
+- [X] T001 Verify `<legacy-entrypoint>` is ready for additional flag registrations and event logic updates.
 
 ---
 
@@ -26,13 +29,13 @@
 
 **Goal**: As a user, I want to use the `--whatsapp` flag to automatically start the WhatsApp service if credentials exist.
 
-**Independent Test**: Run `pi -e ./whatsapp-pi.ts --whatsapp` with an existing session and verify auto-connection; then run without it and verify it stays disconnected.
+**Independent Test**: Run `pi -e ./whatsapp-ng.ts --whatsapp` with an existing session and verify auto-connection; then run without it and verify it stays disconnected.
 
-- [X] T002 Register the `whatsapp` and `w` flags using `pi.registerFlag` in `whatsapp-pi.ts`.
-- [X] T003 Implement the `whatsapp` flag detection logic within the `session_start` event in `whatsapp-pi.ts`.
-- [X] T004 Implement logic to check `sessionManager.isRegistered()` before triggering auto-connect in `whatsapp-pi.ts`.
+- [X] T002 Register the `whatsapp` and `w` flags using `pi.registerFlag` in `<legacy-entrypoint>`.
+- [X] T003 Implement the `whatsapp` flag detection logic within the `session_start` event in `<legacy-entrypoint>`.
+- [X] T004 Implement logic to check `sessionManager.isRegistered()` before triggering auto-connect in `<legacy-entrypoint>`.
 - [X] T005 Implement user notification (`ctx.ui.notify`) if `--whatsapp` is used but no session is registered.
-- [X] T006 [US1] Implement an asynchronous retry loop (max 3 attempts with 3s delay) for `whatsappService.start()` within the auto-connect sequence in `whatsapp-pi.ts`.
+- [X] T006 [US1] Implement an asynchronous retry loop (max 3 attempts with 3s delay) for `whatsappService.start()` within the auto-connect sequence in `<legacy-entrypoint>`.
 - [X] T007 [US1] Ensure `whatsappService.start()` is triggered only if the flag is present and the session is registered.
 - [X] T008 [US2] Ensure the manual default behavior is preserved (no connection if flag is absent) by verifying conditional logic.
 

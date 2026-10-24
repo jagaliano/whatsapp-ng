@@ -1,5 +1,8 @@
 # Research: Send WhatsApp Message Tool (JID + Text)
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Feature**: 013-send-wa-message  
 **Date**: 2026-04-15
 
@@ -31,7 +34,7 @@
 
 ### 5. Recents Recording (FR-005)
 
-- **Decision**: Call `recentsService.recordMessage()` only on `result.success === true`, mirroring the existing pattern in the `message_end` event handler in `whatsapp-pi.ts`.
+- **Decision**: Call `recentsService.recordMessage()` only on `result.success === true`, mirroring the existing pattern in the `message_end` event handler in `<legacy-entrypoint>`.
 - **Rationale**: Consistent with established convention. Recording a failed send would pollute history with phantom messages.
 - **Alternatives considered**: Always record — rejected, inconsistent with existing convention.
 
@@ -43,6 +46,6 @@
 
 ### 7. Placement in Codebase
 
-- **Decision**: Register the tool inline in `whatsapp-pi.ts` immediately after the `registerCommand("whatsapp", ...)` block.
-- **Rationale**: All extension registrations live in the factory function in `whatsapp-pi.ts`. Keeping the tool there avoids splitting a ~50-line addition into a separate file, which would over-engineer a simple registration. YAGNI applies.
+- **Decision**: Register the tool inline in `<legacy-entrypoint>` immediately after the `registerCommand("whatsapp", ...)` block.
+- **Rationale**: All extension registrations live in the factory function in `<legacy-entrypoint>`. Keeping the tool there avoids splitting a ~50-line addition into a separate file, which would over-engineer a simple registration. YAGNI applies.
 - **Alternatives considered**: New file `src/tools/send-wa-message.tool.ts` — rejected for this scope; appropriate if the tool grows complex.

@@ -1,5 +1,8 @@
 # Implementation Plan: WhatsApp Recents Menu
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Branch**: `[011-whatsapp-recents]` | **Date**: 2026-04-14 | **Spec**: [`specs/011-whatsapp-recents/spec.md`](spec.md)
 **Input**: Feature specification from `/specs/011-whatsapp-recents/spec.md`
 
@@ -11,7 +14,7 @@ Add a Recents option to the existing `/whatsapp` menu that shows the last 20 ind
 
 **Language/Version**: TypeScript 5.x on Node.js 20+  
 **Primary Dependencies**: `@whiskeysockets/baileys`, `pino`, `qrcode-terminal`, existing Pi extension APIs  
-**Storage**: Local file-based persistence under the existing user data directory (`~/.pi/whatsapp-pi/`), with a dedicated recents store for conversation summaries and message history  
+**Storage**: Local file-based persistence under the existing user data directory (`<legacy-original-data-root>/`), with a dedicated recents store for conversation summaries and message history
 **Testing**: `vitest`, `tsc --noEmit`  
 **Target Platform**: Pi extension runtime on desktop/server-class Node.js environments  
 **Project Type**: Pi extension / CLI-driven WhatsApp integration  

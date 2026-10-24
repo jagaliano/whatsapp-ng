@@ -69,6 +69,13 @@ describe('IncomingMediaService', () => {
         expect(console.log).not.toHaveBeenCalled();
     });
 
+    it('forwards cancellation and session ownership to audio transcription', async () => {
+        const options = { signal: new AbortController().signal, isCurrent: () => true };
+        const audioMessage = { seconds: 2 };
+        await new IncomingMediaService(audioService as any).process({ kind: 'audio', text: '[Audio Message]', audioMessage }, 'Ana', options);
+        expect(audioService.transcribe).toHaveBeenCalledWith(audioMessage, options);
+    });
+
     it('downloads images and normalizes image/jpg MIME type', async () => {
         const service = new IncomingMediaService(audioService as any);
 
@@ -104,13 +111,58 @@ describe('IncomingMediaService', () => {
         );
         expect(mocks.mkdir).toHaveBeenCalledWith(
             expect.stringContaining('whatsapp-medias'),
-            { recursive: true }
+            { recursive: true, mode: 0o700 }
         );
         expect(mocks.writeFile).toHaveBeenCalledWith(
-            expect.stringMatching(/whatsapp-medias[\\/]video_1234567890\.mp4$/),
-            Buffer.from('media')
+            expect.stringMatching(/whatsapp-medias[\\/]video_1234567890_[a-f0-9-]+\.mp4$/),
+            Buffer.from('media'),
+            { mode: 0o600, flag: 'wx' }
         );
         expect(result.text).toContain('[Video saved:');
+    });
+
+    it.each(['image', 'video', 'document'] as const)('bounds streamed %s downloads and closes the stream without saving', async kind => {
+        let closed = false;
+        mocks.downloadContentFromMessage.mockResolvedValue((async function* () {
+            try { yield Buffer.alloc(25 * 1024 * 1024); yield Buffer.from('too large'); }
+            finally { closed = true; }
+        })());
+        const message = { fileName: 'oversize.pdf' };
+        const result = await new IncomingMediaService(audioService as any).process({ kind, text: '', [`${kind}Message`]: message } as any, 'Ana');
+        expect(result.text).toMatch(/download failed/i);
+        expect(closed).toBe(true);
+        expect(mocks.writeFile).not.toHaveBeenCalled();
+        expect(mocks.pdfParse).not.toHaveBeenCalled();
+    });
+
+    it('rejects declared oversized media before opening a download', async () => {
+        await new IncomingMediaService(audioService as any).process({ kind: 'image', text: '', imageMessage: { fileLength: 25 * 1024 * 1024 + 1 } }, 'Ana');
+        expect(mocks.downloadContentFromMessage).not.toHaveBeenCalled();
+        expect(mocks.writeFile).not.toHaveBeenCalled();
+    });
+
+    it('accepts exactly 25 MiB and concatenates multiple chunks once', async () => {
+        mocks.downloadContentFromMessage.mockResolvedValue(streamFrom([Buffer.alloc(25 * 1024 * 1024 - 1), Buffer.from('x')]));
+        const concat = vi.spyOn(Buffer, 'concat');
+        const result = await new IncomingMediaService(audioService as any).process({ kind: 'image', text: '', imageMessage: {} }, 'Ana');
+        expect(result.imageBuffer?.length).toBe(25 * 1024 * 1024);
+        expect(concat).toHaveBeenCalledOnce();
+        concat.mockRestore();
+    });
+
+    it('creates private, exclusive, collision-resistant saved files', async () => {
+        const service = new IncomingMediaService(audioService as any);
+        await service.process({ kind: 'document', text: '', documentMessage: { fileName: 'same.txt' } }, 'Ana');
+        await service.process({ kind: 'document', text: '', documentMessage: { fileName: 'same.txt' } }, 'Ana');
+        const [first, second] = mocks.writeFile.mock.calls;
+        expect(first[0]).not.toBe(second[0]);
+        expect(first[2]).toEqual({ mode: 0o600, flag: 'wx' });
+        expect(mocks.mkdir).toHaveBeenCalledWith(expect.stringContaining('documents'), { recursive: true, mode: 0o700 });
+    });
+
+    it('does not allow MIME-derived path separators in saved filenames', async () => {
+        await new IncomingMediaService(audioService as any).process({ kind: 'video', text: '', videoMessage: { mimetype: 'video/mp4\\\\..\\\\secret' } }, 'Ana');
+        expect(mocks.writeFile.mock.calls[0][0].split(/[\\\\/]/).pop()).toMatch(/^video_[0-9]+_[a-f0-9-]+\.[a-z0-9]+$/i);
     });
 
     it('returns a readable fallback when image download fails', async () => {
@@ -148,11 +200,12 @@ describe('IncomingMediaService', () => {
         );
         expect(mocks.mkdir).toHaveBeenCalledWith(
             expect.stringMatching(/\.pi-data[/\\]whatsapp[/\\]documents/),
-            { recursive: true }
+            { recursive: true, mode: 0o700 }
         );
         expect(mocks.writeFile).toHaveBeenCalledWith(
-            expect.stringContaining('1234567890_contract.pdf'),
-            Buffer.from('media')
+            expect.stringMatching(/1234567890_[a-f0-9-]+_contract\.pdf$/),
+            Buffer.from('media'),
+            { mode: 0o600, flag: 'wx' }
         );
         expect(mocks.pdfParse).toHaveBeenCalledWith(Buffer.from('media'));
         expect(result.text).toContain('[Document Received: contract.pdf]');
@@ -179,7 +232,7 @@ describe('IncomingMediaService', () => {
         }, 'Ana');
 
         expect(result.text).toContain('[Document Received: scanned.pdf]');
-        expect(result.text).toContain('Location: ./.pi-data/whatsapp/documents/1234567890_scanned.pdf');
+        expect(result.text).toMatch(/Location: \.\/\.pi-data\/whatsapp\/documents\/1234567890_[a-f0-9-]+_scanned\.pdf/);
         expect(result.text).toContain('PDF text was not extracted automatically. The file is saved at the path above.');
         expect(result.text).not.toContain('PDF text preview:');
     });

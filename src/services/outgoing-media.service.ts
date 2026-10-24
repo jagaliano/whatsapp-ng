@@ -330,7 +330,7 @@ export class OutgoingMediaService {
         if (parts.some(part => /^\.env/i.test(part) || /^(?:auth(?:[-_].*)?|credentials|\.ssh|\.gnupg|\.aws|\.azure|\.git)$/i.test(part))) return true;
         if (/^(?:auth|creds|credentials|secrets)\.json$|^id_(?:rsa|dsa|ecdsa|ed25519)(?:\..*)?$|\.(?:pem|key|p8|p12|pfx|kdbx|asc)$/i.test(basename(path))) return true;
         const paths = createStoragePaths();
-        return !inMedia && [join(homedir(), '.pi', 'agent'), paths.root, paths.legacyRoot, join(homedir(), '.pi', 'whatsapp-pi')]
+        return !inMedia && [join(homedir(), '.pi'), paths.root, paths.legacyRoot]
             .some(root => this.contains(root, path));
     }
 

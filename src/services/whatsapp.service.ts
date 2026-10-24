@@ -29,10 +29,14 @@ import { MessageStore } from './message-store.service.js';
 import { HistorySyncService } from './history-sync.service.js';
 import { TransportLease, type AuthOperationScope } from './transport-lease.service.js';
 import type { LifecycleUpdate } from '../models/message-archive.types.js';
+import { dirname } from 'node:path';
+import { StateMigrationService } from './state-migration.service.js';
 
 const LOG_FILE = createStoragePaths().logPath;
 function fileLog(msg: string) {
-    try { appendFileSync(LOG_FILE, `[${new Date().toISOString()}] [WhatsApp-Pi] ${msg}\n`); } catch {
+    try {
+        StateMigrationService.assertReady(dirname(LOG_FILE));
+        appendFileSync(LOG_FILE, `[${new Date().toISOString()}] [WhatsApp-NG] ${msg}\n`); } catch {
         // File logging is best-effort.
     }
 }
@@ -575,6 +579,7 @@ export class WhatsAppService {
     }
 
     private async ensureTransportLease(): Promise<TransportLease> {
+        this.sessionManager.assertStorageReady?.();
         const profile = this.sessionManager.getAuthStateDir();
         if (this.transportLease) {
             try {

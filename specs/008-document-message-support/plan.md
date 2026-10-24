@@ -1,11 +1,14 @@
 # Implementation Plan: Implement Document Message Support
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Branch**: `008-document-message-support` | **Date**: 2026-04-13 | **Spec**: [specs/008-document-message-support/spec.md]
 **Input**: Feature specification from `/specs/008-document-message-support/spec.md`
 
 ## Summary
 
-The goal is to implement support for `documentMessage` in the WhatsApp-Pi integration. When a user sends a document (PDF, etc.), the bot will download it using Baileys, save it to a local directory (`.pi-data/whatsapp/documents/`), and notify the Pi agent with the file's metadata and local path. The agent can then use its tools (like `bash` with `pdftotext`) to process the content.
+The goal is to implement support for `documentMessage` in the WhatsApp-NG integration. When a user sends a document (PDF, etc.), the bot will download it using Baileys, save it to a local directory (`.pi-data/whatsapp/documents/`), and notify the Pi agent with the file's metadata and local path. The agent can then use its tools (like `bash` with `pdftotext`) to process the content.
 
 ## Technical Context
 
@@ -52,7 +55,7 @@ src/
 ├── services/
 │   ├── whatsapp.service.ts
 │   └── message.sender.ts
-└── whatsapp-pi.ts       # Entry point / Extension logic
+└── whatsapp-ng.ts       # Entry point / Extension logic
 
 .pi-data/
 └── whatsapp/

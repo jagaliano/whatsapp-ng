@@ -1,11 +1,13 @@
 import { downloadContentFromMessage } from 'baileys';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { createStoragePaths } from './storage-path.js';
 import type { LiteParse } from '@llamaindex/liteparse';
 import { AudioService } from './audio.service.js';
+import type { AudioTranscriptionOptions } from './audio-transcriber.js';
 import type { IncomingResolution } from './incoming-message.resolver.js';
-import { WhatsAppPiLogger } from './whatsapp-pi.logger.js';
+import { WhatsAppNgLogger } from './whatsapp-ng.logger.js';
 import { t } from '../i18n.js';
 
 export interface ProcessedIncomingContent {
@@ -15,18 +17,19 @@ export interface ProcessedIncomingContent {
 }
 
 const PDF_PREVIEW_LIMIT = 1200;
+const INCOMING_MEDIA_MAX_BYTES = 25 * 1024 * 1024;
 
 export class IncomingMediaService {
     private readonly mediaDir = createStoragePaths().mediaDir;
 
     constructor(
         private readonly audioService: AudioService,
-        private readonly logger = new WhatsAppPiLogger(false)
+        private readonly logger = new WhatsAppNgLogger(false)
     ) {}
 
-    async process(resolved: IncomingResolution, pushName: string): Promise<ProcessedIncomingContent> {
+    async process(resolved: IncomingResolution, pushName: string, options?: AudioTranscriptionOptions): Promise<ProcessedIncomingContent> {
         if (resolved.kind === 'audio') {
-            return this.processAudio(resolved.audioMessage, pushName);
+            return this.processAudio(resolved.audioMessage, pushName, options);
         }
 
         if (resolved.kind === 'image') {
@@ -44,9 +47,9 @@ export class IncomingMediaService {
         return { text: resolved.text };
     }
 
-    private async processAudio(audioMessage: any, pushName: string): Promise<ProcessedIncomingContent> {
+    private async processAudio(audioMessage: any, pushName: string, options?: AudioTranscriptionOptions): Promise<ProcessedIncomingContent> {
         this.logger.log(t('incoming.media.audioTranscribing', { pushName }));
-        const transcription = await this.audioService.transcribe(audioMessage);
+        const transcription = options ? await this.audioService.transcribe(audioMessage, options) : await this.audioService.transcribe(audioMessage);
         return { text: t('incoming.media.audioTranscribed', { transcription }) };
     }
 
@@ -74,33 +77,28 @@ export class IncomingMediaService {
     }
 
     private async processVideo(videoMessage: any, fallbackText: string, pushName: string): Promise<ProcessedIncomingContent> {
-        this.logger.log(`[WhatsApp-Pi] Downloading video from ${pushName}...`);
+        this.logger.log(`[WhatsApp-NG] Downloading video from ${pushName}...`);
 
         try {
             const buffer = await this.downloadMessage(videoMessage, 'video');
             const mimeType = (videoMessage.mimetype || 'video/mp4').toLowerCase().split(';')[0].trim();
-            const extension = mimeType.split('/')[1] || 'mp4';
-            const fileName = `video_${Date.now()}.${extension}`;
-            const absolutePath = join(this.mediaDir, fileName);
-
-            await mkdir(this.mediaDir, { recursive: true });
-            await writeFile(absolutePath, buffer);
-            this.logger.log(`[WhatsApp-Pi] Video saved to ${absolutePath} (${buffer.length} bytes)`);
+            const absolutePath = await this.saveMediaFile('video', mimeType, buffer);
+            this.logger.log(`[WhatsApp-NG] Video saved to ${absolutePath} (${buffer.length} bytes)`);
 
             return { text: `${fallbackText || t('incoming.media.video')}\n[Video saved: ${absolutePath}]` };
         } catch (error) {
-            this.logger.error('[WhatsApp-Pi] Failed to download video:', error);
+            this.logger.error('[WhatsApp-NG] Failed to download video:', error);
             return { text: '[Video (download failed)]' };
         }
     }
 
     private async saveMediaFile(kind: 'image' | 'video', mimeType: string, buffer: Buffer): Promise<string> {
-        const extension = mimeType.split('/')[1] || (kind === 'image' ? 'jpg' : 'mp4');
-        const fileName = `${kind}_${Date.now()}.${extension}`;
+        const extension = mimeType.split('/')[1]?.replace(/[^a-z0-9]/gi, '').slice(0, 32) || (kind === 'image' ? 'jpg' : 'mp4');
+        const fileName = `${kind}_${Date.now()}_${randomUUID()}.${extension}`;
         const absolutePath = join(this.mediaDir, fileName);
 
-        await mkdir(this.mediaDir, { recursive: true });
-        await writeFile(absolutePath, buffer);
+        await mkdir(this.mediaDir, { recursive: true, mode: 0o700 });
+        await writeFile(absolutePath, buffer, { mode: 0o600, flag: 'wx' });
         return absolutePath;
     }
 
@@ -158,7 +156,7 @@ export class IncomingMediaService {
             const result = await parser.parse(buffer);
             return this.formatPdfPreview(result.text);
         } catch (error) {
-            this.logger.warn('[WhatsApp-Pi] PDF parsing failed, falling back to storage-only behavior.', error);
+            this.logger.warn('[WhatsApp-NG] PDF parsing failed, falling back to storage-only behavior.', error);
             return null;
         } finally {
             parser?.close();
@@ -184,24 +182,26 @@ export class IncomingMediaService {
     }
 
     private async downloadMessage(message: any, type: 'image' | 'video' | 'document'): Promise<Buffer> {
+        if (Number(message.fileLength) > INCOMING_MEDIA_MAX_BYTES) throw new Error('Incoming media exceeds the 25 MiB limit');
         const stream = await downloadContentFromMessage(message, type);
-        let buffer = Buffer.from([]);
-
+        const chunks: Buffer[] = [];
+        let size = 0;
         for await (const chunk of stream) {
-            buffer = Buffer.concat([buffer, chunk]);
+            size += chunk.length;
+            if (size > INCOMING_MEDIA_MAX_BYTES) throw new Error('Incoming media exceeds the 25 MiB limit');
+            chunks.push(chunk);
         }
-
-        return buffer;
+        return Buffer.concat(chunks, size);
     }
 
     private async saveDocument(fileName: string, buffer: Buffer): Promise<string> {
         const sanitized = fileName.replace(/[^a-z0-9._-]/gi, '_');
-        const savedFileName = `${Date.now()}_${sanitized}`;
+        const savedFileName = `${Date.now()}_${randomUUID()}_${sanitized}`;
         const documentDir = join(process.cwd(), '.pi-data', 'whatsapp', 'documents');
         const absolutePath = join(documentDir, savedFileName);
 
-        await mkdir(documentDir, { recursive: true });
-        await writeFile(absolutePath, buffer);
+        await mkdir(documentDir, { recursive: true, mode: 0o700 });
+        await writeFile(absolutePath, buffer, { mode: 0o600, flag: 'wx' });
 
         return `./.pi-data/whatsapp/documents/${savedFileName}`;
     }

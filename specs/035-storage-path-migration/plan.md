@@ -1,5 +1,8 @@
 # Implementation Plan: Migrate Extension Storage Path
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Branch**: `035-storage-path-migration` | **Date**: 2026-06-02 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `/specs/035-storage-path-migration/spec.md`
@@ -8,13 +11,13 @@
 
 ## Summary
 
-Move all WhatsApp-Pi persistent local storage from `~/.pi/whatsapp-pi` to `~/.pi/agent/extension/whatsapp-pi`, while preserving existing user data and keeping normal startup behavior intact. The change should centralize storage-path handling so auth state, config, recents, and logs resolve through one root path with automatic legacy migration.
+Move all WhatsApp-NG persistent local storage from `<legacy-original-data-root>` to `<legacy-previous-data-root>`, while preserving existing user data and keeping normal startup behavior intact. The change should centralize storage-path handling so auth state, config, recents, and logs resolve through one root path with automatic legacy migration.
 
 ## Technical Context
 
 **Language/Version**: TypeScript 5.x / Node.js 20+  
 **Primary Dependencies**: `@whiskeysockets/baileys`, `pi-agent-sdk`, `pino`, `qrcode-terminal`  
-**Storage**: Local filesystem under `~/.pi/agent/extension/whatsapp-pi` with legacy read support from `~/.pi/whatsapp-pi`  
+**Storage**: Local filesystem under `<legacy-previous-data-root>` with legacy read support from `<legacy-original-data-root>`
 **Testing**: Vitest  
 **Target Platform**: Node.js 20+ Pi extension runtime  
 **Project Type**: Pi Code Agent extension / CLI-style agent service  
@@ -52,7 +55,7 @@ src/
 ├── services/
 │   ├── session.manager.ts
 │   ├── recents.service.ts
-│   ├── whatsapp-pi.logger.ts
+│   ├── whatsapp-ng.logger.ts
 │   └── incoming-media.service.ts
 ├── ui/
 │   └── message-detail.view.ts

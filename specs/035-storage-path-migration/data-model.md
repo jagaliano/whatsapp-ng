@@ -1,9 +1,12 @@
 # Data Model: Migrate Extension Storage Path
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 ## Entities
 
 ### StorageRoot
-Represents the active local home for WhatsApp-Pi persistence.
+Represents the active local home for WhatsApp-NG persistence.
 
 **Fields**
 - `path`: Canonical directory path used by runtime
@@ -12,14 +15,14 @@ Represents the active local home for WhatsApp-Pi persistence.
 - `source`: `new | legacy | recovered`
 
 **Rules**
-- Must point to `~/.pi/agent/extension/whatsapp-pi` when active.
+- Must point to `<legacy-previous-data-root>` when active.
 - Must be created automatically if missing.
 
 ### LegacyStorageRoot
 Represents the old local home used by earlier installs.
 
 **Fields**
-- `path`: `~/.pi/whatsapp-pi`
+- `path`: `<legacy-original-data-root>`
 - `hasReadableData`: boolean
 - `lastSeenAt`: Timestamp of last successful read
 

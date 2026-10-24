@@ -1,5 +1,8 @@
 # Tasks: whatsapp-ng maintenance and release readiness
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Baseline:** `d415f0b`
 
 **Branch:** `chore/fork-release-readiness`
@@ -24,7 +27,7 @@ M0 is local and review-ready only after T006–T007. No commit, push or PR is au
 
 ## M1: licensing and pre-publication account readiness verified
 
-- [x] T008 Record owner acceptance of upstream's declared MIT license; add LICENSE with the supplied 2026 owner notice and yearless Rapha attribution. [Upstream issue #17](https://github.com/RaphaCastelloes/whatsapp-pi/issues/17) is advisory, not a blocker. `LICENSING.md` records the decision without claiming upstream confirmation.
+- [x] T008 Record owner acceptance of upstream's declared MIT license; add LICENSE with the supplied 2026 owner notice and yearless Rapha attribution. [Upstream issue #17](../../README.md#fork-and-legacy-names) is advisory, not a blocker. `LICENSING.md` records the decision without claiming upstream confirmation.
 - [x] T009 After the owner performs local browser login, verify public-registry identity `jagaliano`, verified email and 2FA `auth-and-writes`. Current package lookup returns E404. This closes account readiness, not name reservation, ownership or guaranteed first-create permission; registration/publication stays in M5. No agent credential edit or publication.
 - [x] T010 Prepare fork identity/version/URLs, retained author and private publish guard with selected future `next` tag.
 - [x] T011 Declare host wildcard peers and development copies; verify official host aliases and retained baseline dependency versions.
@@ -82,9 +85,10 @@ The preparation checkboxes did not authorize publication. The owner subsequently
 
 - [x] M1 Licensing/packaging/loader work, pre-publication npm account readiness and documentation/artifact refresh verified (T008–T017). No name reservation, package ownership or publication is claimed.
 - [x] M2 Implement owner-approved lock policy and scoped dependency/security migrations; clean reproduction, exact-model review and commit/push completed. Platform/native limits remain explicit.
-- [x] M3 Qualify the actual distributable on macOS x86_64 and Linux amd64 using synthetic data, including process/account isolation.
+- [x] M3 Qualify the actual distributable on macOS and Linux amd64 using synthetic data, including process/account isolation.
 - [x] M4 Historical media/history live evidence and exact-model review completed (T036–T040), followed by final-runtime bounded saved-session/readability revalidation (T049). Scope limits remain explicit.
 - [x] T049 Obtain fresh approval and complete final-artifact saved-session connect/stop/reconnect: exactly two one-attempt texts; owner confirms both readable and the archive-restored native quote visible. Auth ownership/context fences, isolated offline records/0600/secret exclusion and configuration byte-preservation passed. Setup failures and contact recovery remain documented; observed statuses were SERVER_ACK (2), not new READ/PLAYED coverage. No reset/logout/media/history fetch or uncertain resend.
+- [x] T050 Complete owner-selected prepare-only M5: refresh release docs, retain private guard, validate the new 38-entry local artifact and managed install/RPC/native smoke, pass 466/49 checks and zero source/consumer audits. See [release handoff](release.md); no publication or new Git delivery.
 - [ ] M5 Publish only with separate approval; verify prerelease installation and make stable promotion a later decision. The latest owner instruction authorizes Git commit/push only and explicitly prohibits publication.
 
 See [the plan](plan.md#4-ordered-implementation-milestones) for each prerequisite, deliverable and completion gate. External metadata, license findings and npm availability must be refreshed at their implementation gates.

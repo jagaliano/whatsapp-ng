@@ -1,10 +1,13 @@
 # Quickstart: Message Detail Reply
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 ## Purpose
 Verify that a user can open a message detail view, choose Reply, compose a message, and send it to the correct conversation.
 
 ## Prerequisites
-- Existing WhatsApp-Pi feature branch checked out.
+- Existing WhatsApp-NG feature branch checked out.
 - Dependencies installed.
 - A conversation with at least one readable message available in the detail view.
 
@@ -17,7 +20,7 @@ Verify that a user can open a message detail view, choose Reply, compose a messa
    ```
 
 2. **Open the message detail view**
-   - Launch Pi with WhatsApp-Pi enabled.
+   - Launch Pi with WhatsApp-NG enabled.
    - Open `/whatsapp`.
    - Navigate to a conversation and open a specific message in the detail view.
 

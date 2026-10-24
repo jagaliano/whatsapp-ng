@@ -35,7 +35,7 @@ describe('baileys console filter', () => {
 
     it('does not suppress unrelated application errors', () => {
         expect(shouldSuppressBaileysConsoleMessage([
-            '[WhatsApp-Pi] Failed to send menu message',
+            '[WhatsApp-NG] Failed to send menu message',
             new Error('network down')
         ])).toBe(false);
     });
@@ -45,10 +45,10 @@ describe('baileys console filter', () => {
         restoreFilter = installBaileysConsoleFilter(false);
 
         console.error('Failed to decrypt message with any known session...');
-        console.error('[WhatsApp-Pi] real error');
+        console.error('[WhatsApp-NG] real error');
 
         expect(errorSpy).toHaveBeenCalledTimes(1);
-        expect(errorSpy).toHaveBeenCalledWith('[WhatsApp-Pi] real error');
+        expect(errorSpy).toHaveBeenCalledWith('[WhatsApp-NG] real error');
     });
 
     it('filters libsignal session close output written through console.info', () => {
@@ -56,10 +56,10 @@ describe('baileys console filter', () => {
         restoreFilter = installBaileysConsoleFilter(false);
 
         console.info('Closing session:', { registrationId: 65653820 });
-        console.info('[WhatsApp-Pi] real info');
+        console.info('[WhatsApp-NG] real info');
 
         expect(infoSpy).toHaveBeenCalledTimes(1);
-        expect(infoSpy).toHaveBeenCalledWith('[WhatsApp-Pi] real info');
+        expect(infoSpy).toHaveBeenCalledWith('[WhatsApp-NG] real info');
     });
 
     it('does not install filtering in verbose mode', () => {

@@ -1,5 +1,8 @@
 # Implementation Plan: Send WhatsApp Message Tool (JID + Text)
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Branch**: `013-send-wa-message` | **Date**: 2026-04-15 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `/specs/013-send-wa-message/spec.md`
 
@@ -17,7 +20,7 @@ Register a `send_wa_message` LLM-callable tool in the Pi extension that accepts 
 **Project Type**: Pi extension (library consumed by Pi agent)  
 **Performance Goals**: Message delivery within 5 seconds under normal conditions (inherited from existing `MessageSender`)  
 **Constraints**: Tool must return in <1 second when WhatsApp is disconnected (no blocking wait); TypeBox schema required for LLM parameter validation  
-**Scale/Scope**: Single tool registration; ~30–50 lines of new code in `whatsapp-pi.ts`
+**Scale/Scope**: Single tool registration; ~30–50 lines of new code in `<legacy-entrypoint>`
 
 ## Constitution Check
 
@@ -47,14 +50,14 @@ specs/013-send-wa-message/
 ### Source Code (repository root)
 
 ```text
-whatsapp-pi.ts           # +registerTool("send_wa_message", ...) call added here
+whatsapp-ng.ts           # +registerTool("send_wa_message", ...) call added here
 
 tests/
 └── unit/
     └── send-wa-message.tool.test.ts   # new unit tests
 ```
 
-**Structure Decision**: Single-project layout. The tool is registered in the existing `whatsapp-pi.ts` extension factory alongside `registerCommand` and `registerFlag`. No new source files are required for the feature itself; only a new test file is added.
+**Structure Decision**: Single-project layout. The tool is registered in the existing `<legacy-entrypoint>` extension factory alongside `registerCommand` and `registerFlag`. No new source files are required for the feature itself; only a new test file is added.
 
 ## Complexity Tracking
 

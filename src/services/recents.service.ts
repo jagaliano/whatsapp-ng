@@ -60,6 +60,7 @@ export class RecentsService {
     }
 
     async ensureInitialized() {
+        this.sessionManager.assertStorageReady?.();
         const options = this.sessionManager.getArchiveStorageOptions?.();
         if (options) {
             this.archive ??= new MessageStore(new JidResolver(), () => 'offline');

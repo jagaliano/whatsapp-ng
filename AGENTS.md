@@ -1,4 +1,4 @@
-# whatsapp-pi Development Guidelines
+# whatsapp-ng Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-05-16
 
@@ -12,26 +12,26 @@ Auto-generated from all feature plans. Last updated: 2026-05-16
 - TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys`, `pi-agent-sdk`, `pino` (005-verbose-mode-support)
 - Memory-based configuration (005-verbose-mode-support)
 - TypeScript 5.x / Node.js 20+ + `pi-agent-sdk` (006-auto-connect-flag)
-- Memory-based flag detection (`--whatsapp-pi-online`, `--verbose`); depends on existing `.pi-data/` auth state. (006-auto-connect-flag)
+- Memory-based flag detection (`--whatsapp-ng-online`, `--verbose`); depends on existing `.pi-data/` auth state. (006-auto-connect-flag)
 - TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys` (007-image-recognition)
 - Forwarding images as base64 to Pi (007-image-recognition)
 - TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys`, `pi-agent-sdk` (Extension API) (008-document-message-support)
 - Local filesystem persistent storage in `.pi-data/whatsapp/documents/` (008-document-message-support)
 - N/A (String constants) (009-localize-system-messages)
 - TypeScript 5.x on Node.js 20+ + `@whiskeysockets/baileys`, `pino`, `qrcode-terminal`, existing Pi extension APIs (011-whatsapp-recents)
-- Local file-based persistence under the extension user data directory (`~/.pi/agent/extension/whatsapp-pi/`), with a dedicated recents store for conversation summaries and message history (011-whatsapp-recents)
+- Local file-based persistence under the extension user data directory (`<legacy-previous-data-root>/`), with a dedicated recents store for conversation summaries and message history (011-whatsapp-recents)
 - TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys`, `@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`, `pino`, `qrcode-terminal` (016-message-detail-view)
-- Existing local recents store at `~/.pi/agent/extension/whatsapp-pi/recents/recents.json`; no new persistent storage (016-message-detail-view)
+- Existing local recents store at `<legacy-previous-data-root>/recents/recents.json`; no new persistent storage (016-message-detail-view)
 - TypeScript 5.x on Node.js 20+ + `@whiskeysockets/baileys`, `@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`, `pino`, `qrcode-terminal` (019-seria-possivel-fazer)
-- Local file-based recents store under `~/.pi/agent/extension/whatsapp-pi/recents/recents.json` (019-seria-possivel-fazer)
+- Local file-based recents store under `<legacy-previous-data-root>/recents/recents.json` (019-seria-possivel-fazer)
 - TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys`, `vitest`, `typescript`, Node built-ins (`fs`, `fs/promises`, `child_process`, `os`, `path`) (021-increase-unit-test)
 - Existing local media directory under `~/.pi/whatsapp-medias`; tests should mock file access and not depend on real files (021-increase-unit-test)
 - TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys`, `@llamaindex/liteparse`, `pino`, `qrcode-terminal`, `@mariozechner/pi-coding-agent` (027-pdf-document-parsing)
 - Local filesystem under `.pi-data/whatsapp/documents/` (027-pdf-document-parsing)
 - TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys`, `pino`, `qrcode-terminal`, `pi-agent-sdk` (028-group-reaction-mode)
-- Local file config in `~/.pi/agent/extension/whatsapp-pi/config.json` (028-group-reaction-mode)
+- Local file config in `<legacy-previous-data-root>/config.json` (028-group-reaction-mode)
 - TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys`, `pi-agent-sdk`, `pino`, `qrcode-terminal` (033-remove-reaction-mode)
-- Local file-based app state under `~/.pi/agent/extension/whatsapp-pi/` (033-remove-reaction-mode)
+- Local file-based app state under `<legacy-previous-data-root>/` (033-remove-reaction-mode)
 
 - TypeScript 5.x / Node.js 20+ + `@whiskeysockets/baileys`, `qrcode-terminal`, `pi-agent-sdk` (assumed name for Pi extension API) (001-whatsapp-tui-integration)
 
@@ -61,5 +61,5 @@ TypeScript 5.x / Node.js 20+: Follow standard conventions
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/035-storage-path-migration/plan.md
+shell commands, and other important information, read specs/038-whatsapp-ng-namespace/plan.md; the earlier storage plan is historical context
 <!-- SPECKIT END -->

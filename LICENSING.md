@@ -4,7 +4,7 @@ This maintained continuation is licensed under the [MIT License](LICENSE).
 
 ## Basis and notices
 
-- Upstream commit `49adbc3` and published `whatsapp-pi@1.0.70` both declare MIT and identify Rapha as author.
+- Upstream commit `49adbc3` and the [upstream package, version 1.0.70](README.md#fork-and-legacy-names), both declare MIT and identify Rapha as author.
 - The owner explicitly accepted that upstream declaration as the licensing basis for this continuation. The earlier absence of a separate upstream license file is no longer a release blocker.
 - `LICENSE` includes the owner's supplied 2026 notice for José Antonio Galiano Sandoval and a yearless notice for Rapha Castelloes. No unverified upstream year range is asserted.
 - Original history and attribution are preserved. The new notice does not claim ownership of all inherited work.
@@ -12,10 +12,10 @@ This maintained continuation is licensed under the [MIT License](LICENSE).
 
 ## Advisory upstream inquiry
 
-[Upstream issue #17](https://github.com/RaphaCastelloes/whatsapp-pi/issues/17) remains a request for any preferred original notice. It is advisory, not a prerequisite for using the declared MIT license. No upstream confirmation is claimed; any authoritative notice supplied later can be incorporated.
+[Upstream issue #17](README.md#fork-and-legacy-names) remains a request for any preferred original notice. It is advisory, not a prerequisite for using the declared MIT license. No upstream confirmation is claimed; any authoritative notice supplied later can be incorporated.
 
 This owner decision supersedes the earlier choice to wait for upstream clarification.
 
 ## Publication boundaries
 
-The candidate remains `private: true`. Pre-publication npm account readiness is verified; the new package name is not reserved and first registration remains an M5 registry operation. Remaining artifact qualification and separate publication approval are still required under the [maintenance plan](https://github.com/jagaliano/whatsapp-ng/blob/chore/fork-release-readiness/specs/037-maintained-fork-readiness/plan.md). Accepting MIT does not authorize login/token changes, npm publication or removal of the private-package guard.
+The candidate is not published to npm and remains `private: true`. Publication requires maintainer approval and checks of the final package. The MIT license permits use of the code; it does not grant access to maintainer accounts or authority to publish under the project's package identity.

@@ -5,6 +5,9 @@ description: "Task list for WhatsApp Recents Menu"
 
 # Tasks: WhatsApp Recents Menu
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Input**: Design documents from `/specs/011-whatsapp-recents/`
 **Prerequisites**: plan.md (required), spec.md (required), research.md, data-model.md, quickstart.md
 
@@ -35,7 +38,7 @@ description: "Task list for WhatsApp Recents Menu"
 
 - [x] T003 Implement Recents cache load/save, sorting, and 20-item trimming rules in `src/services/recents.service.ts`
 - [x] T004 [P] Update `src/services/whatsapp.service.ts` so incoming WhatsApp messages are recorded into the Recents cache
-- [x] T005 [P] Wire the Recents service into `whatsapp-pi.ts` startup and outgoing message handling so sent replies also refresh recent conversations
+- [x] T005 [P] Wire the Recents service into `<legacy-entrypoint>` startup and outgoing message handling so sent replies also refresh recent conversations
 
 **Checkpoint**: Recents data is being captured and persisted; user story work can now begin
 

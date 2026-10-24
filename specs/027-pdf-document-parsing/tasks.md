@@ -1,5 +1,8 @@
 # Tasks: PDF Document Parsing
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Input**: Design documents from `/specs/027-pdf-document-parsing/`
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md
 
@@ -71,11 +74,11 @@
 ### Tests for User Story 3 (OPTIONAL - only if tests requested) ⚠️
 
 - [X] T008 [P] [US3] Add non-PDF regression coverage in `tests/unit/incoming-media.service.test.ts`
-- [X] T009 [P] [US3] Add startup regression coverage for removal of the `pdftotext` check in `tests/unit/whatsapp-pi.extension.test.ts`
+- [X] T009 [P] [US3] Add startup regression coverage for removal of the `pdftotext` check in `tests/unit/whatsapp-ng.extension.test.ts`
 
 ### Implementation for User Story 3
 
-- [X] T010 [US3] Remove the `pdftotext` startup check and warning from `whatsapp-pi.ts`
+- [X] T010 [US3] Remove the `pdftotext` startup check and warning from `<legacy-entrypoint>`
 - [X] T011 [US3] Keep non-PDF document handling on the existing path in `src/services/incoming-media.service.ts`
 
 **Checkpoint**: All document flows should remain stable while PDF handling improves

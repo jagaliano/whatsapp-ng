@@ -1,9 +1,12 @@
 # Feature Specification: Verbose Mode Support
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Feature Branch**: `005-verbose-mode-support`  
 **Created**: 2026-04-10  
 **Status**: Draft  
-**Input**: User description: "the argument pi -e @whatsapp-pi.ts -v to be a verbose mode. The verbose show the trace data. The not verbose, without -v pi -e @whatsapp-pi.ts, don´t show the trace."
+**Input**: User description: "the argument pi -e @whatsapp-ng.ts -v to be a verbose mode. The verbose show the trace data. The not verbose, without -v pi -e @whatsapp-ng.ts, don´t show the trace."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -13,7 +16,7 @@ As a Software Engineer using the WhatsApp extension, I want to enable verbose lo
 
 **Why this priority**: High. Essential for debugging the "failed to commit mutations" and "conflict" errors frequently encountered in Baileys.
 
-**Independent Test**: Run `pi -e ./whatsapp-pi.ts -v` and verify that the terminal displays detailed JSON logs from the `@whiskeysockets/baileys` library.
+**Independent Test**: Run `pi -e ./whatsapp-ng.ts -v` and verify that the terminal displays detailed JSON logs from the `@whiskeysockets/baileys` library.
 
 **Acceptance Scenarios**:
 
@@ -28,7 +31,7 @@ As a daily user of the WhatsApp extension, I want the output to be clean and min
 
 **Why this priority**: Medium. Improves the general user experience and reduces terminal noise.
 
-**Independent Test**: Run `pi -e ./whatsapp-pi.ts` (without any flags) and verify that only "WhatsApp connection successfully opened" and similar status messages appear.
+**Independent Test**: Run `pi -e ./whatsapp-ng.ts` (without any flags) and verify that only "WhatsApp connection successfully opened" and similar status messages appear.
 
 **Acceptance Scenarios**:
 

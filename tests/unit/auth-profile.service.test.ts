@@ -187,7 +187,7 @@ describe('guarded connect-time auth adoption', () => {
     it('honors a prior source reset instead of falling back to an older namespace', async () => {
         const manager = session(); await mkdir(join(legacy, 'auth'), { recursive: true });
         await writeFile(join(legacy, 'auth.auth-profile.json'), '{"version":1,"state":"empty"}');
-        await seed(join(mocks.home, '.pi/whatsapp-pi/auth'), 'older');
+        await seed(join(mocks.home, '.pi/whatsapp-ng/auth'), 'older');
         expect(await manager.isRegistered()).toBe(false);
         const lease = await claim(manager); await manager.getAuthState(lease);
         expect(await readdir(manager.getAuthStateDir())).toEqual([]);

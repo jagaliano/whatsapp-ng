@@ -38,7 +38,7 @@ async function executeToolLogic(
         .join('\n');
 
     logger.log([
-        '[WhatsApp-Pi] Outgoing WhatsApp message',
+        '[WhatsApp-NG] Outgoing WhatsApp message',
         `  To: ${params.jid}`,
         '  Message:',
         formattedMessage
@@ -55,14 +55,14 @@ async function executeToolLogic(
             timestamp: Date.now()
         });
         logger.log([
-            '[WhatsApp-Pi] Outgoing WhatsApp message result',
+            '[WhatsApp-NG] Outgoing WhatsApp message result',
             `  To: ${params.jid}`,
             '  Status: sent',
             `  MessageId: ${result.messageId ?? 'unknown'}`
         ].join('\n'));
     } else {
         logger.log([
-            '[WhatsApp-Pi] Outgoing WhatsApp message result',
+            '[WhatsApp-NG] Outgoing WhatsApp message result',
             `  To: ${params.jid}`,
             '  Status: failed',
             `  Error: ${result.error ?? 'unknown error'}`
@@ -129,8 +129,8 @@ describe('send_wa_message tool', () => {
             expect(parsed.messageId).toBe('MSG123');
             expect(parsed.attempts).toBe(1);
             expect(parsed.error).toBeUndefined();
-            expect(logger.log).toHaveBeenNthCalledWith(1, '[WhatsApp-Pi] Outgoing WhatsApp message\n  To: 5511999998888@s.whatsapp.net\n  Message:\n    Hello');
-            expect(logger.log).toHaveBeenNthCalledWith(2, '[WhatsApp-Pi] Outgoing WhatsApp message result\n  To: 5511999998888@s.whatsapp.net\n  Status: sent\n  MessageId: MSG123');
+            expect(logger.log).toHaveBeenNthCalledWith(1, '[WhatsApp-NG] Outgoing WhatsApp message\n  To: 5511999998888@s.whatsapp.net\n  Message:\n    Hello');
+            expect(logger.log).toHaveBeenNthCalledWith(2, '[WhatsApp-NG] Outgoing WhatsApp message result\n  To: 5511999998888@s.whatsapp.net\n  Status: sent\n  MessageId: MSG123');
         });
 
         it('returns failure result with error description when delivery fails', async () => {
@@ -153,8 +153,8 @@ describe('send_wa_message tool', () => {
             expect(parsed.error).toBe('Socket timed out');
             expect(parsed.attempts).toBe(3);
             expect(parsed.messageId).toBeUndefined();
-            expect(logger.log).toHaveBeenNthCalledWith(1, '[WhatsApp-Pi] Outgoing WhatsApp message\n  To: 5511999998888@s.whatsapp.net\n  Message:\n    Hello');
-            expect(logger.log).toHaveBeenNthCalledWith(2, '[WhatsApp-Pi] Outgoing WhatsApp message result\n  To: 5511999998888@s.whatsapp.net\n  Status: failed\n  Error: Socket timed out');
+            expect(logger.log).toHaveBeenNthCalledWith(1, '[WhatsApp-NG] Outgoing WhatsApp message\n  To: 5511999998888@s.whatsapp.net\n  Message:\n    Hello');
+            expect(logger.log).toHaveBeenNthCalledWith(2, '[WhatsApp-NG] Outgoing WhatsApp message result\n  To: 5511999998888@s.whatsapp.net\n  Status: failed\n  Error: Socket timed out');
         });
     });
 

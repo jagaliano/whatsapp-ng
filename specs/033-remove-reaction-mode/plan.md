@@ -1,5 +1,8 @@
 # Implementation Plan: Remove Passive Reaction Mode
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Branch**: `[033-remove-reaction-mode]` | **Date**: 2026-05-16 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `/specs/033-remove-reaction-mode/spec.md`
 
@@ -11,7 +14,7 @@ Remove Passive Reaction Mode from allowed-group settings, ignore legacy passive 
 
 **Language/Version**: TypeScript 5.x / Node.js 20+  
 **Primary Dependencies**: `@whiskeysockets/baileys`, `pi-agent-sdk`, `pino`, `qrcode-terminal`  
-**Storage**: Local file-based app state under `~/.pi/whatsapp-pi/`  
+**Storage**: Local file-based app state under `<legacy-original-data-root>/`
 **Testing**: Vitest  
 **Target Platform**: Node.js WhatsApp companion app / Pi extension runtime  
 **Project Type**: desktop-app / CLI-style agent service  

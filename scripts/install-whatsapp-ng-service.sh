@@ -18,12 +18,13 @@ if ! command -v systemctl >/dev/null; then
     exit 1
 fi
 
-# Installs the extension in this user's Pi agent configuration.
-echo "Instalando whatsapp-pi no Pi..."
-"$PI_BIN" install npm:whatsapp-pi
+# Source checkout by default; an explicitly selected registry spec requires a published release.
+PACKAGE_SOURCE="${WHATSAPP_NG_PACKAGE_SOURCE:-$PROJECT_DIR}"
+echo "Instalando whatsapp-ng no Pi..."
+"$PI_BIN" install "$PACKAGE_SOURCE"
 
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-UNIT_FILE="$UNIT_DIR/whatsapp-pi.service"
+UNIT_FILE="$UNIT_DIR/whatsapp-ng.service"
 mkdir -p "$UNIT_DIR"
 
 # Values are generated so the service also works with Pi installed by the
@@ -33,10 +34,10 @@ sed \
     -e "s|__PI_DIR__|${HOME//|/\\|}|g" \
     -e "s|__PI_BIN__|${PI_BIN//|/\\|}|g" \
     -e "s|__TMUX_BIN__|${TMUX_BIN//|/\\|}|g" \
-    "$PROJECT_DIR/systemd/whatsapp-pi.service.in" > "$UNIT_FILE"
+    "$PROJECT_DIR/systemd/whatsapp-ng.service.in" > "$UNIT_FILE"
 
 systemctl --user daemon-reload
-systemctl --user enable --now whatsapp-pi.service
+systemctl --user enable --now whatsapp-ng.service
 
 # User services need lingering to start even when nobody is logged in.
 if command -v loginctl >/dev/null && loginctl enable-linger "$USER" 2>/dev/null; then
@@ -46,5 +47,5 @@ else
 fi
 
 echo "Serviço instalado e iniciado."
-echo "Ver status: systemctl --user status whatsapp-pi.service"
-echo "Acessar o tmux: tmux attach -t whatsapp-pi"
+echo "Ver status: systemctl --user status whatsapp-ng.service"
+echo "Acessar o tmux: tmux attach -t whatsapp-ng"

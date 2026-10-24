@@ -1,5 +1,8 @@
 # Tasks: Manual WhatsApp Connection
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Input**: Design documents from `/specs/002-manual-whatsapp-connection/`
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md
 
@@ -43,7 +46,7 @@
 
 ### Implementation for User Story 1
 
-- [X] T005 [US1] Remove auto-connection block from `session_start` event in `whatsapp-pi.ts`
+- [X] T005 [US1] Remove auto-connection block from `session_start` event in `<legacy-entrypoint>`
 - [X] T006 [P] [US1] Update `MenuHandler.handleCommand` in `src/ui/menu.handler.ts` to implement the Connect/Disconnect toggle logic
 - [X] T007 [US1] Map "Connect" menu choice to `whatsappService.start()` in `src/ui/menu.handler.ts`
 - [X] T008 [US1] Map "Disconnect" menu choice to `whatsappService.stop()` in `src/ui/menu.handler.ts`
@@ -61,7 +64,7 @@
 ### Implementation for User Story 2
 
 - [X] T009 [US2] Update `WhatsAppService` in `src/services/whatsapp.service.ts` to trigger `ctx.ui.setStatus` on connection updates
-- [X] T010 [US2] Initialize TUI status to "WhatsApp: Disconnected" in `whatsapp-pi.ts` upon `session_start`
+- [X] T010 [US2] Initialize TUI status to "WhatsApp: Disconnected" in `<legacy-entrypoint>` upon `session_start`
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
@@ -110,7 +113,7 @@
 ```bash
 # Launch menu logic and entry point updates together:
 Task: "Update MenuHandler.handleCommand in src/ui/menu.handler.ts to implement the Connect/Disconnect toggle logic"
-Task: "Remove auto-connection block from session_start event in whatsapp-pi.ts"
+Task: "Remove auto-connection block from session_start event in whatsapp-ng.ts"
 ```
 
 ---

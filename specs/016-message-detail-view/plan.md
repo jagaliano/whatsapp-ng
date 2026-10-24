@@ -1,5 +1,8 @@
 # Implementation Plan: Message Detail View
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Branch**: `016-message-detail-view` | **Date**: 2026-04-20 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `/specs/016-message-detail-view/spec.md`
 
@@ -11,7 +14,7 @@ Add a dedicated message detail view that opens when a user selects a message fro
 
 **Language/Version**: TypeScript 5.x / Node.js 20+  
 **Primary Dependencies**: `@whiskeysockets/baileys`, `@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`, `pino`, `qrcode-terminal`  
-**Storage**: Existing local recents store at `~/.pi/whatsapp-pi/recents/recents.json`; no new persistent storage  
+**Storage**: Existing local recents store at `<legacy-original-data-root>/recents/recents.json`; no new persistent storage
 **Testing**: Vitest (`npm test`) and TypeScript typecheck (`npm run typecheck`)  
 **Target Platform**: Terminal-based Pi extension on desktop Node.js  
 **Project Type**: Pi extension with terminal UI  

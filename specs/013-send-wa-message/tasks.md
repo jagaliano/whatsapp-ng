@@ -1,5 +1,8 @@
 # Tasks: Send WhatsApp Message Tool (JID + Text)
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Input**: Design documents from `/specs/013-send-wa-message/`
 **Prerequisites**: plan.md ✅ spec.md ✅ research.md ✅ data-model.md ✅ contracts/ ✅
 
@@ -16,9 +19,9 @@
 
 **Purpose**: Add the TypeBox import and confirm the Pi SDK tool registration API is available — the only setup needed before any story work begins.
 
-- [x] T001 Add `Type` import from `@sinclair/typebox` at the top of `whatsapp-pi.ts` (line 1 imports block)
+- [x] T001 Add `Type` import from `@sinclair/typebox` at the top of `<legacy-entrypoint>` (line 1 imports block)
 
-**Checkpoint**: `whatsapp-pi.ts` compiles cleanly with the new import (`npm run typecheck`)
+**Checkpoint**: `<legacy-entrypoint>` compiles cleanly with the new import (`npm run typecheck`)
 
 ---
 
@@ -38,10 +41,10 @@
 
 ### Implementation for User Story 1
 
-- [x] T002 [US1] Register `pi.registerTool` block for `send_wa_message` in `whatsapp-pi.ts` after the `registerCommand("whatsapp", ...)` block — include `name`, `label`, `description`, `parameters` (TypeBox schema with `jid` and `message` string fields, `minLength: 1` each), and a stub `execute` that returns `{ isError: true, content: [{ type: "text", text: '{"success":false,"error":"not implemented","attempts":0}' }] }`
-- [x] T003 [US1] Implement the connection guard in the `execute` function in `whatsapp-pi.ts`: if `whatsappService.getStatus() !== 'connected'` return immediately with `{ isError: true, content: [{ type: "text", text: JSON.stringify({ success: false, error: "WhatsApp not connected", attempts: 0 }) }] }`
-- [x] T004 [US1] Implement message delivery in the `execute` function in `whatsapp-pi.ts`: call `await whatsappService.sendMessage(params.jid, params.message)` and capture the `MessageResult`
-- [x] T005 [US1] Implement result serialisation in the `execute` function in `whatsapp-pi.ts`: return `{ isError: !result.success, content: [{ type: "text", text: JSON.stringify({ success: result.success, messageId: result.messageId, error: result.error, attempts: result.attempts }) }] }`
+- [x] T002 [US1] Register `pi.registerTool` block for `send_wa_message` in `<legacy-entrypoint>` after the `registerCommand("whatsapp", ...)` block — include `name`, `label`, `description`, `parameters` (TypeBox schema with `jid` and `message` string fields, `minLength: 1` each), and a stub `execute` that returns `{ isError: true, content: [{ type: "text", text: '{"success":false,"error":"not implemented","attempts":0}' }] }`
+- [x] T003 [US1] Implement the connection guard in the `execute` function in `<legacy-entrypoint>`: if `whatsappService.getStatus() !== 'connected'` return immediately with `{ isError: true, content: [{ type: "text", text: JSON.stringify({ success: false, error: "WhatsApp not connected", attempts: 0 }) }] }`
+- [x] T004 [US1] Implement message delivery in the `execute` function in `<legacy-entrypoint>`: call `await whatsappService.sendMessage(params.jid, params.message)` and capture the `MessageResult`
+- [x] T005 [US1] Implement result serialisation in the `execute` function in `<legacy-entrypoint>`: return `{ isError: !result.success, content: [{ type: "text", text: JSON.stringify({ success: result.success, messageId: result.messageId, error: result.error, attempts: result.attempts }) }] }`
 
 **Checkpoint**: Pi can call `send_wa_message` and a WhatsApp message is delivered to the target contact. Success and failure results are returned as structured JSON.
 
@@ -70,7 +73,7 @@
 
 ### Implementation for User Story 3
 
-- [x] T008 [US3] In the `execute` function in `whatsapp-pi.ts`, after a successful send (`result.success === true`), call `recentsService.recordMessage({ messageId: result.messageId!, senderNumber: '+' + params.jid.split('@')[0], text: params.message, direction: 'outgoing', timestamp: Date.now() })` — mirror the identical pattern used in the `message_end` event handler
+- [x] T008 [US3] In the `execute` function in `<legacy-entrypoint>`, after a successful send (`result.success === true`), call `recentsService.recordMessage({ messageId: result.messageId!, senderNumber: '+' + params.jid.split('@')[0], text: params.message, direction: 'outgoing', timestamp: Date.now() })` — mirror the identical pattern used in the `message_end` event handler
 - [x] T009 [US3] Add a unit test case to `tests/unit/send-wa-message.tool.test.ts` verifying that `recentsService.recordMessage` is called with the correct arguments on success and is NOT called on failure or when disconnected
 - [x] T010 [P] [US3] Run `npm test` to confirm all unit test cases pass including the new recents recording test
 
@@ -82,8 +85,8 @@
 
 **Purpose**: Final validation and optional improvements.
 
-- [x] T011 [P] Run `npm run typecheck` on `whatsapp-pi.ts` to confirm no TypeScript errors are introduced by the new `registerTool` block and `Type` import
-- [x] T012 Add `promptSnippet` to the tool definition in `whatsapp-pi.ts` so the tool appears in Pi's "Available tools" system prompt section: `"send_wa_message(jid, message) - Send a WhatsApp message to a contact by JID"`
+- [x] T011 [P] Run `npm run typecheck` on `<legacy-entrypoint>` to confirm no TypeScript errors are introduced by the new `registerTool` block and `Type` import
+- [x] T012 Add `promptSnippet` to the tool definition in `<legacy-entrypoint>` so the tool appears in Pi's "Available tools" system prompt section: `"send_wa_message(jid, message) - Send a WhatsApp message to a contact by JID"`
 - [ ] T013 [P] Verify `send_wa_message` appears in Pi's tool list at runtime by checking `pi.getAllTools()` output or observing tool availability in a live Pi session
 
 ---
@@ -124,7 +127,7 @@
 ```
 # These can run in parallel:
 Task T006: "Add unit tests for result shapes in tests/unit/send-wa-message.tool.test.ts"
-Task T008: "Add recents recording call in whatsapp-pi.ts execute function"
+Task T008: "Add recents recording call in whatsapp-ng.ts execute function"
 ```
 
 ---
@@ -150,7 +153,7 @@ Task T008: "Add recents recording call in whatsapp-pi.ts execute function"
 ## Notes
 
 - [P] tasks = different files or no shared state, safe to parallelize
-- The tool registration (`registerTool`) must be inside the `export default function(pi)` factory in `whatsapp-pi.ts` — access to `whatsappService` and `recentsService` is via closure
+- The tool registration (`registerTool`) must be inside the `export default function(pi)` factory in `<legacy-entrypoint>` — access to `whatsappService` and `recentsService` is via closure
 - The `Type` import is from `@sinclair/typebox` — it is already a transitive dependency, no `package.json` change needed
 - The π branding suffix is applied internally by `MessageSender.send()` — do NOT add it manually in the tool
 - `lastRemoteJid` is intentionally NOT updated by this tool — only inbound messages set the reply target

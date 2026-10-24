@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { WhatsAppPiLogger } from '../../src/services/whatsapp-pi.logger.ts';
+import { WhatsAppNgLogger } from '../../src/services/whatsapp-ng.logger.ts';
 
-describe('WhatsAppPiLogger', () => {
+describe('WhatsAppNgLogger', () => {
     afterEach(() => {
         vi.restoreAllMocks();
     });
@@ -10,11 +10,11 @@ describe('WhatsAppPiLogger', () => {
         const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        const logger = new WhatsAppPiLogger(false);
+        const logger = new WhatsAppNgLogger(false);
 
-        logger.log('[WhatsApp-Pi] log');
-        logger.warn('[WhatsApp-Pi] warn');
-        logger.error('[WhatsApp-Pi] error');
+        logger.log('[WhatsApp-NG] log');
+        logger.warn('[WhatsApp-NG] warn');
+        logger.error('[WhatsApp-NG] error');
 
         expect(logSpy).not.toHaveBeenCalled();
         expect(warnSpy).not.toHaveBeenCalled();
@@ -23,20 +23,20 @@ describe('WhatsAppPiLogger', () => {
 
     it('always writes info logs', () => {
         const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-        const logger = new WhatsAppPiLogger(false);
+        const logger = new WhatsAppNgLogger(false);
 
-        logger.info('[WhatsApp-Pi] info');
+        logger.info('[WhatsApp-NG] info');
 
-        expect(logSpy).toHaveBeenCalledWith('[WhatsApp-Pi] info');
+        expect(logSpy).toHaveBeenCalledWith('[WhatsApp-NG] info');
     });
 
     it('writes verbose logs when verbose is enabled', () => {
         const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-        const logger = new WhatsAppPiLogger(false);
+        const logger = new WhatsAppNgLogger(false);
 
         logger.setVerbose(true);
-        logger.log('[WhatsApp-Pi] verbose log');
+        logger.log('[WhatsApp-NG] verbose log');
 
-        expect(logSpy).toHaveBeenCalledWith('[WhatsApp-Pi] verbose log');
+        expect(logSpy).toHaveBeenCalledWith('[WhatsApp-NG] verbose log');
     });
 });

@@ -1,5 +1,8 @@
 # Quickstart: Testing Reaction Messages
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Purpose**: Quick reference for testing the reaction message feature
 **Created**: 2026-05-20
 **Feature**: Reaction Message Support
@@ -8,7 +11,7 @@
 
 ### Test 1: Basic Emoji Reaction
 
-1. Start the WhatsApp-Pi extension:
+1. Start the WhatsApp-NG extension:
    ```
    /whatsapp-connect
    ```

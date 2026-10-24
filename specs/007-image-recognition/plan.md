@@ -1,5 +1,8 @@
 # Implementation Plan - Image Recognition Support
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 Enable the Pi Agent to "see" images sent via WhatsApp by downloading and forwarding them as base64 attachments.
 
 ## User Review Required
@@ -14,7 +17,7 @@ Enable the Pi Agent to "see" images sent via WhatsApp by downloading and forward
 
 ### Integration
 
-#### [whatsapp-pi.ts](../../whatsapp-pi.ts)
+#### [whatsapp-ng.ts](../../whatsapp-ng.ts)
 - Update `setMessageCallback` to detect `imageMessage`.
 - Implement image downloading using `@whiskeysockets/baileys`.
 - Forward images to Pi using `pi.sendUserMessage` with content array format.
@@ -25,7 +28,7 @@ Enable the Pi Agent to "see" images sent via WhatsApp by downloading and forward
 - N/A (requires real WhatsApp interaction or heavy mocking of Baileys socket)
 
 ### Manual Verification
-1. Start `whatsapp-pi` extension.
+1. Start `whatsapp-ng` extension.
 2. Send an image to the paired WhatsApp account.
 3. Verify the agent receives the image and can describe its content.
 4. Verify captions are also forwarded.

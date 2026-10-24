@@ -15,7 +15,9 @@ const mocks = vi.hoisted(() => {
         getStatus: vi.fn().mockReturnValue('connected'),
         getAllowList: vi.fn().mockReturnValue([{ number: '+5511999998888', name: 'Ana' }]),
         getAllowedGroups: vi.fn().mockReturnValue([]),
-        setGroupJidForAuth: vi.fn()
+        setGroupJidForAuth: vi.fn(),
+        getSttConfig: vi.fn().mockReturnValue({ sttEndpoint: 'https://speech.invalid/v1', sttModel: 'original', sttEnv: 'FIXTURE_STT_KEY' }),
+        setSttConfig: vi.fn().mockResolvedValue(undefined)
     });
 
     const createWhatsAppService = () => ({
@@ -163,15 +165,16 @@ const createMockContext = () => ({
 
 const loadExtension = async () => {
     vi.resetModules();
-    const module = await import('../../whatsapp-pi.ts');
+    const module = await import('../../whatsapp-ng.ts');
     return module.default;
 };
 
-describe('whatsapp-pi extension', () => {
+describe('whatsapp-ng extension', () => {
     beforeEach(() => {
         resetI18n();
-        vi.stubEnv('WHATSAPP_PI_LOCALE', '');
+        vi.stubEnv('WHATSAPP_NG_LOCALE', '');
         mocks.reset();
+        vi.stubGlobal('__whatsappNgMigrationStarts', new Map());
         vi.clearAllMocks();
         vi.spyOn(console, 'log').mockImplementation(() => {});
         vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -185,7 +188,7 @@ describe('whatsapp-pi extension', () => {
         registerExtension(pi as any);
 
         expect(pi.flags.has('verbose')).toBe(true);
-        expect(pi.flags.has('whatsapp-pi-online')).toBe(true);
+        expect(pi.flags.has('whatsapp-ng-online')).toBe(true);
         expect(pi.flags.has('whatsapp-group')).toBe(true);
         expect(pi.commands.has('whatsapp')).toBe(true);
         expect(pi.tools.has('send_wa_message')).toBe(true);
@@ -244,6 +247,39 @@ describe('whatsapp-pi extension', () => {
         expect(mocks.whatsappService.sendContent).not.toHaveBeenCalled();
     });
 
+    it('preserves omitted STT fields on a partial tool update and returns the effective config', async () => {
+        const pi = createMockPi();
+        (await loadExtension())(pi as any);
+        const result = await pi.tools.get('configure_wa_stt').execute('partial', { sttModel: 'updated' });
+        const expected = { sttEndpoint: 'https://speech.invalid/v1', sttModel: 'updated', sttEnv: 'FIXTURE_STT_KEY' };
+        expect(result.isError).toBe(false);
+        expect(mocks.sessionManager.setSttConfig).toHaveBeenCalledWith(expected);
+        expect(JSON.parse(result.content[0].text)).toEqual({ success: true, ...expected });
+    });
+
+    it.each([{ sttEndpoint: 'http://speech.invalid' }, { sttEnv: '' }, { sttModel: 'x'.repeat(257) }])('rejects invalid STT updates without changing settings: %s', async params => {
+        const pi = createMockPi();
+        (await loadExtension())(pi as any);
+        const result = await pi.tools.get('configure_wa_stt').execute('invalid', params);
+        expect(result.isError).toBe(true);
+        expect(mocks.sessionManager.setSttConfig).not.toHaveBeenCalled();
+    });
+
+    it('rejects incomplete first-time STT setup without persisting it', async () => {
+        mocks.sessionManager.getSttConfig.mockReturnValue({} as any);
+        const pi = createMockPi();
+        (await loadExtension())(pi as any);
+        expect((await pi.tools.get('configure_wa_stt').execute('incomplete', { sttModel: 'fixture' })).isError).toBe(true);
+        expect(mocks.sessionManager.setSttConfig).not.toHaveBeenCalled();
+    });
+
+    it.each([{}, { sttEndpoint: '', sttModel: '', sttEnv: '' }])('can explicitly select local STT with %s', async params => {
+        const pi = createMockPi();
+        (await loadExtension())(pi as any);
+        expect((await pi.tools.get('configure_wa_stt').execute('clear', params)).isError).toBe(false);
+        expect(mocks.sessionManager.setSttConfig).toHaveBeenCalledWith(params);
+    });
+
     it('does not call the removed pi.events i18n API', async () => {
         const registerExtension = await loadExtension();
         const pi = {
@@ -267,7 +303,7 @@ describe('whatsapp-pi extension', () => {
         ctx.sessionManager.getEntries.mockReturnValue([
             {
                 type: 'custom',
-                customType: 'whatsapp-state',
+                customType: 'whatsapp-ng-state',
                 data: {
                     status: 'connected',
                     allowList: [{ number: '+5511999998888', name: 'Ana' }]
@@ -288,6 +324,53 @@ describe('whatsapp-pi extension', () => {
         expect(pi.exec).not.toHaveBeenCalled();
     });
 
+    it('does not import legacy session entries into the independent namespace', async () => {
+        const registerExtension = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext();
+        ctx.sessionManager.getEntries.mockReturnValue([{ type: 'custom', customType: 'whatsapp-state', data: { status: 'connected', allowList: [{ number: '+15550000009' }] } }]);
+        registerExtension(pi as any);
+        await pi.handlers.get('session_start')!({ reason: 'manual' }, ctx);
+        expect(mocks.sessionManager.addNumber).not.toHaveBeenCalled();
+        expect(mocks.sessionManager.setStatus).not.toHaveBeenCalled();
+    });
+
+    it('does not replay a successful migration on new sessions or extension recreation', async () => {
+        const register = await loadExtension(); const pi = createMockPi();
+        pi.getFlag.mockImplementation(name => name === 'whatsapp-ng-migrate-from' ? '/synthetic-source' : false);
+        const { StateMigrationService: first } = await import('../../src/services/state-migration.service.ts');
+        const queue = vi.spyOn(first, 'queue').mockResolvedValueOnce(undefined).mockRejectedValue(new Error('source no longer exists'));
+        const run = vi.spyOn(first, 'runPending').mockResolvedValue(true);
+        try {
+            register(pi as any);
+            await pi.handlers.get('session_start')!({ reason: 'startup' }, createMockContext());
+            await pi.handlers.get('session_start')!({ reason: 'new' }, createMockContext());
+            expect(queue).toHaveBeenCalledOnce(); expect(run).toHaveBeenCalledOnce();
+        } finally { queue.mockRestore(); run.mockRestore(); }
+        const registerAgain = await loadExtension(); const next = createMockPi();
+        next.getFlag.mockImplementation(name => name === 'whatsapp-ng-migrate-from' ? '/synthetic-source' : false);
+        const { StateMigrationService: fresh } = await import('../../src/services/state-migration.service.ts');
+        const queueAgain = vi.spyOn(fresh, 'queue').mockRejectedValue(new Error('must not queue after recreation'));
+        const runAgain = vi.spyOn(fresh, 'runPending').mockRejectedValue(new Error('must not migrate after recreation'));
+        try {
+            registerAgain(next as any);
+            await next.handlers.get('session_start')!({ reason: 'resume' }, createMockContext());
+            expect(queueAgain).not.toHaveBeenCalled(); expect(runAgain).not.toHaveBeenCalled();
+        } finally { queueAgain.mockRestore(); runAgain.mockRestore(); }
+    });
+
+    it('blocks all tools and the command when startup migration fails', async () => {
+        const registerExtension = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext();
+        const { StateMigrationService } = await import('../../src/services/state-migration.service.ts');
+        const run = vi.spyOn(StateMigrationService, 'runPending').mockRejectedValue(new Error('fixture migration blocked'));
+        try {
+            registerExtension(pi as any);
+            await expect(pi.handlers.get('session_start')!({ reason: 'manual' }, ctx)).rejects.toThrow('fixture migration blocked');
+            expect(mocks.sessionManager.ensureInitialized).not.toHaveBeenCalled();
+            expect(mocks.whatsappService.start).not.toHaveBeenCalled();
+            for (const tool of pi.tools.values()) await expect(tool.execute('blocked', {})).rejects.toThrow('fixture migration blocked');
+            await expect(pi.commands.get('whatsapp').handler('', ctx)).rejects.toThrow('fixture migration blocked');
+        } finally { run.mockRestore(); }
+    });
+
     it('preserves saved connected status when auto-connect is enabled and credentials exist', async () => {
         const registerExtension = await loadExtension();
         const pi = createMockPi();
@@ -297,7 +380,7 @@ describe('whatsapp-pi extension', () => {
         ctx.sessionManager.getEntries.mockReturnValue([
             {
                 type: 'custom',
-                customType: 'whatsapp-state',
+                customType: 'whatsapp-ng-state',
                 data: {
                     status: 'connected',
                     allowList: []
@@ -367,7 +450,7 @@ describe('whatsapp-pi extension', () => {
         ctx.sessionManager.getEntries.mockReturnValue([
             {
                 type: 'custom',
-                customType: 'whatsapp-state',
+                customType: 'whatsapp-ng-state',
                 data: {
                     status: 'connected',
                     allowList: []
@@ -422,6 +505,28 @@ describe('whatsapp-pi extension', () => {
         await pi.handlers.get('message_start')!({ message: { role: 'user', content: [{ type: 'text', text: submitted }] } }, ctx);
         await pi.handlers.get('message_start')!({ message: { role: 'assistant', content: [] } }, ctx);
         expect(mocks.whatsappService.sendPresence).toHaveBeenCalledWith('5511999998888@s.whatsapp.net', 'composing');
+    });
+
+    it('provides audio with a live session fence and does not inject stale transcription', async () => {
+        const registerExtension = await loadExtension();
+        const pi = createMockPi();
+        const ctx = createMockContext();
+        registerExtension(pi as any);
+        mocks.extractIncomingText.mockReturnValue({ kind: 'audio', text: '[Audio Message]', audioMessage: {} } as any);
+        let captured: { isCurrent: () => boolean } | undefined;
+        let finish!: () => void;
+        mocks.incomingMediaService.process.mockImplementationOnce((_resolved: any, _name: string, options: any) => {
+            captured = options;
+            return new Promise(resolve => { finish = () => resolve({ text: 'late transcription' }); });
+        });
+        const callback = mocks.whatsappService.setMessageCallback.mock.calls[0][0];
+        const pending = callback({ key: { id: 'AUDIO', remoteJid: '15550000001@s.whatsapp.net', fromMe: false }, message: {}, pushName: 'Fixture' });
+        expect(captured?.isCurrent()).toBe(true);
+        await pi.handlers.get('session_before_switch')!({}, ctx);
+        expect(captured?.isCurrent()).toBe(false);
+        finish();
+        await pending;
+        expect(pi.sendUserMessage).not.toHaveBeenCalled();
     });
 
     it('executes /compact commands received from WhatsApp', async () => {

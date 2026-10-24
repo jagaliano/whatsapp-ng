@@ -74,10 +74,10 @@ describe('WhatsAppService console filtering', () => {
         await service.start();
 
         console.error('Failed to decrypt message with any known session...');
-        console.error('[WhatsApp-Pi] real runtime error');
+        console.error('[WhatsApp-NG] real runtime error');
 
         expect(errorSpy).toHaveBeenCalledTimes(1);
-        expect(errorSpy).toHaveBeenCalledWith('[WhatsApp-Pi] real runtime error');
+        expect(errorSpy).toHaveBeenCalledWith('[WhatsApp-NG] real runtime error');
 
         await service.stop();
         errorSpy.mockRestore();

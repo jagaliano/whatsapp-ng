@@ -19,7 +19,7 @@ No recipient number, account identifier, message/request IDs, credentials, raw a
 
 Unlike M2's preliminary linked-dependency probe, this run installed the local tarball and its dependencies into a fresh temporary consumer using `npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund`. It installed 92 production packages and no physical copies of the three host peers. Its own production audit reported zero findings.
 
-Resolved direct/native selections were Baileys 7.0.0-rc14, LiteParse 2.15.1 and the Darwin x64 LiteParse optional package 2.15.1. The actual Pi resource loader registered seven tools and `/whatsapp` with zero errors/warnings.
+Resolved direct/native selections were Baileys 7.0.0-rc14, LiteParse 2.15.1 and the macOS LiteParse optional package 2.15.1. The actual Pi resource loader registered seven tools and `/whatsapp` with zero errors/warnings.
 
 Checks against the installed package's actual storage classes passed:
 
@@ -105,7 +105,7 @@ The final full gate passed after drafting the closure; receipt-only updates then
 
 ## Remaining boundaries
 
-The final evidence qualifies one direct chat on Darwin x86_64 / Node 26.12.0, not production stability, group/per-participant receipts, large-history behavior, every device/privacy setting or a complete agent-mediated inbound conversation. Earlier unknown/unreadable outcomes remain recorded; relinking preceded fresh readability but does not diagnose the old failure or repair old placeholders. Client confirmation and observed protocol/storage results are reported separately.
+The final evidence qualifies one direct chat on macOS / Node 26.12.0, not production stability, group/per-participant receipts, large-history behavior, every device/privacy setting or a complete agent-mediated inbound conversation. Earlier unknown/unreadable outcomes remain recorded; relinking preceded fresh readability but does not diagnose the old failure or repair old placeholders. Client confirmation and observed protocol/storage results are reported separately.
 
 The package remains private/unpublished. At M4 closure, M1 npm-account readiness, remaining M3 managed-install/removal/exclusivity/platform qualification and M5 publication/stable promotion remained separately gated. Subsequent M1 account verification is recorded in plan section 16. This paragraph describes the historical M4 checkpoint; subsequent M3 work is recorded below. M4 live evidence and its review do not attest new runtime bytes or authorize publication.
 
@@ -122,7 +122,7 @@ The owner authorized a dedicated guarded-profile reliability slice, guarded conn
 
 ### Final platform/artifact checks
 
-| Check | macOS x86_64 | Linux amd64 |
+| Check | macOS | Linux amd64 |
 |---|---|---|
 | Runtime | Darwin, Node 26.12.0, Pi 1.3.0 | Disposable Node 26.12.1 / Pi 1.3.0 container; FFmpeg 5.1.9, Tesseract 5.3.0; zero host mounts |
 | Repository/native tests | **466 passed / 49 files** | **466 passed / 49 files** |

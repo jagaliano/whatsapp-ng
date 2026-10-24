@@ -9,6 +9,9 @@ deepened: 2026-10-21
 
 # Implementation Plan: Baileys Capability Roadmap
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Feature**: `036-baileys-capability-roadmap` | **Spec**: [spec.md](spec.md) | **Tasks**: [tasks.md](tasks.md)
 **Implementation status**: Phases 1–2 (U1–U7) implemented and validated. Phase 2 is on `feat/baileys-everyday-usefulness`, based on `948f539`; the fork owner subsequently authorized committing, pushing to the fork and opening an upstream PR dependent on Phase 1 PR #14. This is publication approval, not upstream maintainer approval. Phase 3 is implemented on `feat/baileys-conversation-fidelity` from `875ad9e`; requested independent review/corrections, final automated validation and representative authorized live checks are complete with the explicit history/receipt limits below. `PR3.md` is a local ignored handoff. After that stop gate, the fork owner separately authorized committing, pushing to the fork and opening an upstream PR dependent on PRs #14 and #15. This is fork publication approval, not upstream maintainer approval.
 
@@ -21,7 +24,7 @@ deepened: 2026-10-21
 - Typed history/lifecycle handlers bypass agent and media processing. Observed receipts remain per participant in groups; edits, reactions, remote/local deletion and before-base updates reconcile within bounded state. Admission floors prevent protected content resurrection under pressure. No outbound destructive tools were added.
 - README documents archive limits, degraded recovery and rollback's omission of post-migration records in the old-code view. Automated migration tests use temporary data only; no real rollback or auth migration has been performed.
 - Pre-review checkpoint passed 383 tests across 42 files, lint/typecheck/whitespace. Final post-correction validation passed **397 tests across 43 files**, `npm run lint`, `npm run typecheck` and `git diff --check`, all with temporary `HOME` and `PI_CODING_AGENT_DIR`. No build script is declared.
-- Isolated `pi --mode rpc --no-session --no-extensions --no-skills --no-prompt-templates --no-themes -e ./whatsapp-pi.ts` returned a successful `get_state` response without credentials or auto-connect. Repeated after the seven review corrections; the final ownership guard has direct regression/full-suite coverage.
+- Isolated `pi --mode rpc --no-session --no-extensions --no-skills --no-prompt-templates --no-themes -e ./whatsapp-ng.ts` returned a successful `get_state` response without credentials or auto-connect. Repeated after the seven review corrections; the final ownership guard has direct regression/full-suite coverage.
 - Added test suites cover migration/restart, retention, profile/account/intent lifetimes, archive-backed recents/cursors, native post-restart quote serialization, history request state, tool modes, typed lifecycle and source-review corrections. A preexisting 100 ms FIFO fixture deadline flaked under the expanded parallel suite; the fixture now directly asserts `O_NONBLOCK` and retains a bounded, scheduling-tolerant watchdog/unblock. No media runtime behavior changed for that fixture.
 
 #### Phase 3 independent review and corrections
@@ -59,7 +62,7 @@ The local PR handoff is `/PR3.md`, ignored alongside earlier drafts. Implementat
 - U6 adds native scoped quotes to text/media tools and the existing reply UI. Quotes preserve observed transport addresses, revalidate retained targets before send, reject missing/deleted/expired/ambiguous/cross-chat payloads and record the quote ID. Minimal raw-cache deletion invalidation supports quote safety; full lifecycle fidelity remains Phase 3.
 - U7 adds audio/PTT/video, shared existing FFmpeg executable resolution, compatible pass-through and bounded codec conversion. Child abort/timeout waits for exit; converted size is checked. No new dependencies, package upgrades, TTS or remote fetching.
 - Final isolated validation: `npm test` — **345 passed across 34 files**; `npm run lint` — passed; `npm run typecheck` — passed; `git diff --check` — passed. Test commands used temporary `HOME` and `PI_CODING_AGENT_DIR`. No build script is declared. Real FFmpeg codec and native Baileys contract cases ran on this host, not just fake sockets.
-- Isolated startup: `pi --mode rpc --no-session --no-extensions --no-skills --no-prompt-templates --no-themes -e ./whatsapp-pi.ts` returned a successful `get_state` response without credentials/auto-connect. An active LSP error probe reported zero errors; eight silent-on-clean paths were unconfirmed, so the successful declared typecheck is the authoritative project check.
+- Isolated startup: `pi --mode rpc --no-session --no-extensions --no-skills --no-prompt-templates --no-themes -e ./whatsapp-ng.ts` returned a successful `get_state` response without credentials/auto-connect. An active LSP error probe reported zero errors; eight silent-on-clean paths were unconfirmed, so the successful declared typecheck is the authoritative project check.
 
 #### Phase 2 independent review
 
@@ -91,7 +94,7 @@ Recipient receipt events were not captured; acceptance alone is not treated as d
 - Sidecar compatibility: isolated `pi -e` probes covered text, image, policy blocking, transformed-content fail-closed behavior and queued chats. Declared SDK `0.73.1` is additionally exercised offline by `tests/unit/pi-routing.compatibility.test.ts`; runtime host `pi --version` reports `1.3.0`.
 - Ownership activates only for observed matching user inputs; snapshots bind destinations through tool execution. Post-tool mirroring, concurrent send suppression, delivery-unknown suppression, retries, terminal/multi-chat ambiguity, aliases and reset/slow-media cleanup have regression fixtures.
 - Latest post-review commands: `npm test` — **294 passed in 28 files**; `npm run lint` — passed; `npm run typecheck` — passed; `git diff --check` — passed. Test runs used isolated temporary `HOME` and `PI_CODING_AGENT_DIR` directories.
-- Isolated startup: `pi --mode rpc --no-session --no-extensions --no-skills --no-prompt-templates --no-themes -e ./whatsapp-pi.ts`, with temporary `HOME` and `PI_CODING_AGENT_DIR`, returned a successful `get_state` response.
+- Isolated startup: `pi --mode rpc --no-session --no-extensions --no-skills --no-prompt-templates --no-themes -e ./whatsapp-ng.ts`, with temporary `HOME` and `PI_CODING_AGENT_DIR`, returned a successful `get_state` response.
 - Active LSP checks were run; inferred-test mock typing was corrected. Auxiliary pattern warnings include existing code and copy-before-reverse false positives; no blanket clean-LSP claim is made.
 - Independent source review subsequently completed with `openai-codex/gpt-6.1-sol`; the reviewer was read-only and had no command-execution tool. Parent-run regression tests reproduced the reported runtime failures before correction. See the correction record below.
 - Not run: live-account delivery/rendering and interactive TUI visual checks; no live-account operations were authorized. SDK/lifecycle fixtures are not evidence of live WhatsApp delivery.
@@ -105,11 +108,11 @@ Recipient receipt events were not captured; acceptance alone is not treated as d
 4. **P2, ordinary π-ending input:** restrict legacy branding rejection to `fromMe`; `Calculate 2π` from an allowed contact is recorded and processed, and owned-echo regression coverage remains.
 5. **P2, stale specification:** updated spec approval history/status and the approved sidecar deviation; later phases remain unauthorized. No upstream maintainer approval is implied.
 
-All five findings were addressed locally; the initial reviewer verdict is not represented as a post-fix approval. Post-fix validation passed: 294 tests in 28 files, lint, typecheck and `git diff --check`. Final isolated `pi --mode rpc --no-session --no-extensions --no-skills --no-prompt-templates --no-themes -e ./whatsapp-pi.ts` startup returned a successful `get_state` response. The active LSP probe reported zero errors, but seven silent-on-clean paths were unconfirmed; the successful declared typecheck is the authoritative project check. Routing scope includes session generation so returning to the same account cannot reactivate an old response epoch.
+All five findings were addressed locally; the initial reviewer verdict is not represented as a post-fix approval. Post-fix validation passed: 294 tests in 28 files, lint, typecheck and `git diff --check`. Final isolated `pi --mode rpc --no-session --no-extensions --no-skills --no-prompt-templates --no-themes -e ./whatsapp-ng.ts` startup returned a successful `get_state` response. The active LSP probe reported zero errors, but seven silent-on-clean paths were unconfirmed; the successful declared typecheck is the authoritative project check. Routing scope includes session generation so returning to the same account cannot reactivate an old response epoch.
 
 The local first-contact PR draft is `PR1.md`, ignored by `/PR1.md` in `.gitignore`. After implementation and review, the fork owner authorized committing Phase 1, pushing the feature branch to the fork, and opening an upstream PR. This does not authorize later implementation phases or imply upstream approval.
 
-**Target**: `jagaliano/whatsapp-pi`, based on upstream commit `9e12203`, extension `1.0.71`, installed `baileys@7.0.0-rc14`.
+**Target**: `legacy contribution fork`, based on upstream commit `9e12203`, extension `1.0.71`, installed `baileys@7.0.0-rc14`.
 
 ## Summary
 
@@ -130,7 +133,7 @@ The user's chosen trust model is unchanged: allowed chats share one Pi conversat
 - TypeScript in strict mode, ES2022, NodeNext modules, `.js` local imports in source; tests follow existing `.ts` imports.
 - Existing runtime dependencies remain unchanged: Baileys, TypeBox, Pino, FFmpeg, Whisper, LiteParse. No new database, package, SDK orchestration, or generic event framework.
 - Class-based services own state and side effects; interfaces/discriminated unions describe contracts. Follow the four-space service style, existing file naming, constructor injection, small methods, and async/await. Do not copy existing `any` casts into new boundaries.
-- `whatsapp-pi.ts` remains the composition root: flags, Pi event handlers, tool registration, and wiring. Protocol, storage, identity, conversion, and routing state belong in focused services.
+- `<legacy-entrypoint>` remains the composition root: flags, Pi event handlers, tool registration, and wiring. Protocol, storage, identity, conversion, and routing state belong in focused services.
 - Reuse `SessionManager`, `WhatsAppService`, `MessageSender`, `ReactionSender`, `RecentsService`, `IncomingMediaService`, and `storage-path.ts`; add a service only for a distinct responsibility.
 - User-facing strings go through `src/i18n.ts`, including the existing English/Portuguese/Spanish structure. Reuse the current menu/editor flow instead of adding a UI framework.
 - The actual current storage root is resolved by `createStoragePaths()` using the plural `extensions` directory. Historical spec 035 mentions older singular paths; fresh source is authoritative. Add paths through that helper, never repeat a hard-coded home path.
@@ -178,7 +181,7 @@ The agreed scope and planning acceptance scenarios are authoritative in [spec.md
 - `src/services/recents.service.ts`: local conversation views and lookup, currently 20 messages per conversation; preview cleanup currently also destroys stored emoji/newline content.
 - `src/models/whatsapp.types.ts`: shared interfaces and selected-message/reply context.
 - `src/ui/message-reply.view.ts`: preserves the selected ID in a draft but currently sends text without Baileys quote options.
-- `tests/unit/send-wa-message.tool.test.ts`, `whatsapp-pi.message-end.test.ts`, and `whatsapp-pi.extension.test.ts`: mock Pi registration/events and cross-service behavior.
+- `tests/unit/send-wa-message.tool.test.ts`, `whatsapp-ng.message-end.test.ts`, and `whatsapp-ng.extension.test.ts`: mock Pi registration/events and cross-service behavior.
 - `tests/unit/message.sender.test.ts`: socket fakes and fake-timer retry assertions.
 - `tests/unit/recents.service.test.ts`: mocked local storage and deterministic time.
 - `.specify/memory/constitution.md`, specs 017/034/035: repository architecture and artifact conventions. Old specs are historical context, not proof of current API names.
@@ -308,7 +311,7 @@ flowchart TB
 **Goal / requirements**: Handle every relevant upsert item without history/duplicate prompts; R1, R11.
 **Dependencies**: None.
 
-**Files**: Modify `src/services/whatsapp.service.ts`, `src/models/whatsapp.types.ts`, `whatsapp-pi.ts`, `src/services/incoming-message.resolver.ts`; test `tests/unit/whatsapp.service.test.ts`, `tests/unit/incoming-message.resolver.test.ts`, `tests/unit/whatsapp-pi.extension.test.ts`.
+**Files**: Modify `src/services/whatsapp.service.ts`, `src/models/whatsapp.types.ts`, `<legacy-entrypoint>`, `src/services/incoming-message.resolver.ts`; test `tests/unit/whatsapp.service.test.ts`, `tests/unit/incoming-message.resolver.test.ts`, `tests/unit/whatsapp-ng.extension.test.ts`.
 
 **Approach / patterns**: Use Baileys typed projections including `type` and `requestId`. Deliver one normalized item per callback; iterate deterministically and isolate per-item errors. Implement the explicit ledger states/reservation/fresh-message-retry rules above, initially using provisional scoped identities until U2 adds atomic alias re-indexing. Every `requestId` resend is import-only; ordinary delayed `notify` without a request ID retains existing live eligibility. Follow existing callback/service/logger/i18n seams and preserve intentional operator-message semantics.
 
@@ -349,7 +352,7 @@ flowchart TB
 **Goal / requirements**: Complete lookup/receipt/reaction targets and stable retries; R4, R11.
 **Dependencies**: U1, U2.
 
-**Files**: Create `src/services/message-store.service.ts`; modify `src/models/whatsapp.types.ts`, `src/services/whatsapp.service.ts`, `src/services/message.sender.ts`, `src/services/reaction.sender.ts`, `whatsapp-pi.ts`; test `tests/unit/message-store.service.test.ts` (new), `tests/unit/message.sender.test.ts`, `tests/unit/reaction.sender.test.ts`, `tests/unit/whatsapp.service.test.ts`.
+**Files**: Create `src/services/message-store.service.ts`; modify `src/models/whatsapp.types.ts`, `src/services/whatsapp.service.ts`, `src/services/message.sender.ts`, `src/services/reaction.sender.ts`, `<legacy-entrypoint>`; test `tests/unit/message-store.service.test.ts` (new), `tests/unit/message.sender.test.ts`, `tests/unit/reaction.sender.test.ts`, `tests/unit/whatsapp.service.test.ts`.
 
 **Approach / patterns**: Replace the sent-ID-only cache with one bounded, memory-only raw store (500 messages, 24 hours, earlier protocol expiry), using U2's canonical indexes and immutable complete transport keys. Store only approved incoming/outgoing raw content for quotes and `getMessage`; never scan by bare ID across chats. U8 adds sanitized persistent quote projections, not raw transport secrets. Extend the sender's content/options contract to the Baileys union while retaining existing text entrypoints, branding and unbranded menu sends. Generate one outbound message ID before retry; register the extension-owned ID before transmission and reuse it on every attempt. Do not retry validation/auth/permission failures; ambiguous network acceptance reports uncertainty, not delivered/read status. Receipts/reactions use the stored full target key; missing group participant/direction cannot be guessed. Accept a single Unicode emoji grapheme, including modifier/ZWJ/flag sequences, or empty removal without a new dependency. Invalidate group metadata on both participant and group metadata updates.
 
@@ -368,7 +371,7 @@ flowchart TB
 **Goal / requirements**: Destination-safe automatic responses/tools in the shared session; R3, R11.
 **Dependencies**: U1–U3.
 
-**Files**: Create `src/services/conversation-router.service.ts`; modify `whatsapp-pi.ts`, `src/models/whatsapp.types.ts`, `src/services/whatsapp.service.ts`, `src/i18n.ts`; test `tests/unit/conversation-router.service.test.ts` (new), `tests/unit/whatsapp-pi.message-end.test.ts`, `tests/unit/send-wa-message.tool.test.ts`, `tests/unit/whatsapp-pi.extension.test.ts`.
+**Files**: Create `src/services/conversation-router.service.ts`; modify `<legacy-entrypoint>`, `src/models/whatsapp.types.ts`, `src/services/whatsapp.service.ts`, `src/i18n.ts`; test `tests/unit/conversation-router.service.test.ts` (new), `tests/unit/whatsapp-ng.message-end.test.ts`, `tests/unit/send-wa-message.tool.test.ts`, `tests/unit/whatsapp-ng.extension.test.ts`.
 
 **Approach / patterns**: First complete T034's explicit compatibility spike against the submission matrix and transition table; record the actual package/host versions and go/no-go evidence before T010. Always pass trigger-turn intent plus follow-up delivery to the candidate custom path, with observable handoff/consumption and readable TUI/RPC display. Then implement the state table in a focused router, including `turn_end`-owned final mirroring, tool-result-aware suppression, recovery epochs and historic-details non-reactivation. Do not change global queue settings, rely on `message_end` for automatic sends, or silently replace required input-policy hooks. A failed compatibility gate requires user approval of a different approach, not implementation by guesswork.
 
@@ -391,7 +394,7 @@ flowchart TB
 **Goal / requirements**: Useful local artifacts through one validated media path; R5, R11.
 **Dependencies**: Phase 1 gate.
 
-**Files**: Create `src/services/outgoing-media.service.ts`; modify `src/services/message.sender.ts`, `src/services/whatsapp.service.ts`, `src/models/whatsapp.types.ts`, `whatsapp-pi.ts`, `src/i18n.ts`, `README.md`; test `tests/unit/outgoing-media.service.test.ts` (new), `tests/unit/send-wa-media.tool.test.ts` (new), `tests/unit/message.sender.test.ts`, `tests/unit/whatsapp-pi.extension.test.ts`.
+**Files**: Create `src/services/outgoing-media.service.ts`; modify `src/services/message.sender.ts`, `src/services/whatsapp.service.ts`, `src/models/whatsapp.types.ts`, `<legacy-entrypoint>`, `src/i18n.ts`, `README.md`; test `tests/unit/outgoing-media.service.test.ts` (new), `tests/unit/send-wa-media.tool.test.ts` (new), `tests/unit/message.sender.test.ts`, `tests/unit/whatsapp-ng.extension.test.ts`.
 
 **Approach / patterns**: Add `send_wa_media` with local file, explicit `document`/`image` type, optional known recipient and caption. Reuse text destination/routing/results and shared send orchestration. Accept regular files resolved under the workspace or extension media root; resolve symlinks before containment checks. Reject credential/auth roots, `.env*`, private-key files, directories, missing/empty/unreadable files and paths outside approved roots. No URL/base64 input or remote fetch. Initial application upload budget: 25 MiB per file before and after conversion, explicitly not a promise of WhatsApp's limits. Validate selected media type against supported encoding/MIME; documents use an explicit filename and sensible MIME fallback. Prefer streams where supported, and never serialize file bytes into tool transcripts. File access is an egress policy, not a sandbox against other Pi tools.
 
@@ -409,7 +412,7 @@ flowchart TB
 **Goal / requirements**: Actual same-conversation WhatsApp quotes, not a local-only reply draft; R6, R11.
 **Dependencies**: U5 and the U3 message store.
 
-**Files**: Modify `src/services/message.sender.ts`, `src/services/whatsapp.service.ts`, `src/services/message-store.service.ts`, `src/models/whatsapp.types.ts`, `src/ui/message-reply.view.ts`, `src/ui/message-detail.view.ts`, `src/ui/menu.handler.ts`, `whatsapp-pi.ts`, `src/i18n.ts`, `README.md`; test `tests/unit/message-reply.view.test.ts`, `tests/unit/message-detail.view.test.ts`, `tests/unit/send-wa-message.tool.test.ts`, `tests/unit/send-wa-media.tool.test.ts`, `tests/unit/message.sender.test.ts`.
+**Files**: Modify `src/services/message.sender.ts`, `src/services/whatsapp.service.ts`, `src/services/message-store.service.ts`, `src/models/whatsapp.types.ts`, `src/ui/message-reply.view.ts`, `src/ui/message-detail.view.ts`, `src/ui/menu.handler.ts`, `<legacy-entrypoint>`, `src/i18n.ts`, `README.md`; test `tests/unit/message-reply.view.test.ts`, `tests/unit/message-detail.view.test.ts`, `tests/unit/send-wa-message.tool.test.ts`, `tests/unit/send-wa-media.tool.test.ts`, `tests/unit/message.sender.test.ts`.
 
 **Approach / patterns**: Add optional quote targeting to text/media tools, preserving existing required parameters and plain-text use. Resolve account/canonical-conversation/full-key targets via the selected-message reference or an unambiguous scoped ID; use the original retained message in Phase 2 and the validated secret-free quote projection after U8, never an invented legacy payload. Use the selected message's chat, not last conversation or a display number. Extend selected-message context only as needed for full-key lookup. The existing menu/editor composes text and cancel behavior; no new UI architecture. Until U8, targets must still exist in the running process's bounded store. Detail/reply UI explicitly indicates when age/cap eviction makes quoting unavailable. After U8, supported secret-free projections may remain quotable beyond the raw window. Missing/deleted/expired/ambiguous/cross-chat references return errors; never manufacture a raw message from stripped legacy recents or silently drop the quote.
 
@@ -426,7 +429,7 @@ flowchart TB
 **Goal / requirements**: Extend the same explicit media tool after documents/images/quotes are stable; R7, R11.
 **Dependencies**: U5, U6.
 
-**Files**: Modify `src/services/outgoing-media.service.ts`, `src/services/message.sender.ts`, `src/models/whatsapp.types.ts`, `whatsapp-pi.ts`, `src/i18n.ts`, `README.md`; test `tests/unit/outgoing-media.service.test.ts`, `tests/unit/send-wa-media.tool.test.ts`, `tests/unit/message.sender.test.ts`.
+**Files**: Modify `src/services/outgoing-media.service.ts`, `src/services/message.sender.ts`, `src/models/whatsapp.types.ts`, `<legacy-entrypoint>`, `src/i18n.ts`, `README.md`; test `tests/unit/outgoing-media.service.test.ts`, `tests/unit/send-wa-media.tool.test.ts`, `tests/unit/message.sender.test.ts`.
 
 **Approach / patterns**: Extend media types with audio/video and explicit voice-note mode. Reuse FFmpeg executable resolution, but do not copy `audio.service.ts`'s uncancellable subprocess invocation: add signal/timeout and child-exit ownership in the outgoing service. Compatible inputs send directly; otherwise convert voice notes to supported Ogg/Opus and video to MP4/H.264/AAC without shell interpolation. Budget conversion to 60 seconds and pass Baileys' 60-second `mediaUploadTimeoutMs`; the latter is not an end-to-end abort guarantee. A pre-send abort prevents transmission; after `sendMessage` starts, cancellation abandons caller waiting only, records delivery-unknown and stops blind retries while a tracked completion/receipt may still resolve. Keep files/resources alive until the subprocess exits and any Baileys consumer settles; clean only owned temporaries, never user originals. Recheck the 25 MiB output budget. No TTS, video analysis, GIF/sticker/album work.
 
@@ -445,7 +448,7 @@ flowchart TB
 **Goal / requirements**: Restart-safe lookup/transcript fidelity within explicit limits; R1, R6, R8, R11.
 **Dependencies**: Phase 2 gate; extend the U3 store rather than replace it with a parallel repository.
 
-**Files**: Modify `src/services/message-store.service.ts`, `src/services/recents.service.ts`, `src/services/storage-path.ts`, `src/services/session.manager.ts`, `src/models/whatsapp.types.ts`, `src/services/whatsapp.service.ts`, `src/ui/menu.handler.ts`, `whatsapp-pi.ts`, `src/i18n.ts`, `README.md`; test `tests/unit/message-store.service.test.ts`, `tests/unit/message-store.migration.test.ts` (new), `tests/unit/recents.service.test.ts`, `tests/unit/inbox-read-tools.test.ts`, `tests/unit/session.manager.test.ts`, `tests/unit/menu.handler.test.ts`.
+**Files**: Modify `src/services/message-store.service.ts`, `src/services/recents.service.ts`, `src/services/storage-path.ts`, `src/services/session.manager.ts`, `src/models/whatsapp.types.ts`, `src/services/whatsapp.service.ts`, `src/ui/menu.handler.ts`, `<legacy-entrypoint>`, `src/i18n.ts`, `README.md`; test `tests/unit/message-store.service.test.ts`, `tests/unit/message-store.migration.test.ts` (new), `tests/unit/recents.service.test.ts`, `tests/unit/inbox-read-tools.test.ts`, `tests/unit/session.manager.test.ts`, `tests/unit/menu.handler.test.ts`.
 
 **Approach / patterns**: Extend the U3 store with a versioned normalized archive, not a raw-envelope archive. Use a persisted random storage-profile ID bound to each relative auth-directory profile (`auth` or existing group-specific directory), plus a stored last-verified self-account marker from normal session metadata. These non-secret markers select the last-known partition before connection. With no verified marker, expose only an explicit unpaired/legacy view; do not guess account identity from a conversation's phone number. A different verified login creates/selects a different partition before any new ingest. Preserve known disconnected reads and explicit local selection of another known profile/legacy view without opening a socket.
 
@@ -475,7 +478,7 @@ Apply 1,000 records per conversation, 30-day maximum age and the 100 MiB partiti
 **Goal / requirements**: Faithful linked-device history without surprise agent/network work; R9, R11.
 **Dependencies**: U8.
 
-**Files**: Create `src/services/history-sync.service.ts`; modify `src/services/whatsapp.service.ts`, `src/services/session.manager.ts`, `src/services/message-store.service.ts`, `src/services/recents.service.ts`, `src/models/whatsapp.types.ts`, `whatsapp-pi.ts`, `src/i18n.ts`, `README.md`; test `tests/unit/history-sync.service.test.ts` (new), `tests/unit/request-wa-history.tool.test.ts` (new), `tests/unit/inbox-read-tools.test.ts`, `tests/unit/whatsapp.service.test.ts`.
+**Files**: Create `src/services/history-sync.service.ts`; modify `src/services/whatsapp.service.ts`, `src/services/session.manager.ts`, `src/services/message-store.service.ts`, `src/services/recents.service.ts`, `src/models/whatsapp.types.ts`, `<legacy-entrypoint>`, `src/i18n.ts`, `README.md`; test `tests/unit/history-sync.service.test.ts` (new), `tests/unit/request-wa-history.tool.test.ts` (new), `tests/unit/inbox-read-tools.test.ts`, `tests/unit/whatsapp.service.test.ts`.
 
 **Approach / patterns**: Subscribe to typed history-set/status events, iterate every returned message through the non-prompt import path, and ingest verified history PN/LID mappings. Keep `syncFullHistory: false` by default; an explicit bounded history setting may enable broader initial sync, still constrained by authorization, storage limits and WhatsApp availability. Do not expose synchronized contacts/chats as a new directory feature.
 
@@ -499,7 +502,7 @@ After 60 seconds without a reliably correlated terminal outcome, return partial/
 **Goal / requirements**: Accurate retained conversation state from lifecycle events; R10, R11.
 **Dependencies**: U8, U9.
 
-**Files**: Modify `src/services/whatsapp.service.ts`, `src/services/message-store.service.ts`, `src/services/recents.service.ts`, `src/services/incoming-message.resolver.ts`, `src/models/whatsapp.types.ts`, `src/ui/message-detail.view.ts`, `whatsapp-pi.ts`, `src/i18n.ts`, `README.md`; test `tests/unit/message-store.service.test.ts`, `tests/unit/whatsapp.service.lifecycle.test.ts` (new), `tests/unit/incoming-message.resolver.test.ts`, `tests/unit/message-detail.view.test.ts`, `tests/unit/inbox-read-tools.test.ts`.
+**Files**: Modify `src/services/whatsapp.service.ts`, `src/services/message-store.service.ts`, `src/services/recents.service.ts`, `src/services/incoming-message.resolver.ts`, `src/models/whatsapp.types.ts`, `src/ui/message-detail.view.ts`, `<legacy-entrypoint>`, `src/i18n.ts`, `README.md`; test `tests/unit/message-store.service.test.ts`, `tests/unit/whatsapp.service.lifecycle.test.ts` (new), `tests/unit/incoming-message.resolver.test.ts`, `tests/unit/message-detail.view.test.ts`, `tests/unit/inbox-read-tools.test.ts`.
 
 **Approach / patterns**: Handle typed `messages.update`, `messages.delete`, `messages.reaction` and `message-receipt.update` events with scoped full-key lookup. Track send acceptance separately from observed server/delivery/read/playback state; group receipt state is per participant. Receipt progression never regresses on duplicate/out-of-order events. Apply edits to current text with an edited marker; distinguish remote revoke from local removal. Remove revoked content/raw media secrets and retain minimal tombstones; derived recents and quote validation reflect that change. Reactions are per reacting participant, including removal; reconcile both dedicated events and raw reaction/protocol payloads without duplicates or ordinary agent prompts.
 

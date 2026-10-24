@@ -5,17 +5,20 @@ import { WhatsAppService } from './src/services/whatsapp.service.js';
 import { MenuHandler } from './src/ui/menu.handler.js';
 import { RecentsService } from './src/services/recents.service.js';
 import { AudioService } from './src/services/audio.service.js';
+import { createRemoteAudioTranscriber } from './src/services/remote-audio.transcriber.js';
 import { extractIncomingText } from './src/services/incoming-message.resolver.js';
 import { IncomingMediaService } from './src/services/incoming-media.service.js';
-import { WhatsAppPiLogger } from './src/services/whatsapp-pi.logger.js';
+import { WhatsAppNgLogger } from './src/services/whatsapp-ng.logger.js';
 import { ReactionSender } from './src/services/reaction.sender.js';
 import { initI18n, t } from './src/i18n.js';
 import { ConversationRouter, type RoutedContent, type RoutingSnapshot } from './src/services/conversation-router.service.js';
 import type { MessageResult, QuoteTarget, TextSendOptions } from './src/models/whatsapp.types.js';
 import { OutgoingMediaService } from './src/services/outgoing-media.service.js';
+import { StateMigrationService } from './src/services/state-migration.service.js';
+import { getDefaultStorageRoot } from './src/services/storage-path.js';
 
 const shutdownState = globalThis as typeof globalThis & {
-    __whatsappPiShutdown?: {
+    __whatsappNgShutdown?: {
         installed: boolean;
         stop?: () => Promise<void>;
     };
@@ -31,8 +34,8 @@ export default function (pi: ExtensionAPI) {
         default: false
     });
 
-    pi.registerFlag("whatsapp-pi-online", {
-        description: "Enable WhatsApp-Pi on startup",
+    pi.registerFlag("whatsapp-ng-online", {
+        description: "Enable WhatsApp-NG on startup",
         type: "boolean",
         default: false
     });
@@ -49,12 +52,23 @@ export default function (pi: ExtensionAPI) {
         default: false
     });
 
+    pi.registerFlag("whatsapp-ng-migrate-from", {
+        description: "Explicit absolute state-root source for an offline full-state move; all prior owners must be stopped.",
+        type: "string",
+        default: ""
+    });
+
+    let startupError: Error | undefined;
+    const assertStartupReady = () => {
+        if (startupError) throw startupError;
+        StateMigrationService.assertReady(getDefaultStorageRoot());
+    };
     const sessionManager = new SessionManager();
     const whatsappService = new WhatsAppService(sessionManager);
     const recentsService = new RecentsService(sessionManager);
     whatsappService.setRecentsService(recentsService);
-    const logger = new WhatsAppPiLogger(false);
-    const audioService = new AudioService(logger);
+    const logger = new WhatsAppNgLogger(false, false);
+    const audioService = new AudioService(logger, undefined, () => sessionManager.getSttConfig());
     const incomingMediaService = new IncomingMediaService(audioService, logger);
     const menuHandler = new MenuHandler(whatsappService, sessionManager, recentsService);
     let _ctx: ExtensionContext | undefined;
@@ -111,18 +125,18 @@ export default function (pi: ExtensionAPI) {
     };
 
     const installGracefulShutdownHandlers = () => {
-        shutdownState.__whatsappPiShutdown ??= { installed: false };
-        if (shutdownState.__whatsappPiShutdown.installed) {
+        shutdownState.__whatsappNgShutdown ??= { installed: false };
+        if (shutdownState.__whatsappNgShutdown.installed) {
             return;
         }
 
-        shutdownState.__whatsappPiShutdown.installed = true;
+        shutdownState.__whatsappNgShutdown.installed = true;
         
         const shutdown = async (reason: string) => {
             try {
-                await shutdownState.__whatsappPiShutdown?.stop?.();
+                await shutdownState.__whatsappNgShutdown?.stop?.();
             } catch (error) {
-                logger.error(`[WhatsApp-Pi] Graceful shutdown failed during ${reason}:`, error);
+                logger.error(`[WhatsApp-NG] Graceful shutdown failed during ${reason}:`, error);
             }
         };
 
@@ -132,6 +146,14 @@ export default function (pi: ExtensionAPI) {
 
     // Initial status setup
     pi.on("session_start", async (_event, ctx) => {
+        try {
+            const destination = getDefaultStorageRoot();
+            const source = pi.getFlag("whatsapp-ng-migrate-from");
+            await StateMigrationService.startOnce(destination, typeof source === 'string' ? source : undefined);
+        } catch (error) {
+            startupError = error instanceof Error ? error : new Error('WhatsApp-NG storage migration failed');
+            throw startupError;
+        }
         router.reset();
         _ctx = ctx;
         // Check verbose mode
@@ -143,7 +165,7 @@ export default function (pi: ExtensionAPI) {
         logger.setVerbose(isVerbose);
 
         if (isVerbose) {
-            logger.log('[WhatsApp-Pi] Verbose mode enabled - Baileys trace logs will be shown');
+            logger.log('[WhatsApp-NG] Verbose mode enabled - Baileys trace logs will be shown');
         }
         ctx.ui.setStatus('whatsapp', '| WhatsApp: Disconnected');
         whatsappService.setStatusCallback((status) => {
@@ -155,15 +177,16 @@ export default function (pi: ExtensionAPI) {
         if (boundGroupJid) {
             whatsappService.setGroupBinding(boundGroupJid);
             sessionManager.setGroupJidForAuth(boundGroupJid);
-            logger.log(`[WhatsApp-Pi] Group-only mode: bound to ${boundGroupJid}`);
+            logger.log(`[WhatsApp-NG] Group-only mode: bound to ${boundGroupJid}`);
         }
 
         whatsappService.setFullHistorySync?.(pi.getFlag("whatsapp-history-full") === true);
         await sessionManager.ensureInitialized();
         await recentsService.ensureInitialized();
+        logger.enableFileLogging?.();
         installGracefulShutdownHandlers();
-        shutdownState.__whatsappPiShutdown = {
-            installed: shutdownState.__whatsappPiShutdown?.installed ?? false,
+        shutdownState.__whatsappNgShutdown = {
+            installed: shutdownState.__whatsappNgShutdown?.installed ?? false,
             stop: async () => {
                 await whatsappService.stop();
             }
@@ -185,14 +208,14 @@ export default function (pi: ExtensionAPI) {
 
         const savedStateEntry = [...ctx.sessionManager.getEntries()]
             .reverse()
-            .find(entry => entry.type === "custom" && entry.customType === "whatsapp-state");
-        const isWhatsappPiOn = pi.getFlag("whatsapp-pi-online") === true;
+            .find(entry => entry.type === "custom" && entry.customType === "whatsapp-ng-state");
+        const isWhatsappNgOn = pi.getFlag("whatsapp-ng-online") === true;
         const registered = await sessionManager.isRegistered();
 
         if (savedStateEntry) {
             const data = (savedStateEntry as { data?: any }).data;
             if (data.status) {
-                const restoredStatus = data.status === 'connected' && !(isWhatsappPiOn && registered)
+                const restoredStatus = data.status === 'connected' && !(isWhatsappNgOn && registered)
                     ? 'disconnected'
                     : data.status;
                 await sessionManager.setStatus(restoredStatus);
@@ -217,7 +240,7 @@ export default function (pi: ExtensionAPI) {
             }
         }
 
-        if (isWhatsappPiOn && registered) {
+        if (isWhatsappNgOn && registered) {
             ctx.ui.setStatus('whatsapp', '| WhatsApp: Auto-connecting...');
 
             // Retry logic (max 3 attempts, 3s delay)
@@ -240,7 +263,7 @@ export default function (pi: ExtensionAPI) {
             };
 
             await tryConnect();
-        } else if (isWhatsappPiOn) {
+        } else if (isWhatsappNgOn) {
             ctx.ui.notify('WhatsApp: Auto-connect requested, but no saved WhatsApp credentials were found. Use Connect WhatsApp once to scan the QR code.', 'warning');
         } else {
             ctx.ui.notify('WhatsApp: Use Connect / Reconnect WhatsApp. QR code will appear only if pairing is needed.', 'info');
@@ -273,7 +296,7 @@ export default function (pi: ExtensionAPI) {
             && canonicalProvided && canonicalProvided === canonicalConversation(lastRemoteJid)
             && providedJid !== lastRemoteJid
         ) {
-            logger.log(`[WhatsApp-Pi] send_wa_message: using active remoteJid ${lastRemoteJid} instead of reconstructed JID ${providedJid}`);
+            logger.log(`[WhatsApp-NG] send_wa_message: using active remoteJid ${lastRemoteJid} instead of reconstructed JID ${providedJid}`);
             return lastRemoteJid;
         }
 
@@ -297,11 +320,16 @@ export default function (pi: ExtensionAPI) {
 
         const resolved = extractIncomingText(msg.message, recentsService);
         if (resolved.kind === 'system') {
-            logger.log(`[WhatsApp-Pi] ${pushName} (${sender}): ${resolved.text}`);
+            logger.log(`[WhatsApp-NG] ${pushName} (${sender}): ${resolved.text}`);
             return;
         }
 
-        const { text, imageBuffer, imageMimeType } = await incomingMediaService.process(resolved, pushName);
+        const processed = resolved.kind === 'audio'
+            ? await incomingMediaService.process(resolved, pushName, {
+                isCurrent: () => runtimeId === router.getRuntimeId() && whatsappService.isSessionContextCurrent(msg.sessionContext)
+            })
+            : await incomingMediaService.process(resolved, pushName);
+        const { text, imageBuffer, imageMimeType } = processed;
         if (runtimeId !== router.getRuntimeId() || !whatsappService.isSessionContextCurrent(msg.sessionContext)) {
             if (whatsappService.isSessionContextCurrent(msg.sessionContext)) whatsappService.markIncomingProcessing(msg.key, 'failed');
             return;
@@ -319,13 +347,13 @@ export default function (pi: ExtensionAPI) {
             fullText = `${quotePrefix}\n\n${text}`;
         }
 
-        logger.log(`[WhatsApp-Pi] ${messageHeader} ${fullText}`);
+        logger.log(`[WhatsApp-NG] ${messageHeader} ${fullText}`);
 
         whatsappService.markIncomingProcessing?.(msg.key, 'prepared');
 
         // Commands must not also become ordinary agent prompts.
         if (text.trim().toLowerCase().startsWith('/compact')) {
-            logger.log(`[WhatsApp-Pi] Session compact requested by ${pushName}.`);
+            logger.log(`[WhatsApp-NG] Session compact requested by ${pushName}.`);
 
             if (_ctx) {
                 router.reset();
@@ -336,7 +364,7 @@ export default function (pi: ExtensionAPI) {
         }
 
         if (text.trim().toLowerCase().startsWith('/abort')) {
-            logger.log(`[WhatsApp-Pi] Abort requested by ${pushName}.`);
+            logger.log(`[WhatsApp-NG] Abort requested by ${pushName}.`);
             if (_ctx) {
                 router.reset();
                 _ctx.abort();
@@ -377,6 +405,7 @@ export default function (pi: ExtensionAPI) {
             quote: Type.Optional(quoteSchema)
         }),
         async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+            assertStartupReady();
             // Resolve JID: explicit jid/recipient_jid, unless it is a reconstructed
             // version of the active chat; otherwise lastRemoteJid > operatorJid.
             const resolvedJid = resolveToolRecipientJid(params);
@@ -437,6 +466,7 @@ export default function (pi: ExtensionAPI) {
             quote: Type.Optional(quoteSchema)
         }),
         async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+            assertStartupReady();
             const mediaPath = params.path;
             const mediaType = params.type;
             const quote = quoteTarget(params.quote);
@@ -504,6 +534,7 @@ export default function (pi: ExtensionAPI) {
             participant: Type.Optional(Type.String({ description: "Original group participant JID, when needed to disambiguate its key." }))
         }),
         async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+            assertStartupReady();
             // Get socket from WhatsApp service
             const socket = whatsappService.getSocket();
             if (!socket) {
@@ -546,6 +577,7 @@ export default function (pi: ExtensionAPI) {
             requestId: Type.Optional(Type.String({ description: "Retained request ID for local status, or omit to list statuses." }))
         }),
         async execute(_id, params) {
+            assertStartupReady();
             try {
                 const result = params.mode === 'status' ? await whatsappService.getHistoryStatus(params.requestId)
                     : params.jid ? await whatsappService.requestHistory(params.jid, params.count ?? 50)
@@ -570,6 +602,7 @@ export default function (pi: ExtensionAPI) {
             scope: Type.Optional(Type.String({ description: "Explicit local history scope ID; available scopes are included in the result. Never fetches from WhatsApp." }))
         }),
         async execute(_toolCallId, params) {
+            assertStartupReady();
             try {
                 const conversations = await recentsService.getRecentConversations(params.scope);
                 let filtered = conversations;
@@ -610,6 +643,7 @@ export default function (pi: ExtensionAPI) {
             cursor: Type.Optional(Type.String({ description: "Opaque cursor from the previous local page. No network history request is made." }))
         }),
         async execute(_toolCallId, params) {
+            assertStartupReady();
             if (!params.senderNumber || !params.senderNumber.trim()) {
                 return {
                     isError: true,
@@ -650,6 +684,7 @@ export default function (pi: ExtensionAPI) {
             scope: Type.Optional(Type.String({ description: "Explicit local history scope ID." }))
         }),
         async execute(_toolCallId, params) {
+            assertStartupReady();
             try {
                 const conversations = await recentsService.getRecentConversations(params.scope);
                 const since = typeof params.sinceTimestamp === 'number' ? params.sinceTimestamp : 0;
@@ -671,15 +706,51 @@ export default function (pi: ExtensionAPI) {
         }
     });
 
+    pi.registerTool({
+        name: "configure_wa_stt",
+        label: "Configure WhatsApp STT",
+        description: "Update remote speech-to-text settings, preserving omitted fields. Initial setup requires endpoint, model and API-key environment variable name. Pass {} to restore local transcription. Persists to config.",
+        promptSnippet: "configure_wa_stt({sttEndpoint, sttModel, sttEnv}) - Set remote STT config (sttEnv is the env-var name, e.g. GROQ_API_KEY).",
+        parameters: Type.Object({
+            sttEndpoint: Type.Optional(Type.String({ description: "OpenAI-compatible HTTPS base URL (e.g. https://api.groq.com/openai/v1)" })),
+            sttModel: Type.Optional(Type.String({ description: "Model name (e.g. whisper-large-v3-turbo)" })),
+            sttEnv: Type.Optional(Type.String({ description: "Environment variable name that holds the API key (e.g. GROQ_API_KEY)" }))
+        }),
+        async execute(_toolCallId, params) {
+            assertStartupReady();
+            try {
+                const updates = Object.fromEntries(Object.entries({
+                    sttEndpoint: params.sttEndpoint, sttModel: params.sttModel, sttEnv: params.sttEnv
+                }).filter(([, value]) => value !== undefined));
+                const config = Object.keys(updates).length ? { ...sessionManager.getSttConfig(), ...updates } : {};
+                // Construction validates only configuration, without reading a key or uploading audio.
+                createRemoteAudioTranscriber(config);
+                await sessionManager.setSttConfig(config);
+                return {
+                    isError: false,
+                    details: undefined,
+                    content: [{ type: "text" as const, text: JSON.stringify({ success: true, ...config }) }]
+                };
+            } catch (error) {
+                return {
+                    isError: true,
+                    details: undefined,
+                    content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }) }]
+                };
+            }
+        }
+    });
+
     // Register commands
     pi.registerCommand("whatsapp", {
         description: t("command.whatsapp.description"),
         handler: async (args, ctx) => {
+            assertStartupReady();
             _ctx = ctx;
             await menuHandler.handleCommand(ctx);
 
             // Persist state after changes
-            pi.appendEntry("whatsapp-state", {
+            pi.appendEntry("whatsapp-ng-state", {
                 status: sessionManager.getStatus(),
                 allowList: sessionManager.getAllowList(),
                 allowedGroups: sessionManager.getAllowedGroups()
@@ -724,7 +795,7 @@ export default function (pi: ExtensionAPI) {
 
     pi.on("session_shutdown", async () => {
         router.reset();
-        logger.log("[WhatsApp-Pi] Session shutdown detected. Stopping WhatsApp service...");
+        logger.log("[WhatsApp-NG] Session shutdown detected. Stopping WhatsApp service...");
         await whatsappService.stop();
     });
 }

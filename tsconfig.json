@@ -13,6 +13,6 @@
     "isolatedModules": true,
     "types": ["node"]
   },
-  "include": ["whatsapp-pi.ts", "src/**/*"],
+  "include": ["whatsapp-ng.ts", "src/**/*"],
   "exclude": ["node_modules", "tests"]
 }

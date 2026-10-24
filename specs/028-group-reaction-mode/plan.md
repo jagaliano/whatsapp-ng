@@ -1,5 +1,8 @@
 # Implementation Plan: Allowed Group Reaction Mode
 
+> Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
+
+
 **Branch**: `028-group-reaction-mode` | **Date**: 2026-05-11 | **Spec**: `specs/028-group-reaction-mode/spec.md`
 **Input**: Feature specification from `/specs/028-group-reaction-mode/spec.md`
 
@@ -11,7 +14,7 @@ Add per-allowed-group reaction mode with two behaviors: passive (reply only when
 
 **Language/Version**: TypeScript 5.x / Node.js 20+  
 **Primary Dependencies**: `@whiskeysockets/baileys`, `pino`, `qrcode-terminal`, `pi-agent-sdk`  
-**Storage**: Local file config in `~/.pi/whatsapp-pi/config.json`  
+**Storage**: Local file config in `<legacy-original-data-root>/config.json`
 **Testing**: Vitest  
 **Target Platform**: Desktop Node.js CLI/TUI extension  
 **Project Type**: desktop CLI/TUI extension  
