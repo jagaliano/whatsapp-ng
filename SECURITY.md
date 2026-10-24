@@ -10,7 +10,7 @@ Ordinary non-sensitive bugs belong in [issues](https://github.com/jagaliano/what
 
 ## Current candidate and limitations
 
-`whatsapp-ng@1.1.0-rc.1` is an unpublished prerelease, not a supported stable release. The package remains private until final package checks and maintainer approval.
+`whatsapp-ng@1.1.0-rc.1` is an experimental prerelease targeting the `next` tag, not a supported stable release.
 
 Development targets Node 26.x and Pi 1.4.0. Recorded source validation passed 585 tests on macOS with two workers, including native PDF/OCR and media-conversion checks. Earlier Linux package tests used Pi 1.3.0 and do not establish support for the updated package. Live tests cover selected direct-chat behavior, including WhatsApp voice transcription through Groq; Windows, service installers and broader group/history/receipt behavior remain unverified.
 

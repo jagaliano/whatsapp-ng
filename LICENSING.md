@@ -18,4 +18,4 @@ This owner decision supersedes the earlier choice to wait for upstream clarifica
 
 ## Publication boundaries
 
-The candidate is not published to npm and remains `private: true`. Publication requires maintainer approval and checks of the final package. The MIT license permits use of the code; it does not grant access to maintainer accounts or authority to publish under the project's package identity.
+The maintainer controls publication of `whatsapp-ng` and its prerelease tags. The MIT license permits use of the code; it does not grant access to maintainer accounts or authority to publish under the project's package identity.

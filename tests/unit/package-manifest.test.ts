@@ -48,8 +48,8 @@ describe('maintained candidate packaging', () => {
         }
     });
 
-    it('keeps publication blocked while recording the selected prerelease tag', () => {
-        expect(manifest.private).toBe(true);
+    it('permits the approved public prerelease under the next tag', () => {
+        expect(manifest.private).toBe(false);
         expect(manifest.publishConfig).toEqual({ tag: 'next', access: 'public' });
     });
 

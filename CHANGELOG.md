@@ -1,8 +1,8 @@
 # Changelog
 
-## 1.1.0-rc.1 candidate (unreleased)
+## 1.1.0-rc.1
 
-Maintained continuation of the [upstream project](README.md#fork-and-legacy-names), preserving original history, attribution and MIT notices. Publication remains blocked by `private: true`; the intended prerelease tag is `next`, not `latest`.
+Maintained continuation of the [upstream project](README.md#fork-and-legacy-names), preserving original history, attribution and MIT notices. The prerelease tag is `next`, not `latest`.
 
 ### Messaging foundation
 
@@ -41,7 +41,7 @@ Maintained continuation of the [upstream project](README.md#fork-and-legacy-name
 - Pin Baileys 7.0.0-rc14 and upgrade LiteParse from 2.15.1 to 2.17.0; retain lazy native PDF loading and bounded parsing/cleanup/fallback.
 - Remove the FFmpeg npm binary/downloader dependency. Use user-installed FFmpeg through `FFMPEG_PATH` or `PATH`.
 - Use wildcard host-provided Pi/TUI/TypeBox peers and align the SDK/AI/TUI development cohort and lockfile with Pi 1.4.0; retain the host's independent TypeBox 1.3.27 version and refresh test tooling.
-- Include MIT terms, original/yearless upstream attribution, the owner's 2026 notice and private security reporting. No transport upgrade/protocol patch or npm publication.
+- Include MIT terms, original/yearless upstream attribution, the owner's 2026 notice and private security reporting. No transport upgrade or protocol patch.
 
 ### Remote transcription
 
@@ -65,4 +65,4 @@ Maintained continuation of the [upstream project](README.md#fork-and-legacy-name
 - Live direct-chat checks include media/native replies, saved-session reconnects, selected history/receipt behavior and a real WhatsApp voice note transcribed through Groq into Pi. These checks do not establish general recognition accuracy or compatibility with every provider.
 - Earlier Linux package and storage-migration tests used Pi 1.3.0. The updated package needs fresh Linux testing; Windows, service installers and broader group/history/receipt behavior remain unverified. See [storage migration test results](specs/038-whatsapp-ng-namespace/validation.md) for the earlier evidence.
 - Known Pi SDK/host Undici advisories remain outstanding. The latest recorded production-only npm audit reports zero findings but excludes host-supplied packages. See [dependency and security details](DEPENDENCIES.md#latest-audit-refresh).
-- Final package verification and maintainer approval are still required before npm publication.
+- Published-package and host behavior remain subject to the limitations above; this prerelease is not a stable-support commitment.

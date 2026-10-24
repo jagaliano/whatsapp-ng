@@ -12,7 +12,7 @@ Pi is a powerful agentic AI coding assistant that operates in your terminal. Thi
 
 Maintained continuation of [RaphaCastelloes/whatsapp-pi](https://github.com/RaphaCastelloes/whatsapp-pi), preserving original Git history and attribution for independent fixes and releases. Original author metadata remains **Rapha**; fork maintenance is led by **jagaliano**. This does not assert that upstream is abandoned.
 
-> **Unreleased:** `whatsapp-ng@1.1.0-rc.1` is not available on npm yet. Use the source-checkout instructions below. The first npm prerelease is planned for the `next` tag, after final package checks and maintainer approval. See the [changelog](CHANGELOG.md), [MIT license](LICENSE) and [security policy](SECURITY.md).
+> **Experimental prerelease:** `whatsapp-ng@1.1.0-rc.1` targets npm's `next` tag, not `latest`. See [installation](#installation), the [changelog](CHANGELOG.md), [MIT license](LICENSE) and [security policy](SECURITY.md).
 
 ## Fork and legacy names
 
@@ -198,9 +198,15 @@ Do not delete auth, config or archives to recover a lock. First stop every proce
 
 Storage/auth directories are private (`0700`); config, saved credentials, profile-control files and new archive snapshots use `0600`. Baileys can create additional key files with umask-derived leaf modes; the private auth directory is their confidentiality boundary. Filesystem permissions are not encryption.
 
-### Candidate use and future registry installation
+### Installation
 
-For now, inspect a source checkout and use its explicit entry only after stopping the prior installation:
+Stop any prior installation using the same WhatsApp profile, then install the exact prerelease:
+
+```bash
+pi install npm:whatsapp-ng@1.1.0-rc.1
+```
+
+Alternatively, inspect a source checkout and use its explicit entry:
 
 ```bash
 git clone https://github.com/jagaliano/whatsapp-ng.git
@@ -212,13 +218,6 @@ pi --no-extensions -e ./whatsapp-ng.ts
 ```
 
 Use the reviewed maintenance commit, not uncommitted local work. The lockfile reproduces maintainer dependencies with the flags above. Lifecycle scripts are disabled; provide system FFmpeg and, for OCR, Tesseract. Normal installs without that flag can run native downloads/builds. The lock does not freeze every future consumer install; see [DEPENDENCIES.md](DEPENDENCIES.md).
-
-Once the prerelease is published, you will be able to install the exact version with:
-
-```bash
-# Future command, not currently available on npm:
-pi install npm:whatsapp-ng@1.1.0-rc.1
-```
 
 Do not install `npm:whatsapp-pi` expecting this fork. This migration changes the entry, online flag and state root; `/whatsapp`, group/history flags and existing messaging/history tool names remain unchanged.
 

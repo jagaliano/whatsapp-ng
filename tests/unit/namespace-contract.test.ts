@@ -29,7 +29,7 @@ describe('independent maintained namespace', () => {
         const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
         expect(manifest.main).toBe('whatsapp-ng.ts');
         expect(manifest.pi.extensions).toEqual(['./whatsapp-ng.ts']);
-        expect(manifest.private).toBe(true);
+        expect(manifest.private).toBe(false);
         const entry = readFileSync(resolve(root, manifest.main), 'utf8');
         expect(entry).toContain('"whatsapp-ng-online"');
         expect(entry).toContain('"whatsapp-ng-migrate-from"');
