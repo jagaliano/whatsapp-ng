@@ -1,6 +1,7 @@
 import { ConversationRouter, type RoutingSnapshot } from './conversation-router.service.js';
 import type { MessageRequest, MessageResult, WhatsAppSessionContext } from '../models/whatsapp.types.js';
 import { resolveTtsConfig, TTS_MAX_CHARACTERS, type TtsConfig } from './tts-config.js';
+import { cleanSpeechText } from './whatsapp-text.js';
 import type { PreparedSpeech, TtsSynthesisOptions } from './tts.service.js';
 
 export type ReplyOutputMode = 'text' | 'voice' | 'both' | 'mirror';
@@ -47,12 +48,13 @@ interface Job extends Captured {
 }
 
 /** No summarization or truncation: unsuitable answers retain their complete text. */
+function speechReplyText(text: string, allowLinkLabels = false): string | undefined {
+    if (text.length > TTS_MAX_CHARACTERS * 2) return;
+    const spoken = cleanSpeechText(text, { allowLinkLabels });
+    return spoken && [...spoken].length <= TTS_MAX_CHARACTERS ? spoken : undefined;
+}
 export function isSpeakableReply(text: string): boolean {
-    if (!text.trim() || text.length > TTS_MAX_CHARACTERS * 2 || [...text].length > TTS_MAX_CHARACTERS) return false;
-    if (text.includes('`') || /(?:^|\n)\s*~~~|^\s*[[{]/.test(text)) return false;
-    const lines = text.split(/\r?\n/).filter(line => line.trim());
-    const code = lines.filter(line => /^\s*(?:[{}[\]]|[$>]\s|(?:const|let|var|function|class|import|export|def|return|SELECT|INSERT|UPDATE|DELETE|CREATE|npm|node|git|curl)\b)/.test(line)).length;
-    return code < 2 || code < lines.length / 2;
+    return speechReplyText(text) !== undefined;
 }
 
 /** Owns one eligible final response, never a tool/thinking/terminal message. */
@@ -94,18 +96,25 @@ export class FinalOutputCoordinator {
             let mode = job.policy.mode;
             if (mode === 'mirror') mode = this.dependencies.router.getRequestMetadata(snapshot).inputKind === 'audio' ? 'voice' : 'text';
             if (snapshot.target?.endsWith('@g.us') && job.policy.groupOptIn !== true) mode = 'text';
-            if (mode !== 'text' && !isSpeakableReply(text)) { mode = 'text'; result.fallback = true; }
+            let spoken = mode === 'text' ? undefined : speechReplyText(text, mode === 'both');
+            if (mode !== 'text' && spoken === undefined) { mode = 'text'; result.fallback = true; }
             if (mode === 'text' || mode === 'both') {
                 result.text = await this.text(job, text);
                 if (result.text.delivery === 'unknown') return { ...result, uncertain: true };
                 if (mode === 'text') return this.current(job) ? result : { ...result, cancelled: true };
+                // A failed text send cannot authorize speech that omits the only copy of a link address.
+                if (!result.text.success) {
+                    spoken = speechReplyText(text);
+                    if (spoken === undefined) return this.current(job) ? { ...result, fallback: true } : { ...result, cancelled: true };
+                }
                 job.allowFinalText = true;
             }
             if (!this.current(job)) return { ...result, cancelled: true };
             try {
                 const config = job.policy.tts ?? {};
                 if (!job.policy.isCurrent || job.policy.approvedDestinationKey !== resolveTtsConfig(config).destinationKey) throw new Error('Speech consent required');
-                prepared = await this.dependencies.prepareSpeech(text, config, { signal: job.controller.signal,
+                if (spoken === undefined) throw new Error('Speech text unavailable');
+                prepared = await this.dependencies.prepareSpeech(spoken, config, { signal: job.controller.signal,
                     isCurrent: () => this.current(job), approvedDestinationKey: job.policy.approvedDestinationKey }, job.workspaceRoot);
             } catch {
                 if (!this.current(job)) return { ...result, cancelled: true };

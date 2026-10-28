@@ -57,7 +57,13 @@ Use terminal `/whatsapp` → **Voice** to choose the destination, voice, speed, 
 
 Fish requires an existing voice reference and a supported model header; no paid default voice is assumed. OpenAI-compatible/OpenRouter endpoints must support the requested speech API/model. Edge uses separate `edgeVoice`, `edgeLocale` and `edgeSpeed` preferences; its default is `en-US-AndrewMultilingualNeural` / `en-US`. It is an unofficial online service with no availability guarantee; failures do not silently switch providers.
 
-Preparation permits one active job, five pending, 2,000 Unicode characters, 8 MiB audio and a 60-second synthesis budget including queue wait. Output uses the bounded FFmpeg/Ogg-Opus voice-note path. Long or code-heavy answers remain complete text; no summarization call is made.
+Preparation permits one active job, five pending, 2,000 spoken Unicode characters, 8 MiB audio and a 60-second synthesis budget including queue wait. Output uses the bounded FFmpeg/Ogg-Opus voice-note path.
+
+Automatic replies make a separate plain-text speech copy without changing the displayed answer or saved text. Balanced Markdown/WhatsApp emphasis, headings, bullets and quote escapes are removed as formatting; ordinary quotation marks and unmatched approximation tildes such as “~5 minutes” are allowed. Heading candidates longer than 1,024 characters are left literal to bound parsing.
+
+Voice and audio Mirror fall back to the complete original text when an HTTP(S) Markdown link would lose its destination in speech. Voice + text may speak the readable label only after the full original text send is accepted; a failed or uncertain text send never authorizes omitting the only copy of its address, and the text is not retried. Opaque URL-shaped labels retain their literal addresses.
+
+Short inline labels (up to 80 characters), such as `config.json`, `/whatsapp`, `--verbose` or `Voice settings`, are eligible instead of blocking the whole reply. Command-like multiword snippets, including lowercase program names or option-shaped arguments, conservatively retain text rather than relying on a complete executable-name list. Code fences, tables, ambiguous/unclosed code and overlong answers also retain the complete original text. The original input is bounded before parsing and the cleaned copy must fit the existing 2,000-character speech limit. No answer is summarized, truncated, fetched or sent to an extra model for cleanup.
 
 A definite pre-transmission voice failure can fall back to the full text once. Voice + text does not resend its text. Unknown delivery never triggers another voice send or speculative text fallback. Already-issued uploads cannot be recalled; their snapshots remain owned until settlement.
 

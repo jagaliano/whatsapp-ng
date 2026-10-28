@@ -82,6 +82,90 @@ describe('four-mode final-output coordinator', () => {
         expect(h.voice).toHaveBeenCalledTimes(kind === 'audio' ? 1 : 0);
         expect(h.text).toHaveBeenCalledTimes(kind === 'audio' ? 0 : 1);
     });
+    it.each(['voice', 'both'] as const)('cleans ordinary formatting for %s without changing the text reply', async mode => {
+        const examples = [
+            ['He said "hello".', 'He said "hello".'],
+            [String.raw`He said \"hello\".`, 'He said "hello".'],
+            ['**Ready** and *important*.', 'Ready and important.'],
+            ['# Update\n- **Ready**\n- *Done*', 'Update\nReady\nDone'],
+            ['Open `config.json` from `/whatsapp`.', 'Open config.json from /whatsapp.'],
+            ['> "Hello."\n> **Ready.**', '"Hello."\nReady.'],
+            ['***Muy _importante_***. Use “*Voz*”.', 'Muy importante. Use “Voz”.']
+        ];
+        for (const [answer, spoken] of examples) {
+            const h = setup(mode); const result = await h.output.deliver(h.snapshot, answer);
+            expect(result.voice?.success, answer).toBe(true);
+            expect(h.prepare.mock.calls[0]?.[0], answer).toBe(spoken);
+            if (mode === 'both') expect(h.text.mock.calls[0][1]).toBe(answer);
+            else expect(h.text).not.toHaveBeenCalled();
+        }
+    });
+    it('keeps real inline code, commands, tables and fenced code as complete text', async () => {
+        for (const answer of ['Run `git status`.', 'Use `const n = 42`.', '```ts\nconst n = 42;\n```', '~~~sh\ngit status\n~~~',
+            'git status', '| Key | Value |\n| --- | --- |\n| n | 42 |']) {
+            const h = setup('voice'); const result = await h.output.deliver(h.snapshot, answer);
+            expect(result.text?.success, answer).toBe(true); expect(h.text.mock.calls[0][1]).toBe(answer);
+            expect(h.prepare, answer).not.toHaveBeenCalled(); expect(h.voice).not.toHaveBeenCalled();
+        }
+    });
+    it.each(['voice', 'both', 'mirror'] as const)('keeps command-like inline snippets as complete text in %s mode', async mode => {
+        for (const command of ['docker compose up -d', 'yarn install', 'pnpm test', 'ls -la', 'cd whatsapp-ng-release', 'make build', 'chmod +x run.sh', 'pi install npm:whatsapp-ng']) {
+            const answer = 'Run `' + command + '` in the project folder.'; const h = setup(mode, 'audio');
+            const result = await h.output.deliver(h.snapshot, answer);
+            expect(result.text?.success, answer).toBe(true); expect(h.text.mock.calls[0][1]).toBe(answer);
+            expect(h.prepare).not.toHaveBeenCalled(); expect(h.voice).not.toHaveBeenCalled();
+        }
+    });
+    it.each(['voice', 'mirror'] as const)('preserves Markdown link addresses as text in %s mode', async mode => {
+        const answer = 'Read [the guide](https://example.test/setup).'; const h = setup(mode, 'audio');
+        const result = await h.output.deliver(h.snapshot, answer);
+        expect(result.text?.success).toBe(true); expect(result.fallback).toBe(true);
+        expect(h.text).toHaveBeenCalledOnce(); expect(h.text.mock.calls[0][1]).toBe(answer);
+        expect(h.prepare).not.toHaveBeenCalled(); expect(h.voice).not.toHaveBeenCalled();
+        expect(h.accepted).toHaveBeenCalledWith(h.snapshot, h.context, 'text', answer, expect.objectContaining({ success: true }));
+    });
+    it('speaks link labels in both mode only after the full text is accepted', async () => {
+        const answer = 'Read [the guide](https://example.test/setup).'; const h = setup('both'); const order: string[] = [];
+        h.text.mockImplementationOnce(async () => { order.push('text'); return success(); });
+        h.prepare.mockImplementationOnce(async spoken => { order.push('speech'); expect(spoken).toBe('Read the guide.'); return h.artifact; });
+        const result = await h.output.deliver(h.snapshot, answer);
+        expect(result.text?.success && result.voice?.success).toBe(true); expect(order).toEqual(['text', 'speech']);
+        expect(h.text.mock.calls[0][1]).toBe(answer); expect(h.text).toHaveBeenCalledOnce(); expect(h.voice).toHaveBeenCalledOnce();
+    });
+    it.each(['failed', 'unknown', 'throw'] as const)('does not omit a link address after a %s text send in both mode', async outcome => {
+        const answer = 'Read [the guide](https://example.test/setup).'; const h = setup('both');
+        if (outcome === 'throw') h.text.mockRejectedValueOnce(new Error('Synthetic pre-provider stop'));
+        else h.text.mockResolvedValueOnce(outcome === 'unknown' ? unknown() : failed());
+        const result = await h.output.deliver(h.snapshot, answer);
+        expect(result.text?.success).toBe(false); expect(h.text).toHaveBeenCalledOnce();
+        expect(h.prepare).not.toHaveBeenCalled(); expect(h.voice).not.toHaveBeenCalled();
+        if (outcome !== 'failed') expect(result.uncertain).toBe(true);
+    });
+    it('retains cancellation authority after a failed link-bearing text send', async () => {
+        const h = setup('both'); h.text.mockImplementationOnce(async () => { h.revoke(); return failed(); });
+        const result = await h.output.deliver(h.snapshot, 'Read [the guide](https://example.test/setup).');
+        expect(result.cancelled).toBe(true); expect(h.prepare).not.toHaveBeenCalled(); expect(h.voice).not.toHaveBeenCalled();
+        expect(h.text).toHaveBeenCalledOnce();
+    });
+    it('keeps ordinary approximation prose eligible for voice', async () => {
+        const answer = 'It takes ~5 minutes, or ~2 s for a cached reply.'; const h = setup('voice');
+        expect((await h.output.deliver(h.snapshot, answer)).voice?.success).toBe(true);
+        expect(h.prepare.mock.calls[0][0]).toBe(answer); expect(h.text).not.toHaveBeenCalled();
+    });
+    it('counts Unicode code points rather than splitting supplementary characters at the speech limit', async () => {
+        const spoken = '👋'.repeat(1000) + 'é'.repeat(1000); const answer = '**' + spoken + '**'; const h = setup('both');
+        expect((await h.output.deliver(h.snapshot, answer)).voice?.success).toBe(true);
+        expect(h.prepare.mock.calls[0][0]).toBe(spoken); expect(h.text.mock.calls[0][1]).toBe(answer);
+        const long = setup('voice'); const over = answer + 'é'; await long.output.deliver(long.snapshot, over);
+        expect(long.prepare).not.toHaveBeenCalled(); expect(long.text.mock.calls[0][1]).toBe(over);
+    });
+    it('measures the spoken copy without truncating the visible answer', async () => {
+        const answer = '**' + 'a'.repeat(2000) + '**'; const h = setup('both');
+        expect((await h.output.deliver(h.snapshot, answer)).voice?.success).toBe(true);
+        expect(h.text.mock.calls[0][1]).toBe(answer); expect(h.prepare.mock.calls[0][0]).toBe('a'.repeat(2000));
+        const empty = setup('voice'); await empty.output.deliver(empty.snapshot, '***');
+        expect(empty.prepare).not.toHaveBeenCalled(); expect(empty.text.mock.calls[0][1]).toBe('***');
+    });
     it.each(['voice', 'both'] as const)('missing consent in %s mode retains full text without any synthesis', async mode => {
         const h = setup(mode); h.select({ ...policy(mode), approvedDestinationKey: undefined }); h.output.capture(h.snapshot, '/fixture');
         const result = await h.output.deliver(h.snapshot, 'Complete answer');

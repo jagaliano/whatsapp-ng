@@ -1,4 +1,4 @@
-/** Conservative assistant Markdown → WhatsApp text; never parses/fetches HTML or rewrites code bodies. */
+/** Conservative assistant text projections for WhatsApp display and speech; no fetching or model calls. */
 export function formatWhatsAppText(text: string): string {
     if (text.length > 64 * 1024 || text.includes('\0')) return text;
     const lines = text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
@@ -70,6 +70,109 @@ function inline(text: string, depth = 0): string {
     }
     return result.join('');
 }
+const speechCodeStart = /^\s*(?:[{}[\]]|[$]\s|(?:const|let|var|function|class|import|export|def|return|SELECT|INSERT|UPDATE|DELETE|CREATE|npm|npx|node|git|curl|pip|python|python3|bash|sh|echo)\b)/;
+const speechCommand = /^\s*(?:[$]\s|(?:npm|npx|node|git|curl|pip|python|python3|bash|sh|echo)\s+\S)/;
+
+/** Plain spoken copy only. Omitting link destinations requires a separate text copy; undefined retains the original. */
+export function cleanSpeechText(text: string, options: { allowLinkLabels?: boolean } = {}): string | undefined {
+    if (text.length > 64 * 1024 || text.includes('\0')) return;
+    const output: string[] = [];
+    for (const raw of text.replace(/\r\n?/g, '\n').split('\n')) {
+        // Never remove a code fence or flatten a table just to make it eligible for upload.
+        if (/^\s*(?:`{3,}|~{3,})/.test(raw) || raw.includes('|')
+            || (/^(?: {4,}|\t)\S/.test(raw) && !/^\s*[-+*•]\s+/.test(raw))) return;
+        let line = raw.replace(/^ {0,3}(?:>[ \t]?)+/, '').trim();
+        if (/^(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(line)) { output.push(''); continue; }
+        if (line.length <= 1024) line = line.replace(/^#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/, '$1');
+        line = line.replace(/^[-+*•][ \t]+/, '');
+        if (/^(?:`{3,}|~{3,})/.test(line)) return;
+        const rendered = speechInline(line, options.allowLinkLabels === true);
+        if (rendered === undefined) return;
+        output.push(rendered.trim());
+    }
+    const spoken = output.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    if (!/[\p{L}\p{N}]/u.test(spoken) || /^\s*[[{]/.test(spoken)) return;
+    const lines = spoken.split('\n').filter(line => line.trim());
+    if (lines.some(line => speechCommand.test(line) || (speechCodeStart.test(line) && /[=;{}]/.test(line)))) return;
+    const code = lines.filter(line => speechCodeStart.test(line)).length;
+    if (code >= 2 && code >= lines.length / 2) return;
+    return spoken;
+}
+
+function speechInline(text: string, allowLinkLabels: boolean, depth = 0): string | undefined {
+    if (depth >= 4) return;
+    const result: string[] = [];
+    for (let i = 0; i < text.length;) {
+        if (text[i] === '\\') {
+            let end = i; while (text[end] === '\\') end++;
+            // Decode quote escaping, not arbitrary JSON escapes or filesystem paths.
+            if (text[end] === '"' || text[end] === "'") { result.push(text[end]); i = end + 1; continue; }
+            result.push(text.slice(i, end)); i = end; continue;
+        }
+        if (text[i] === '`') {
+            const end = codeEnd(text, i); if (end < 0) return;
+            let width = 1; while (text[i + width] === '`') width++;
+            const label = text.slice(i + width, end - width).replace(/\\+(["'])/g, '$1').trim();
+            if (!speechLabel(label)) return;
+            result.push(label); i = end; continue;
+        }
+        const rest = text.slice(i);
+        const url = /^https?:\/\/[^\s<>]+/i.exec(rest);
+        if (url) { result.push(url[0]); i += url[0].length; continue; }
+        if (rest.startsWith('![')) return;
+        if (text[i] === '[') {
+            const labelEnd = delimiter(text, '](', i + 1, Math.min(text.length, i + 513));
+            if (labelEnd > i) {
+                const end = text.indexOf(')', labelEnd + 2); if (end < 0) return;
+                const destination = text.slice(labelEnd + 2, end);
+                if (!/^https?:\/\/[^\s()<>]+$/i.test(destination) || text.slice(i + 1, labelEnd).includes('[')) return;
+                const label = speechInline(text.slice(i + 1, labelEnd), allowLinkLabels, depth + 1);
+                if (!label?.trim() || (!allowLinkLabels && label !== destination)) return;
+                result.push(label); i = end + 1; continue;
+            }
+        }
+        const run = /^(\*+|_+|~+)/.exec(rest)?.[0];
+        if (run && run.length <= (run[0] === '~' ? 2 : 3)
+            && (i === 0 || !/[\p{L}\p{N}_]/u.test(text[i - 1])) && text[i + run.length] && !/\s/.test(text[i + run.length])) {
+            const end = speechDelimiter(text, run, i + run.length);
+            if (end < 0) {
+                if (run === '~') { result.push(run); i++; continue; }
+                return;
+            }
+            const content = text.slice(i + run.length, end);
+            const plain = speechInline(content, allowLinkLabels, depth + 1); if (plain === undefined) return;
+            result.push(plain); i = end + run.length; continue;
+        }
+        if (run) { result.push(run); i += run.length; continue; }
+        result.push(text[i]); i++;
+    }
+    return result.join('');
+}
+
+function speechLabel(value: string): boolean {
+    if (!value || value.length > 80 || /[\r\n]/.test(value)) return false;
+    let plain = value;
+    const quotes: Record<string, string> = { '"': '"', "'": "'", '“': '”', '‘': '’' };
+    if (quotes[plain[0]] && plain.at(-1) === quotes[plain[0]]) plain = plain.slice(1, -1);
+    // Ambiguous argument lists stay copyable instead of relying on an ever-growing executable denylist.
+    if (/\s/.test(plain) && (speechCodeStart.test(plain) || /(?:^|\s)-\S/.test(plain)
+        || /^[a-z][a-z0-9._+#':-]*$/.test(plain.split(/\s/, 1)[0]))) return false;
+    return /^\/[a-z][a-z0-9_-]*$/i.test(plain) || /^--?[a-z][a-z0-9-]*$/i.test(plain)
+        || /^[\p{L}\p{N}][\p{L}\p{N}\p{M} ._+#'’:-]*$/u.test(plain);
+}
+
+function speechDelimiter(text: string, marker: string, start: number): number {
+    for (let from = start; from < text.length;) {
+        const at = delimiter(text, marker, from); if (at < 0) return -1;
+        let stop = at + marker.length; while (text[stop] === marker[0]) stop++;
+        const end = stop - marker.length;
+        // A closing *** may close an inner * and an outer ** together.
+        if (end > start && !/\s/.test(text[end - 1]) && (stop === text.length || !/[\p{L}\p{N}_]/u.test(text[stop]))) return end;
+        from = stop;
+    }
+    return -1;
+}
+
 /** Exact-length backtick runs are opaque, including delimiter-looking content. */
 function codeEnd(text: string, start: number): number {
     let opening = start; while (text[opening] === '`') opening++;

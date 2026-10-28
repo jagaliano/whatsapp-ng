@@ -59,7 +59,7 @@ Text chat needs no additional media tools. Install the tools below only for the 
 | --- | --- |
 | [FFmpeg](https://ffmpeg.org/download.html) | Audio conversion, video processing and outgoing image/video preparation. Required for voice-note transcription and spoken replies, even with a remote speech API. |
 | [Whisper.cpp](https://github.com/ggml-org/whisper.cpp) with a GGML model | Local transcription through `whisper-cli`. Not needed for remote transcription or when using a compatible native addon. |
-| [CrispASR](docs/crispasr.md) with a compatible Whisper GGML model | An alternative local transcription CLI. It can also be operated separately as a compatible speech server; see its setup guide. |
+| [CrispASR](docs/crispasr.md) with a compatible model | Optional beta/experimental local speech toolkit: a Whisper-compatible transcription CLI, or a separately managed STT/TTS server with broader model choices. |
 | [Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html) with language data | Local OCR of scanned PDFs. PDFs with readable text do not require OCR. |
 
 For local CLI transcription, choose Whisper.cpp **or** CrispASR; you do not need both. The included `whisper-cpp-node` addon offers an alternative backend on compatible **macOS/Windows** builds, not Linux. It includes its own Whisper engine and still needs a model, but no separate CLI. Setting an explicit CLI path disables native-addon fallback.
@@ -77,6 +77,16 @@ Install `whisper-cli` and point `WHISPER_MODEL_PATH` to your existing GGML model
 Local transcription runs on CPU. Without a model override, the base model downloads on first use. When neither CLI is available and no explicit CLI path is set, compatible macOS/Windows builds can use the included native addon instead; Linux requires a CLI.
 
 [CrispASR](docs/crispasr.md) is another supported local CLI/server option. See the [speech reference](docs/reference.md#speech-configuration) for discovery order and environment variables.
+
+### Local CrispASR speech servers (beta)
+
+[CrispASR](https://github.com/CrispStrobe/CrispASR) is a unified C++ speech toolkit, originally based on Whisper.cpp, with many STT and TTS model families and model auto-download/cache options. Treat this optional setup as **beta/experimental**: it is a fast-moving 0.x project, and model/build compatibility needs checking. STT choices include Whisper, Parakeet, Canary and Qwen3-ASR; TTS choices include Kokoro, Piper, Qwen3-TTS and OmniVoice.
+
+We added **`http://` support for STT/TTS endpoints** to open the way for local servers such as CrispASR, without needing TLS just for localhost. Loopback HTTP is allowed; non-loopback HTTP requires an explicit launch-environment opt-in and is unencrypted. See the [setup, model examples and transport safeguards](docs/crispasr.md).
+
+CrispASR provides **Windows, Linux and macOS** builds, with **CPU, NVIDIA CUDA, Apple Metal and Vulkan** execution options depending on the build, hardware and model—not every combination on every OS. Multilingual Whisper covers **99 STT languages**, while upstream OmniVoice advertises **600+ TTS languages**; coverage is model/voice-specific, not a promise that every engine supports all languages. These are upstream capabilities, not a full `whatsapp-ng` validation matrix. Our direct CLI path remains CPU-only and requires a compatible Whisper GGML model; use a separate compatible HTTP server for other model families or GPU acceleration. OmniVoice's reference-audio HTTP flow still has [additional integration limits](docs/crispasr.md#multilingual-and-omnivoice-limits).
+
+The guide explicitly downloads `ggml-large-v3-turbo-q5_0.bin` using CrispASR's **`--hf-repo` / `--hf-file`** selectors rather than accepting a base-model default. **It is an example: choose the model that fits your languages, accuracy, memory and latency needs.**
 
 ### Remote
 
@@ -109,11 +119,11 @@ Open `/whatsapp` → **Voice** to choose a speech backend, voice, speed and repl
 | Voice + text | Both formats. |
 | Mirror | Voice for verified audio input; text otherwise. |
 
-Backends include Fish, OpenAI-compatible speech APIs and the unofficial Microsoft Edge speech service. Edge requires no configured API key but is an online service, not offline synthesis. The transcription and speech backends are independent.
+Backends include Fish, OpenAI-compatible speech APIs and the unofficial Microsoft Edge speech service. A compatible [CrispASR TTS server](docs/crispasr.md#tts-server), such as the Kokoro example, can provide local synthesis through the same endpoint client. Edge requires no configured API key but is an online service, not offline synthesis. The transcription and speech backends are independent.
 
 Speech is disabled until you approve its destination in the terminal Voice menu. Groups need separate opt-in. Changing the endpoint requires new approval; configuring a backend with `configure_wa_tts` does not enable speech or grant consent.
 
-Voice settings also let you pause automatic replies for individual chats and send a confirmed preview. Long or code-heavy answers stay as text. See the [speech reference](docs/reference.md#speech-replies) for backend fields and failure behavior.
+Voice settings also let you pause automatic replies for individual chats and send a confirmed preview. Speech uses a separate plain-text copy: emphasis markers, headings, bullets and escaped quotes are cleaned up; short labels such as `config.json` can be spoken normally. Ordinary approximate values such as “~5 minutes” remain eligible. Voice and audio Mirror keep an answer as text when speaking its link label would omit the address. Voice + text speaks link labels only if the full text send succeeds. The displayed answer is unchanged. Long answers, code/command-like snippets and tables stay as complete text. See the [speech reference](docs/reference.md#speech-replies) for backend fields and failure behavior.
 
 <a id="settings-off-and-diagnostic-privacy"></a>
 
@@ -203,3 +213,5 @@ Report bugs through [GitHub issues](https://github.com/jagaliano/whatsapp-ng/iss
 <a id="fork-and-legacy-names"></a>
 
 Based on [Rapha Castelloes' original project](https://github.com/RaphaCastelloes/whatsapp-pi), maintained by José Antonio Galiano Sandoval. Older names and paths are listed in the [migration reference](docs/reference.md#historical-identifiers).
+
+The local speech overview is adapted from [CrispStrobe/CrispASR](https://github.com/CrispStrobe/CrispASR) and its contributors' documentation; see the [guide's credits and upstream references](docs/crispasr.md#credits-and-upstream-references).

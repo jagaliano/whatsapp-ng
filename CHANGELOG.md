@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Clean a separate spoken copy of automatic answers: remove ordinary emphasis/headings/bullets and quote escapes, allow short inline words/menu labels, preserve approximate values and bound heading parsing. Keep displayed text unchanged and command-like snippets/tables/overlong answers as complete text. Preserve link addresses through full-text fallback in Voice/Mirror; Voice + text speaks link labels only after its text send is accepted. No summarization or provider change.
+
 - Restrict `configure_wa_stt` updates and resets to verified local requests or the configured WhatsApp owner. Recheck authority through atomic settings commit; denied, stale, cancelled and failed writes preserve disk and memory. This prevents other allowed chats from redirecting transcription uploads or selecting a different API-key environment variable through this tool.
 
 - Permit loopback HTTP speech endpoints and explicitly opted-in non-loopback HTTP without relaxing URL/redirect guards or destination consent. Add CrispASR CLI/model/language aliases while retaining Whisper-first PATH discovery, plus optional remote-only STT language and a packaged [local speech guide](docs/crispasr.md). Preserve TTS wire bodies and existing backends; no binaries/models or new download machinery are bundled. Validate with **1194 tests/81 files**, no skips, lint/typecheck clean; clarify non-destructive HTTP opt-in recovery and isolate tests from the operator's exported opt-in.
