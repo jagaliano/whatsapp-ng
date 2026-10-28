@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Prepare PR/main validation and default-off tag-triggered GitHub/npm OIDC publishing. Require exact version-tag/main ancestry, protected-environment approval and the same checksummed candidate; reject rerun publication and token fallback, retain attempt evidence, and verify registry integrity/tags. First publication still needs a separately approved manual bootstrap; no tokens, environment settings, tags or releases are created automatically.
+
 - Add dependency-free local release commands for explicit version/lockfile updates, clean-commit validation and tarball preparation, plus separately confirmed publication of the checksummed artifact. Keep prereleases on `next`, reserve `latest` for explicit stable versions, and retain publication-attempt evidence instead of retrying uncertain outcomes. No automatic commits, tags, pushes or release promotion.
 
 - Clean a separate spoken copy of automatic answers: remove ordinary emphasis/headings/bullets and quote escapes, allow short inline words/menu labels, preserve approximate values and bound heading parsing. Keep displayed text unchanged and command-like snippets/tables/overlong answers as complete text. Preserve link addresses through full-text fallback in Voice/Mirror; Voice + text speaks link labels only after its text send is accepted. No summarization or provider change.

@@ -204,7 +204,7 @@ npm run typecheck
 pi --no-extensions -e ./whatsapp-ng.ts
 ```
 
-Maintainers can use the [local release commands](docs/releases.md) for explicit version bumps, validated tarball preparation and separately confirmed publication. RC1 is already versioned; preparing it does not bump or publish it.
+Maintainers can use the [release guide](docs/releases.md) for explicit local version bumps, validated tarball preparation and separately confirmed publication. PR/main CI and a default-off, environment-gated tag-triggered OIDC workflow are provided; npm requires a first manual package publication before trusted publishing can be configured. RC1 is already versioned; preparing it does not bump or publish it.
 
 System tools must be installed separately. Add `--verbose` for extension diagnostics, not message bodies or protocol-key traces. See [dependencies and platform checks](DEPENDENCIES.md), the [manual acceptance guide](tests/manual/prerelease-acceptance.md), and [design records](specs/README.md).
 

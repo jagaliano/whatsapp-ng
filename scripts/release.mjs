@@ -1,4 +1,4 @@
-/** Explicit local release operations; never commits, tags, pushes, or retries publication. */
+/** Explicit local/GitHub release operations; never commits, tags, pushes, or retries publication. */
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -43,7 +43,10 @@ function compareVersions(a, b) {
     return 0;
 }
 const digest = bytes => createHash('sha512').update(bytes).digest('base64');
-const json = path => JSON.parse(readFileSync(path, 'utf8'));
+const json = path => {
+    try { return JSON.parse(readFileSync(path, 'utf8')); }
+    catch { throw new Error('Invalid or missing local release JSON; operation refused'); }
+};
 function save(path, value, exclusive = false) {
     writeFileSync(path, JSON.stringify(value, null, 2) + '\n', { mode: 0o600, flag: exclusive ? 'wx' : 'w' });
 }
@@ -69,14 +72,19 @@ export function commandRunner(command, args, options = {}) {
     }
 }
 
-export function release(args, { root = resolve(dirname(fileURLToPath(import.meta.url)), '..'), run = commandRunner, log = console.log } = {}) {
+export function release(args, { root = resolve(dirname(fileURLToPath(import.meta.url)), '..'), run = commandRunner, log = console.log, github = process.env } = {}) {
     if (args.length === 0 || args.includes('--help')) { log(usage); return; }
     const [action, ...rest] = args;
-    if (!['version', 'prepare', 'publish'].includes(action)) throw new Error(usage);
-    if ((action === 'version' && rest.length !== 1) || (action === 'prepare' && rest.length)
+    if (!['version', 'prepare', 'publish', 'check-tag', 'publish-ci'].includes(action)) throw new Error(usage);
+    if ((action === 'version' && rest.length !== 1) || (['prepare', 'check-tag', 'publish-ci'].includes(action) && rest.length)
         || (action === 'publish' && (rest.length !== 4 || rest[0] !== '--confirm' || rest[2] !== '--tag'))) throw new Error(usage);
     const git = (...values) => String(run('git', values, { cwd: root })).trim();
     const npm = (values, options = {}) => run('npm', values, { cwd: root, ...options });
+    const npmJson = values => {
+        const output = npm(values);
+        try { return JSON.parse(output); }
+        catch { throw new Error('Malformed npm JSON; publication refused or remains unverified'); }
+    };
     const clean = () => {
         // Git's relative root check avoids Windows separator/case and symlink spelling differences.
         if (git('rev-parse', '--show-cdup') !== '') throw new Error('Run from the release repository root');
@@ -101,10 +109,24 @@ export function release(args, { root = resolve(dirname(fileURLToPath(import.meta
         log(`Version ${target}; channel ${nextTag}. Review changes/changelog, then commit manually. Nothing tagged or published.`); return;
     }
     const head = git('rev-parse', 'HEAD');
+    const ciPublish = action === 'publish-ci';
+    if (action === 'check-tag' || ciPublish) {
+        const ref = `refs/tags/v${manifest.version}`;
+        if (github.GITHUB_ACTIONS !== 'true' || github.GITHUB_EVENT_NAME !== 'push' || github.GITHUB_REPOSITORY !== 'jagaliano/whatsapp-ng'
+            || github.GITHUB_REF_TYPE !== 'tag' || github.GITHUB_REF !== ref
+            || github.GITHUB_WORKFLOW_REF !== `jagaliano/whatsapp-ng/.github/workflows/publish.yml@${ref}`
+            || !/^[a-f0-9]{40}$/.test(github.GITHUB_SHA ?? '')) throw new Error('Not an exact release-tag event from the expected GitHub workflow');
+        if (git('rev-parse', `${github.GITHUB_SHA}^{commit}`) !== head || git('rev-parse', `${ref}^{commit}`) !== head) throw new Error('Release tag/event does not match the checked-out commit');
+        git('merge-base', '--is-ancestor', head, 'origin/main');
+        if (ciPublish && (github.NPM_PUBLISH_ENABLED !== 'true' || github.GITHUB_RUN_ATTEMPT !== '1'
+            || !github.ACTIONS_ID_TOKEN_REQUEST_URL || !github.ACTIONS_ID_TOKEN_REQUEST_TOKEN || github.NODE_AUTH_TOKEN || github.NPM_TOKEN)) throw new Error('OIDC publishing is disabled, is a rerun, or has an unexpected credential source');
+        if (action === 'check-tag') { log(JSON.stringify({ name: manifest.name, version: manifest.version, tag, commit: head })); return; }
+        if (compareVersions(String(npm(['--version'])).trim(), '11.5.1') < 0) throw new Error('Trusted publishing requires npm 11.5.1 or newer');
+    }
     const output = resolve(root, '.pi/cache/releases');
     const receiptPath = resolve(output, 'prepared.json');
     const attemptPath = resolve(output, `publish-${manifest.version}.attempt.json`);
-    if (action === 'publish' && existsSync(attemptPath)) throw new Error('Publication was already attempted. Check the registry; do not retry an uncertain outcome.');
+    if ((action === 'publish' || ciPublish) && existsSync(attemptPath)) throw new Error('Publication was already attempted. Check the registry; do not retry an uncertain outcome.');
     const current = () => { clean(); if (git('rev-parse', 'HEAD') !== head) throw new Error('HEAD changed during release operation'); };
     if (action === 'prepare') {
         rmSync(receiptPath, { force: true });
@@ -118,11 +140,11 @@ export function release(args, { root = resolve(dirname(fileURLToPath(import.meta
                 npm(['run', script, ...(script === 'test' ? ['--', '--maxWorkers=2'] : [])], { env });
             }
         } finally { rmSync(home, { recursive: true, force: true }); }
-        const audit = JSON.parse(npm(['audit', '--omit=dev', '--json', '--registry='+registry]));
+        const audit = npmJson(['audit', '--omit=dev', '--json', '--registry='+registry]);
         if (audit.metadata?.vulnerabilities?.total !== 0) throw new Error('Production dependency audit is not clean');
         current();
         const directory = resolve(output, `${manifest.version}-${randomUUID()}`); mkdirSync(directory, { recursive: true, mode: 0o700 });
-        const [packed] = JSON.parse(npm(['pack', '--ignore-scripts', '--json', '--pack-destination', directory]));
+        const [packed] = npmJson(['pack', '--ignore-scripts', '--json', '--pack-destination', directory]);
         if (packed.name !== manifest.name || packed.version !== manifest.version || packed.filename !== `${manifest.name}-${manifest.version}.tgz`) throw new Error('Packed identity differs from source');
         const allowed = new Set(git('ls-files', '-z').split('\0'));
         const required = new Set(['package.json', 'README.md', 'LICENSE', manifest.main, 'src/services/edge-tts.worker.mjs', 'docs/reference.md', 'docs/crispasr.md', 'docs/releases.md']);
@@ -136,14 +158,14 @@ export function release(args, { root = resolve(dirname(fileURLToPath(import.meta
         if (required.size) throw new Error('Required runtime/license/documentation file is missing');
         const artifact = resolve(directory, packed.filename); const integrity = 'sha512-'+digest(readFileSync(artifact));
         if (packed.integrity !== integrity) throw new Error('Packed integrity mismatch');
-        const dry = JSON.parse(npm(['publish', artifact, '--dry-run', '--ignore-scripts', '--tag', tag, '--access', 'public', '--registry='+registry, '--json']));
+        const dry = npmJson(['publish', artifact, '--dry-run', '--ignore-scripts', '--tag', tag, '--access', 'public', '--registry='+registry, '--json']);
         if ((dry[manifest.name] ?? dry).integrity !== integrity) throw new Error('Publish dry-run integrity mismatch');
         current();
         if ('sha512-'+digest(readFileSync(artifact)) !== integrity) throw new Error('Artifact changed during preparation');
         save(receiptPath, { version: 1, name: manifest.name, packageVersion: manifest.version, tag, registry, commit: head, artifact: relative(output, artifact), integrity });
         log(`Prepared ${manifest.name}@${manifest.version} for ${tag}: ${artifact}\nIntegrity: ${integrity}\nReceipt: ${receiptPath}\nNot published. Installed-Pi/live/platform acceptance and host/development audit review remain separate.`); return;
     }
-    if (rest[1] !== manifest.version || rest[3] !== tag) throw new Error('Confirm the exact prepared version and matching distribution tag');
+    if (!ciPublish && (rest[1] !== manifest.version || rest[3] !== tag)) throw new Error('Confirm the exact prepared version and matching distribution tag');
     const receipt = json(receiptPath);
     if (receipt.version !== 1 || receipt.name !== manifest.name || receipt.packageVersion !== manifest.version || receipt.tag !== tag || receipt.registry !== registry || receipt.commit !== head
         || typeof receipt.artifact !== 'string' || isAbsolute(receipt.artifact) || receipt.artifact.split(/[\\/]/).includes('..')) throw new Error('Prepared receipt does not match current source');
@@ -154,14 +176,32 @@ export function release(args, { root = resolve(dirname(fileURLToPath(import.meta
     try { npm(['view', `${manifest.name}@${manifest.version}`, 'version', '--json', '--registry='+registry]); }
     catch (error) { if (error.code !== 'E404') throw error; absent = true; }
     if (!absent) throw new Error('This version already exists in the registry; do not republish');
-    npm(['whoami', '--registry='+registry]);
+    if (ciPublish) {
+        // Explicit selectors also support an existing prerelease-only package with no latest tag.
+        let existingPackage = false;
+        for (const existingTag of ['next', 'latest']) {
+            try {
+                const packageName = npmJson(['view', `${manifest.name}@${existingTag}`, 'name', '--json', '--registry='+registry]);
+                if (packageName !== manifest.name) throw new Error('Unexpected registry package identity');
+                existingPackage = true; break;
+            } catch (error) { if (error.code !== 'E404') throw error; }
+        }
+        if (!existingPackage) throw new Error('Bootstrap the first package publication manually before enabling OIDC');
+    } else npm(['whoami', '--registry='+registry]);
     current();
     if ('sha512-'+digest(readFileSync(artifact)) !== receipt.integrity) throw new Error('Prepared artifact changed');
     const attempt = { ...receipt, startedAt: new Date().toISOString(), outcome: 'unknown' };
     save(attemptPath, attempt, true);
     log(`Publishing ${manifest.name}@${manifest.version} under ${tag}. Never retry an uncertain outcome; check ${attemptPath}.`);
-    npm(['publish', artifact, '--ignore-scripts', '--tag', tag, '--access', 'public', '--registry='+registry], { interactive: true });
+    npm(['publish', artifact, '--ignore-scripts', '--tag', tag, '--access', 'public', '--registry='+registry, ...(ciPublish ? ['--provenance'] : [])], { interactive: !ciPublish });
     save(attemptPath, { ...attempt, outcome: 'npm-command-succeeded' });
+    if (ciPublish) {
+        const published = npmJson(['view', `${manifest.name}@${manifest.version}`, 'version', 'dist.integrity', '--json', '--registry='+registry]);
+        const tags = npmJson(['view', `${manifest.name}@${manifest.version}`, 'dist-tags', '--json', '--registry='+registry]);
+        if (published.version !== manifest.version || (published['dist.integrity'] ?? published.dist?.integrity) !== receipt.integrity || tags[tag] !== manifest.version) throw new Error('Publication returned success but registry integrity/tag verification failed; do not republish');
+        save(attemptPath, { ...attempt, outcome: 'registry-verified' });
+        log(JSON.stringify({ version: manifest.version, tag, integrity: receipt.integrity, next: tags.next, latest: tags.latest }));
+    }
     log('npm publish returned success. Verify registry integrity/tag and installed-package behavior before creating the Git tag or GitHub release.');
 }
 

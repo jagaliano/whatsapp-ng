@@ -55,7 +55,9 @@
     "typecheck": "tsc --noEmit",
     "release:version": "node scripts/release.mjs version",
     "release:prepare": "node scripts/release.mjs prepare",
-    "release:publish": "node scripts/release.mjs publish"
+    "release:publish": "node scripts/release.mjs publish",
+    "release:check-tag": "node scripts/release.mjs check-tag",
+    "release:publish-ci": "node scripts/release.mjs publish-ci"
   },
   "dependencies": {
     "@llamaindex/liteparse": "2.17.0",

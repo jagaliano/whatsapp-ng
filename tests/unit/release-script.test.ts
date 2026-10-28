@@ -14,13 +14,14 @@ const attemptPath = '.pi/cache/releases/publish-1.1.0-rc.1.attempt.json';
 const integrity = (data: Buffer) => 'sha512-' + createHash('sha512').update(data).digest('base64');
 
 function fixture() {
-    const state = { dirty: false, rootPrefix: '', head: 'fixture-head', failedScript: '', existing: false, viewError: 'E404', publishError: false, unexpected: false, missingWorker: false, wrongIntegrity: false };
+    const state = { dirty: false, rootPrefix: '', head: 'fixture-head', mainAncestor: true, failedScript: '', existing: false, packageExists: true, published: false, npmVersion: '11.20.0', badRegistryIntegrity: false, badRegistryTag: false, viewError: 'E404', publishError: false, unexpected: false, missingWorker: false, wrongIntegrity: false };
     const files = ['package.json', 'package-lock.json', 'README.md', 'LICENSE', 'whatsapp-ng.ts', 'src/services/edge-tts.worker.mjs', 'docs/reference.md', 'docs/crispasr.md', 'docs/releases.md'];
     write('package.json', { name: 'whatsapp-ng', version: '1.1.0-rc.1', private: false, main: 'whatsapp-ng.ts', publishConfig: { tag: 'next', access: 'public' } });
     write('package-lock.json', { name: 'whatsapp-ng', version: '1.1.0-rc.1', packages: { '': { name: 'whatsapp-ng', version: '1.1.0-rc.1' }, dependency: { version: '2.0.0' } } });
     for (const file of files.slice(2)) { const path = resolve(root, file); mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, 'synthetic public source'); }
-    const run = vi.fn((command: string, args: string[], _options: { cwd: string; env?: NodeJS.ProcessEnv; interactive?: boolean }) => {
+    const run = vi.fn((command: string, args: string[], _options: { cwd?: string; env?: NodeJS.ProcessEnv; interactive?: boolean } = {}) => {
         if (command === 'git') {
+            if (args[0] === 'merge-base') { if (!state.mainAncestor) throw new Error('Synthetic non-main commit'); return ''; }
             if (args[0] === 'status') return state.dirty ? ' M README.md' : '';
             if (args[0] === 'ls-files') return files.join('\0') + '\0';
             if (args[0] === 'rev-parse') {
@@ -31,6 +32,7 @@ function fixture() {
             throw new Error('Unexpected fixture Git operation');
         }
         if (command !== 'npm') throw new Error('Unexpected fixture executable');
+        if (args[0] === '--version') return state.npmVersion;
         if (args[0] === 'run') { if (args[1] === state.failedScript) throw new Error('Synthetic validation failure'); return ''; }
         if (args[0] === 'audit') return JSON.stringify({ metadata: { vulnerabilities: { total: 0 } } });
         if (args[0] === 'version') {
@@ -48,9 +50,13 @@ function fixture() {
             if (args.includes('--dry-run')) return JSON.stringify({ 'whatsapp-ng': { integrity: state.wrongIntegrity ? 'wrong' : integrity(readFileSync(args[1])) } });
             expect(read(`.pi/cache/releases/publish-${read('package.json').version}.attempt.json`).outcome).toBe('unknown');
             if (state.publishError) throw new Error('Synthetic lost publication response');
-            return '';
+            state.published = true; return '';
         }
         if (args[0] === 'view') {
+            const manifest = read('package.json');
+            if ([`${manifest.name}@next`, `${manifest.name}@latest`].includes(args[1]) && args[2] === 'name' && state.packageExists) return JSON.stringify(manifest.name);
+            if (args[2] === 'dist-tags') return JSON.stringify({ [releaseTag(manifest.version)]: state.badRegistryTag ? '9.0.0' : manifest.version });
+            if (args.includes('dist.integrity') && state.published) return JSON.stringify({ version: manifest.version, 'dist.integrity': state.badRegistryIntegrity ? 'wrong' : read(receiptPath).integrity });
             if (state.existing) return '"1.1.0-rc.1"';
             const error = new Error('Synthetic registry result') as Error & { code?: string }; error.code = state.viewError; throw error;
         }
@@ -64,6 +70,87 @@ function fixture() {
 }
 beforeEach(() => { root = mkdtempSync(resolve(tmpdir(), 'wa-release-unit-')); });
 afterEach(() => { vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true }); });
+
+function githubFixture() {
+    const h = fixture(); h.state.head = 'a'.repeat(40); h.invoke('prepare');
+    const github: Record<string, string> = {
+        GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'push', GITHUB_REPOSITORY: 'jagaliano/whatsapp-ng', GITHUB_REF_TYPE: 'tag',
+        GITHUB_REF: 'refs/tags/v1.1.0-rc.1', GITHUB_SHA: h.state.head, GITHUB_RUN_ATTEMPT: '1',
+        GITHUB_WORKFLOW_REF: 'jagaliano/whatsapp-ng/.github/workflows/publish.yml@refs/tags/v1.1.0-rc.1',
+        NPM_PUBLISH_ENABLED: 'true', ACTIONS_ID_TOKEN_REQUEST_URL: 'https://example.invalid/oidc', ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'synthetic-oidc-placeholder'
+    };
+    const invokeCI = (action = 'publish-ci') => release([action], { root, run: h.run, log: vi.fn(), github });
+    return { ...h, github, invokeCI };
+}
+
+describe('GitHub exact-tag OIDC release gates (mocked publication only)', () => {
+    it('checks an exact main-ancestor tag without publishing or requiring OIDC', () => {
+        const h = githubFixture(); delete h.github.ACTIONS_ID_TOKEN_REQUEST_TOKEN; delete h.github.NPM_PUBLISH_ENABLED;
+        h.invokeCI('check-tag'); expect(h.actualPublishes()).toHaveLength(0);
+        expect(h.run.mock.calls.some(([name, args]) => name === 'git' && args[0] === 'merge-base' && args.at(-1) === 'origin/main')).toBe(true);
+    });
+    it.each([
+        ['GITHUB_ACTIONS', 'false'], ['GITHUB_EVENT_NAME', 'pull_request'], ['GITHUB_REPOSITORY', 'foreign/repo'],
+        ['GITHUB_REF_TYPE', 'branch'], ['GITHUB_REF', 'refs/tags/v9.0.0'], ['GITHUB_SHA', 'not-a-sha'],
+        ['GITHUB_WORKFLOW_REF', 'jagaliano/whatsapp-ng/.github/workflows/ci.yml@refs/tags/v1.1.0-rc.1']
+    ])('refuses unexpected event field %s', (key, value) => {
+        const h = githubFixture(); h.github[key] = value; expect(h.invokeCI).toThrow(/exact release-tag/); expect(h.actualPublishes()).toHaveLength(0);
+    });
+    it('rejects a tag/event whose commit differs from checkout', () => {
+        const h = githubFixture(); const original = h.run.getMockImplementation()!;
+        h.run.mockImplementation((name, args, options) => name === 'git' && args[1] === `${h.github.GITHUB_REF}^{commit}` ? 'b'.repeat(40) : original(name, args, options));
+        expect(h.invokeCI).toThrow(/checked-out commit/); expect(h.actualPublishes()).toHaveLength(0);
+    });
+    it('rejects commits not on origin/main', () => {
+        const h = githubFixture(); h.state.mainAncestor = false; expect(h.invokeCI).toThrow(/non-main/); expect(h.actualPublishes()).toHaveLength(0);
+    });
+    it.each([
+        ['NPM_PUBLISH_ENABLED', ''], ['NPM_PUBLISH_ENABLED', 'false'], ['GITHUB_RUN_ATTEMPT', '2'],
+        ['ACTIONS_ID_TOKEN_REQUEST_URL', ''], ['ACTIONS_ID_TOKEN_REQUEST_TOKEN', ''],
+        ['NODE_AUTH_TOKEN', 'synthetic-disallowed-token'], ['NPM_TOKEN', 'synthetic-disallowed-token']
+    ])('refuses disabled/rerun/token-fallback setting %s=%s', (key, value) => {
+        const h = githubFixture(); h.github[key] = value; expect(h.invokeCI).toThrow(/OIDC publishing/);
+        expect(h.actualPublishes()).toHaveLength(0); expect(existsSync(resolve(root, attemptPath))).toBe(false);
+    });
+    it('requires a supported npm version', () => {
+        const h = githubFixture(); h.state.npmVersion = '11.5.0'; expect(h.invokeCI).toThrow(/11.5.1/); expect(h.actualPublishes()).toHaveLength(0);
+    });
+    it('never bootstraps an unpublished package using CI credentials', () => {
+        const h = githubFixture(); h.state.packageExists = false; expect(h.invokeCI).toThrow(/Bootstrap/);
+        expect(h.actualPublishes()).toHaveLength(0); expect(existsSync(resolve(root, attemptPath))).toBe(false);
+    });
+    it('publishes the exact candidate with provenance and verifies registry evidence without whoami', () => {
+        const h = githubFixture(); h.invokeCI(); expect(h.actualPublishes()).toHaveLength(1);
+        const args = h.actualPublishes()[0][1]; expect(args).toContain('--provenance'); expect(args).toContain('--ignore-scripts');
+        expect(h.actualPublishes()[0][2]?.interactive).toBe(false); expect(read(attemptPath).outcome).toBe('registry-verified');
+        expect(h.run.mock.calls.some(([name, values]) => name === 'npm' && values[0] === 'whoami')).toBe(false);
+        expect(h.invokeCI).toThrow(/already attempted/); expect(h.actualPublishes()).toHaveLength(1);
+    });
+    it('supports a prerelease-only namespace without relying on a default latest tag', () => {
+        const h = githubFixture(); const original = h.run.getMockImplementation()!;
+        h.run.mockImplementation((name, args, options) => name === 'npm' && args[0] === 'view' && args[1] === 'whatsapp-ng' ? '' : original(name, args, options));
+        h.invokeCI(); expect(read(attemptPath).outcome).toBe('registry-verified'); expect(h.actualPublishes()).toHaveLength(1);
+    });
+    it('accepts an existing latest tag when next is not present', () => {
+        const h = githubFixture(); const original = h.run.getMockImplementation()!;
+        h.run.mockImplementation((name, args, options) => {
+            if (name === 'npm' && args[0] === 'view' && args[1] === 'whatsapp-ng@next') {
+                const error = new Error('Synthetic absent tag') as Error & { code: string }; error.code = 'E404'; throw error;
+            }
+            return original(name, args, options);
+        });
+        h.invokeCI(); expect(read(attemptPath).outcome).toBe('registry-verified'); expect(h.actualPublishes()).toHaveLength(1);
+    });
+    it.each(['badRegistryIntegrity', 'badRegistryTag'] as const)('retains success evidence but refuses unverified %s without republishing', key => {
+        const h = githubFixture(); h.state[key] = true; expect(h.invokeCI).toThrow(/verification failed/);
+        expect(read(attemptPath).outcome).toBe('npm-command-succeeded'); expect(h.invokeCI).toThrow(/already attempted/); expect(h.actualPublishes()).toHaveLength(1);
+    });
+    it('rejects malformed package metadata without echoing it or attempting a publish', () => {
+        const h = githubFixture(); const original = h.run.getMockImplementation()!;
+        h.run.mockImplementation((name, args, options) => name === 'npm' && args[0] === 'view' && args[2] === 'name' ? 'private-output-sentinel' : original(name, args, options));
+        expect(h.invokeCI).toThrow('Malformed npm JSON; publication refused or remains unverified'); expect(h.actualPublishes()).toHaveLength(0);
+    });
+});
 
 describe('real release command runner with synthetic npm entry', () => {
     it('requires npm routing before starting a child', () => {
@@ -152,7 +239,7 @@ describe('explicit local release commands', () => {
         expect(receipt.integrity).toBe(integrity(readFileSync(resolve(root, '.pi/cache/releases', receipt.artifact))));
         const gates = h.run.mock.calls.filter(([name, args]) => name === 'npm' && args[0] === 'run');
         expect(gates.map(([, args]) => args[1])).toEqual(['test', 'lint', 'typecheck']);
-        for (const [, , options] of gates) { expect(options.env).not.toHaveProperty('RELEASE_TEST_SECRET'); expect(options.env?.PI_OFFLINE).toBe('1'); expect(options.env?.HOME).not.toBe(process.env.HOME); }
+        for (const [, , options] of gates) { expect(options?.env).not.toHaveProperty('RELEASE_TEST_SECRET'); expect(options?.env?.PI_OFFLINE).toBe('1'); expect(options?.env?.HOME).not.toBe(process.env.HOME); }
         expect(h.actualPublishes()).toHaveLength(0);
     });
     it('invalidates a previous receipt before running fresh gates', () => {
