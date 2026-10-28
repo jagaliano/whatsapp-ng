@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { releaseTag, versionParts } from '../../scripts/release.mjs';
 
 interface PackageManifest {
     name: string;
@@ -23,7 +24,12 @@ const manifest = JSON.parse(readFileSync(new URL('../../package.json', import.me
 describe('maintained candidate packaging', () => {
     it('identifies the fork without replacing the original author', () => {
         expect(manifest.name).toBe('whatsapp-ng');
-        expect(manifest.version).toBe('1.1.0-rc.1');
+        expect(() => versionParts(manifest.version)).not.toThrow();
+        const lock = JSON.parse(readFileSync(new URL('../../package-lock.json', import.meta.url), 'utf8'));
+        expect(lock.version).toBe(manifest.version);
+        expect(lock.packages[''].version).toBe(manifest.version);
+        expect(lock.name).toBe(manifest.name);
+        expect(lock.packages[''].name).toBe(manifest.name);
         expect(manifest.author).toBe('Rapha');
         expect(manifest.repository.url).toBe('git+https://github.com/jagaliano/whatsapp-ng.git');
         expect(manifest.bugs.url).toBe('https://github.com/jagaliano/whatsapp-ng/issues');
@@ -48,9 +54,9 @@ describe('maintained candidate packaging', () => {
         }
     });
 
-    it('permits the approved public prerelease under the next tag', () => {
+    it('keeps prereleases on next and explicit stable versions on latest', () => {
         expect(manifest.private).toBe(false);
-        expect(manifest.publishConfig).toEqual({ tag: 'next', access: 'public' });
+        expect(manifest.publishConfig).toEqual({ tag: releaseTag(manifest.version), access: 'public' });
     });
 
     it('preserves entry identity and pins the reviewed runtime dependencies', () => {

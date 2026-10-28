@@ -204,6 +204,8 @@ npm run typecheck
 pi --no-extensions -e ./whatsapp-ng.ts
 ```
 
+Maintainers can use the [local release commands](docs/releases.md) for explicit version bumps, validated tarball preparation and separately confirmed publication. RC1 is already versioned; preparing it does not bump or publish it.
+
 System tools must be installed separately. Add `--verbose` for extension diagnostics, not message bodies or protocol-key traces. See [dependencies and platform checks](DEPENDENCIES.md), the [manual acceptance guide](tests/manual/prerelease-acceptance.md), and [design records](specs/README.md).
 
 ## Support and license

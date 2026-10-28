@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add dependency-free local release commands for explicit version/lockfile updates, clean-commit validation and tarball preparation, plus separately confirmed publication of the checksummed artifact. Keep prereleases on `next`, reserve `latest` for explicit stable versions, and retain publication-attempt evidence instead of retrying uncertain outcomes. No automatic commits, tags, pushes or release promotion.
+
 - Clean a separate spoken copy of automatic answers: remove ordinary emphasis/headings/bullets and quote escapes, allow short inline words/menu labels, preserve approximate values and bound heading parsing. Keep displayed text unchanged and command-like snippets/tables/overlong answers as complete text. Preserve link addresses through full-text fallback in Voice/Mirror; Voice + text speaks link labels only after its text send is accepted. No summarization or provider change.
 
 - Restrict `configure_wa_stt` updates and resets to verified local requests or the configured WhatsApp owner. Recheck authority through atomic settings commit; denied, stale, cancelled and failed writes preserve disk and memory. This prevents other allowed chats from redirecting transcription uploads or selecting a different API-key environment variable through this tool.

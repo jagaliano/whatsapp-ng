@@ -18,6 +18,7 @@
     "src",
     "docs/crispasr.md",
     "docs/reference.md",
+    "docs/releases.md",
     "SECURITY.md",
     "LICENSING.md",
     "CHANGELOG.md",
@@ -49,9 +50,12 @@
     "@sinclair/typebox": "*"
   },
   "scripts": {
-    "lint": "eslint whatsapp-ng.ts \"src/**/*.ts\" \"src/**/*.mjs\" \"tests/**/*.ts\"",
+    "lint": "eslint whatsapp-ng.ts \"src/**/*.ts\" \"src/**/*.mjs\" \"scripts/**/*.mjs\" \"tests/**/*.ts\"",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "release:version": "node scripts/release.mjs version",
+    "release:prepare": "node scripts/release.mjs prepare",
+    "release:publish": "node scripts/release.mjs publish"
   },
   "dependencies": {
     "@llamaindex/liteparse": "2.17.0",
