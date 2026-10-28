@@ -18,10 +18,10 @@ const MODEL_URL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggm
 type AudioLogger = Pick<WhatsAppNgLogger, 'log' | 'error'>;
 
 function getCliPath() {
-    const name = process.platform === 'win32' ? 'whisper-cli.exe' : 'whisper-cli';
-    const configured = process.env.WHISPER_CLI_PATH?.trim();
-    const candidates = configured ? [resolve(configured)] :
-        (process.env.PATH ?? '').split(delimiter).filter(Boolean).map(path => resolve(path, name));
+    const names = ['whisper-cli', 'crispasr'].map(name => process.platform === 'win32' ? `${name}.exe` : name);
+    const configured = process.env.CRISPASR_CLI_PATH?.trim() || process.env.WHISPER_CLI_PATH?.trim();
+    const directories = (process.env.PATH ?? '').split(delimiter).filter(Boolean);
+    const candidates = configured ? [resolve(configured)] : names.flatMap(name => directories.map(path => resolve(path, name)));
     return candidates.find(path => {
         try {
             if (!statSync(path).isFile()) return false;
@@ -30,7 +30,10 @@ function getCliPath() {
         } catch { return false; }
     }) ?? null;
 }
-function modelPath() { return process.env.WHISPER_MODEL_PATH?.trim() ? resolve(process.env.WHISPER_MODEL_PATH.trim()) : join(createStoragePaths().root, 'whisper', 'models', MODEL_FILENAME); }
+function modelPath() {
+    const configured = process.env.CRISPASR_MODEL_PATH?.trim() || process.env.WHISPER_MODEL_PATH?.trim();
+    return configured ? resolve(configured) : join(createStoragePaths().root, 'whisper', 'models', MODEL_FILENAME);
+}
 async function download(url: string, target: string, signal: AbortSignal, redirects = 0): Promise<void> {
     signal.throwIfAborted();
     if (new URL(url).protocol !== 'https:' || redirects > 5) throw new Error('Whisper.cpp model download redirect rejected');
@@ -50,7 +53,8 @@ async function download(url: string, target: string, signal: AbortSignal, redire
 async function ensureModel(logger: AudioLogger, signal: AbortSignal) {
     const target = modelPath();
     try { const info = await stat(target); if (info.isFile() && info.size > 0) return target; } catch { /* validate override or download default below */ }
-    if (process.env.WHISPER_MODEL_PATH?.trim()) throw new Error('WHISPER_MODEL_PATH must point to an existing nonempty Whisper.cpp model file; no replacement downloaded');
+    const override = process.env.CRISPASR_MODEL_PATH?.trim() ? 'CRISPASR_MODEL_PATH' : process.env.WHISPER_MODEL_PATH?.trim() ? 'WHISPER_MODEL_PATH' : undefined;
+    if (override) throw new Error(`${override} must point to an existing nonempty Whisper.cpp model file; no replacement downloaded`);
     signal.throwIfAborted();
     logger.log(`[WhatsApp-NG] Whisper.cpp model download: ${target}`);
     await mkdir(dirname(target), { recursive: true, mode: 0o700 });
@@ -65,7 +69,7 @@ async function ensureModel(logger: AudioLogger, signal: AbortSignal) {
 }
 export function tryCreateWhisperCliAudioTranscriber(logger: AudioLogger): AudioTranscriber | null {
     const cli = getCliPath();
-    if (!cli) { logger.log('[WhatsApp-NG] Whisper.cpp CLI unavailable. Install whisper-cli on PATH or set WHISPER_CLI_PATH.'); return null; }
+    if (!cli) { logger.log('[WhatsApp-NG] Local speech CLI unavailable. Install whisper-cli/crispasr on PATH or set CRISPASR_CLI_PATH/WHISPER_CLI_PATH.'); return null; }
     const libPath = dirname(cli);
     const env = { ...process.env, LD_LIBRARY_PATH: libPath + (process.env.LD_LIBRARY_PATH ? `:${process.env.LD_LIBRARY_PATH}` : '') };
     return { async transcribe(inputPath, options = {}) {
@@ -83,7 +87,7 @@ export function tryCreateWhisperCliAudioTranscriber(logger: AudioLogger): AudioT
             checkCurrent();
             const model = await ensureModel(logger, signal);
             checkCurrent();
-            const execution = execFileAsync(cli, ['--model', model, '--file', inputPath, '--language', process.env.WHISPER_LANGUAGE?.trim() || 'auto', '--no-timestamps', '--no-prints', '--no-gpu'], {
+            const execution = execFileAsync(cli, ['--model', model, '--file', inputPath, '--language', process.env.CRISPASR_LANGUAGE?.trim() || process.env.WHISPER_LANGUAGE?.trim() || 'auto', '--no-timestamps', '--no-prints', '--no-gpu'], {
                 windowsHide: true, env, signal, timeout: TRANSCRIPTION_TIMEOUT_MS, killSignal: 'SIGKILL'
             });
             // Abort can reject execFile before the child exits. Do not let AudioService

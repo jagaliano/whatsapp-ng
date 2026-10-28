@@ -47,7 +47,7 @@ export class AudioService {
             }
             const transcriber = remote ?? this.whisperCppTranscriber;
             if (!transcriber) throw new Error('Whisper.cpp unavailable: install whisper-cli on PATH or set WHISPER_CLI_PATH');
-            if (remote) this.logger.log(t('audio.remoteNotice', { host: remote.hostname }));
+            if (remote) this.logger.log(t('audio.remoteNotice', { host: remote.origin }));
             await mkdir(this.mediaDir, { recursive: true, mode: 0o700 });
             scratchDir = await mkdtemp(join(this.mediaDir, 'audio-'));
             const inputPath = join(scratchDir, 'input.ogg');
@@ -82,7 +82,8 @@ export class AudioService {
                 return text || t('audio.emptyTranscription');
             });
         } catch (error) {
-            console.error(t('audio.transcriptionError'), error);
+            // Child-process errors may include stdout containing recognized speech.
+            console.error(t('audio.transcriptionError'));
             return t('audio.transcriptionErrorResult', { error: error instanceof Error ? error.message : String(error) });
         } finally {
             if (scratchDir) {

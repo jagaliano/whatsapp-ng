@@ -117,9 +117,10 @@ describe('WhatsAppService QR welcome message', () => {
         expect(socket.sendMessage).toHaveBeenCalledOnce();
         expect(socket.sendMessage).toHaveBeenCalledWith(
             SELF_JID_NORMALIZED,
-            expect.objectContaining({ text: expect.stringContaining('Send me a message') }),
+            expect.objectContaining({ text: expect.stringContaining('AI assistant, not the human account owner') }),
             { messageId: expect.any(String) }
         );
+        expect(sessionManager.setOperatorJid).not.toHaveBeenCalled();
 
         await service.stop();
     });

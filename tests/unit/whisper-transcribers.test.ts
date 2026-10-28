@@ -31,6 +31,7 @@ beforeEach(async () => {
     vi.stubEnv('WHISPER_CLI_PATH', '');
     vi.stubEnv('WHISPER_MODEL_PATH', model);
     vi.stubEnv('WHISPER_LANGUAGE', '');
+    for (const name of ['CRISPASR_CLI_PATH', 'CRISPASR_MODEL_PATH', 'CRISPASR_LANGUAGE']) vi.stubEnv(name, '');
     mocks.native.mockReturnValue(null);
     mocks.execute.mockResolvedValue({ stdout: '  local transcription\n', stderr: '' });
     mocks.download.mockImplementation(() => { throw new Error('Network forbidden in fixture'); });
@@ -38,6 +39,29 @@ beforeEach(async () => {
 afterEach(async () => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); });
 
 describe('installed Whisper.cpp CLI', () => {
+    it('prefers explicit CrispASR binary/model/language over Whisper settings', async () => {
+        const crisp = join(bin, process.platform === 'win32' ? 'crispasr.exe' : 'crispasr'); await writeFile(crisp, 'SYNTHETIC'); await chmod(crisp, 0o755);
+        const selectedModel = join(root, 'crisp.bin'); await writeFile(selectedModel, 'SYNTHETIC');
+        vi.stubEnv('CRISPASR_CLI_PATH', crisp); vi.stubEnv('WHISPER_CLI_PATH', cli); vi.stubEnv('CRISPASR_MODEL_PATH', selectedModel); vi.stubEnv('CRISPASR_LANGUAGE', 'pt'); vi.stubEnv('WHISPER_LANGUAGE', 'es');
+        await tryCreateWhisperCppAudioTranscriber(logger)!.transcribe('input.wav');
+        expect(mocks.execute).toHaveBeenCalledWith(crisp, ['--model', selectedModel, '--file', 'input.wav', '--language', 'pt', '--no-timestamps', '--no-prints', '--no-gpu'], expect.anything());
+        expect(mocks.native).not.toHaveBeenCalled(); expect(mocks.download).not.toHaveBeenCalled();
+    });
+    it('does not fall through from invalid explicit CrispASR to Whisper/PATH/addon', () => {
+        vi.stubEnv('CRISPASR_CLI_PATH', join(root, 'missing')); vi.stubEnv('WHISPER_CLI_PATH', cli); mocks.native.mockReturnValue({ transcribe: vi.fn() });
+        expect(tryCreateWhisperCppAudioTranscriber(logger)).toBeNull(); expect(mocks.native).not.toHaveBeenCalled();
+    });
+    it('keeps Whisper first across PATH directories and discovers CrispASR if Whisper is absent', async () => {
+        const crispBin = join(root, 'crisp-bin'); await mkdir(crispBin); const crisp = join(crispBin, process.platform === 'win32' ? 'crispasr.exe' : 'crispasr'); await writeFile(crisp, 'SYNTHETIC'); await chmod(crisp, 0o755);
+        const { delimiter } = await import('node:path'); vi.stubEnv('PATH', [crispBin, bin].join(delimiter));
+        await tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav'); expect(mocks.execute.mock.calls[0][0]).toBe(cli);
+        vi.stubEnv('PATH', crispBin); await tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav'); expect(mocks.execute.mock.calls[1][0]).toBe(crisp);
+    });
+    it('does not replace an invalid CrispASR model with the valid Whisper model or a download', async () => {
+        vi.stubEnv('CRISPASR_MODEL_PATH', join(root, 'absent.bin'));
+        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav')).rejects.toThrow(/CRISPASR_MODEL_PATH/);
+        expect(mocks.download).not.toHaveBeenCalled(); expect(mocks.execute).not.toHaveBeenCalled();
+    });
     it('discovers the executable on PATH and uses the configured light model on CPU', async () => {
         const transcriber = tryCreateWhisperCliAudioTranscriber(logger);
         expect(transcriber).not.toBeNull();

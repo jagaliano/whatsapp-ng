@@ -25,7 +25,7 @@ async function fixture() {
     internal.registerSocketListeners(socket, {}, async () => {});
     const callback = vi.fn(); service.setMessageCallback(callback);
     const ingest = (id = 'base', jid = peer, fromMe = false) => service.handleIncomingMessages({ type: 'append', messages: [{ key: { id, remoteJid: jid, fromMe }, message: { conversation: 'original 😊\nline' }, messageTimestamp: Date.now() }] });
-    return { service, recents, callback, handlers, socket, ingest };
+    return { service, recents, callback, handlers, socket, ingest, session };
 }
 
 describe('typed history/lifecycle socket integration', () => {
@@ -73,6 +73,15 @@ describe('typed history/lifecycle socket integration', () => {
         await service.handleIncomingMessages({ type: 'notify', requestId: 'network-id', messages: [{ key: { ...key, id: 'older' }, message: { conversation: 'backfill' }, messageTimestamp: Date.now() - 2000 }] });
         handlers.get('messaging-history.status')!({ syncType: proto.HistorySync.HistorySyncType.ON_DEMAND, status: 'complete', explicit: true });
         expect((await service.getHistoryStatus('network-id')).request?.status).toBe('partial'); expect(callback).not.toHaveBeenCalled();
+    });
+    it.each(['', peer])('pairing welcome never appoints or overwrites configured owner %s', async owner => {
+        const { service, socket, session } = await fixture();
+        const setOperatorJid = vi.fn(); Object.assign(session, { getOperatorJid: () => owner, setOperatorJid });
+        const sendMessage = vi.fn().mockResolvedValue({ key: { id: 'welcome' }, message: { conversation: 'fixture welcome' } });
+        Object.assign(socket, { sendMessage });
+        await (service as any).sendQrWelcome();
+        expect(setOperatorJid).not.toHaveBeenCalled(); expect(sendMessage).toHaveBeenCalledOnce();
+        expect(sendMessage.mock.calls[0][1].text).toContain('AI assistant');
     });
     it('rejects stale socket callbacks after reconnect cleanup', async () => {
         const { service, handlers, recents, ingest } = await fixture(); await ingest(); Object.assign(service, { socket: { user: { id: self } } });

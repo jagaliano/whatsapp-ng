@@ -3,6 +3,8 @@ export interface SttConfig {
     sttModel?: string;
     /** Environment-variable name only, never an API key. */
     sttEnv?: string;
+    /** Remote STT only; auto omits the protocol field for server-side detection. */
+    sttLanguage?: string;
 }
 
 export interface AudioTranscriptionOptions {

@@ -1,5 +1,7 @@
 import { useMultiFileAuthState, type SignalKeyStore, type SignalDataTypeMap } from 'baileys';
 import { basename, join, relative } from 'path';
+import { randomUUID } from 'node:crypto';
+import { loadSpeechSettings, speechDefaults, storedSpeechFields, validateSpeechSettings, matchingChatPreferences, settingsJid, TTS_CONFIG_FIELDS, type SpeechSettings } from './speech-settings.js';
 import { readFile, writeFile, mkdir, rm, rename, readdir, chmod } from 'fs/promises';
 import { SessionStatus } from '../models/whatsapp.types.js';
 import type { SttConfig } from './audio-transcriber.js';
@@ -7,6 +9,9 @@ import { t } from '../i18n.js';
 import { TransportLease } from './transport-lease.service.js';
 import { AuthProfileService } from './auth-profile.service.js';
 import { StateMigrationService } from './state-migration.service.js';
+import { validateGroupReplies, type GroupReplies } from './group-message.policy.js';
+import { validateOptionalOutputs, type OptionalOutputs } from './optional-output.service.js';
+import { validateReplyReporting, type ReplyReporting } from './run-report.service.js';
 import {
     getDefaultLegacyStorageRoot,
     getDefaultStorageRoot,
@@ -49,7 +54,26 @@ export class SessionManager {
     private visionModel: string = 'gpt-4o';
     private sttConfig: SttConfig = {};
     private operatorJid: string = '';
+    private finalAfterAttachments = true;
+    private storedReplyStats: unknown;
+    private replyStatsRevision = 0;
+    private storedReplyReporting: unknown;
+    private replyReportingRevision = 0;
+    private storedGroupReplies: unknown;
+    private groupRepliesRevision = 0;
+    private storedOptionalOutputs: unknown;
+    private optionalOutputsRevision = 0;
+    private speechSettings = speechDefaults();
+    private storedSpeechState: Record<string, unknown> = {};
+    private speechConfigInvalid = false;
+    private speechRevision = 0;
+    private operatorRevision = 0;
+    private admissionEra = randomUUID();
+    private readonly chatReplyVersions = new Map<string, string>();
+    private configWrites: Promise<unknown> = Promise.resolve();
     private configLoaded = false;
+    private configReadFailure = false;
+    private initialization?: Promise<void>;
     private authEpoch = 0;
 
     constructor(baseDir = getDefaultStorageRoot(), legacyBaseDir = baseDir === getDefaultStorageRoot() ? getDefaultLegacyStorageRoot() : baseDir) {
@@ -78,19 +102,28 @@ export class SessionManager {
 
     public async ensureInitialized() {
         this.assertStorageReady();
+        if (this.initialization) return this.initialization;
+        const pending = this.initializeConfig();
+        this.initialization = pending;
+        try { await pending; }
+        finally { if (this.initialization === pending) this.initialization = undefined; }
+    }
+
+    private async initializeConfig() {
         try {
             await this.ensureStorageDirectories();
             await this.migrateLegacyStorageIfNeeded();
             try { await chmod(this.configPath, 0o600); }
             catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-            await this.cleanupStaleConfigTempFiles();
             if (!this.configLoaded) {
+                await this.queueConfig(() => this.cleanupStaleConfigTempFiles());
                 await this.loadConfig();
                 this.configLoaded = true;
             }
             await this.syncAuthStateFromDisk();
         } catch {
-            // Initialization is best-effort; callers can continue with defaults.
+            if (!this.configLoaded) this.configReadFailure = true;
+            // Ordinary initialization stays best-effort; guarded mutations reject.
         }
     }
 
@@ -125,15 +158,105 @@ export class SessionManager {
             this.hasAuthState = Boolean(config.hasAuthState);
             this.openaiKey = config.openaiKey || '';
             this.visionModel = config.visionModel || 'gpt-4o';
-            this.sttConfig = { sttEndpoint: config.sttEndpoint, sttModel: config.sttModel, sttEnv: config.sttEnv };
+            this.sttConfig = { sttEndpoint: config.sttEndpoint, sttModel: config.sttModel, sttEnv: config.sttEnv, sttLanguage: config.sttLanguage };
             this.operatorJid = config.operatorJid || '';
+            this.finalAfterAttachments = config.finalAfterAttachments !== false;
+            this.storedReplyStats = config.replyStats;
+            this.storedReplyReporting = config.replyReporting;
+            this.storedGroupReplies = config.groupReplies;
+            this.storedOptionalOutputs = config.optionalOutputs;
+            this.storedSpeechState = Object.fromEntries([...TTS_CONFIG_FIELDS, 'voicePreferences'].flatMap(key => config[key] === undefined ? [] : [[key, config[key]]]));
+            try { this.speechSettings = loadSpeechSettings(config); this.speechConfigInvalid = false; }
+            catch { this.speechSettings = speechDefaults(); this.speechConfigInvalid = true; }
 
             if (recovered) {
                 await this.saveConfig();
             }
-        } catch {
-            // File not found is fine
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') this.configReadFailure = true;
         }
+    }
+
+    public getFinalAfterAttachments(): boolean {
+        return this.finalAfterAttachments;
+    }
+
+    public async setFinalAfterAttachments(enabled: boolean, current: () => boolean = () => true): Promise<void> {
+        if (typeof enabled !== 'boolean') throw new Error('Final-after-attachment preference must be a boolean');
+        await this.ensureInitialized();
+        if (!this.configLoaded || this.configReadFailure) throw new Error('Configuration is unreadable; originals preserved');
+        await this.queueConfig(async () => {
+            if (!current()) throw new Error('Settings request expired');
+            await this.writeConfig(this.storedSpeechState, this.operatorJid, current, 'atomic', enabled);
+            this.finalAfterAttachments = enabled;
+        });
+    }
+
+    public getReplyStats(): boolean { return !this.configReadFailure && this.storedReplyStats === true; }
+    public getReplyStatsRevision(): number { return this.replyStatsRevision; }
+    public async setReplyStats(enabled: boolean, current: () => boolean = () => true): Promise<void> {
+        if (typeof enabled !== 'boolean') throw new Error('Final stats preference must be a boolean');
+        await this.ensureInitialized();
+        if (!this.configLoaded || this.configReadFailure) throw new Error('Configuration is unreadable; originals preserved');
+        await this.queueConfig(async () => {
+            if (!current()) throw new Error('Settings request expired');
+            await this.writeConfig(this.storedSpeechState, this.operatorJid, current, 'atomic', this.finalAfterAttachments, enabled);
+            this.storedReplyStats = enabled; this.replyStatsRevision++;
+        });
+    }
+
+    public getReplyReporting(): ReplyReporting {
+        if (this.configReadFailure) throw new Error('Invalid saved reply reporting settings');
+        return validateReplyReporting(this.storedReplyReporting);
+    }
+    public getReplyReportingRevision(): number { return this.replyReportingRevision; }
+    public async setReplyReporting(value: ReplyReporting, expectedRevision: number, current: () => boolean = () => true): Promise<void> {
+        if (value === undefined) throw new Error('Invalid reply reporting settings');
+        const next = validateReplyReporting(value);
+        await this.ensureInitialized();
+        if (!this.configLoaded || this.configReadFailure) throw new Error('Configuration is unreadable; originals preserved');
+        await this.queueConfig(async () => {
+            const valid = () => expectedRevision === this.replyReportingRevision && current();
+            if (!valid()) throw new Error('Settings request expired');
+            await this.writeConfig(this.storedSpeechState, this.operatorJid, valid, 'atomic', this.finalAfterAttachments, this.storedReplyStats, this.storedGroupReplies, this.storedOptionalOutputs, next);
+            this.storedReplyReporting = next; this.replyReportingRevision++;
+        });
+    }
+
+    public getGroupReplies(): GroupReplies {
+        if (this.configReadFailure) throw new Error('Invalid saved group settings');
+        return validateGroupReplies(this.storedGroupReplies);
+    }
+    public getGroupRepliesRevision(): number { return this.groupRepliesRevision; }
+    public async setGroupReplies(value: GroupReplies, expectedRevision: number, current: () => boolean = () => true): Promise<void> {
+        if (value === undefined) throw new Error('Invalid group reply settings');
+        const next = validateGroupReplies(value);
+        await this.ensureInitialized();
+        if (!this.configLoaded || this.configReadFailure) throw new Error('Configuration is unreadable; originals preserved');
+        await this.queueConfig(async () => {
+            const valid = () => expectedRevision === this.groupRepliesRevision && current();
+            if (!valid()) throw new Error('Settings request expired');
+            await this.writeConfig(this.storedSpeechState, this.operatorJid, valid, 'atomic', this.finalAfterAttachments, this.storedReplyStats, next);
+            this.storedGroupReplies = next; this.groupRepliesRevision++;
+        });
+    }
+
+    public getOptionalOutputs(): OptionalOutputs {
+        if (this.configReadFailure) throw new Error('Invalid saved optional output settings');
+        return validateOptionalOutputs(this.storedOptionalOutputs);
+    }
+    public getOptionalOutputsRevision(): number { return this.optionalOutputsRevision; }
+    public async setOptionalOutputs(value: OptionalOutputs, expectedRevision: number, current: () => boolean = () => true): Promise<void> {
+        if (value === undefined) throw new Error('Invalid optional output settings');
+        const next = validateOptionalOutputs(value);
+        await this.ensureInitialized();
+        if (!this.configLoaded || this.configReadFailure) throw new Error('Configuration is unreadable; originals preserved');
+        await this.queueConfig(async () => {
+            const valid = () => expectedRevision === this.optionalOutputsRevision && current();
+            if (!valid()) throw new Error('Settings request expired');
+            await this.writeConfig(this.storedSpeechState, this.operatorJid, valid, 'atomic', this.finalAfterAttachments, this.storedReplyStats, this.storedGroupReplies, next);
+            this.storedOptionalOutputs = next; this.optionalOutputsRevision++;
+        });
     }
 
     private parseConfig(data: string): { config: any; recovered: boolean } {
@@ -189,39 +312,93 @@ export class SessionManager {
         return -1;
     }
 
+    private queueConfig<T>(operation: () => Promise<T>): Promise<T> {
+        const pending = this.configWrites.then(operation);
+        this.configWrites = pending.catch(() => {});
+        return pending;
+    }
+
     public async saveConfig() {
         this.assertStorageReady();
-        const tempPath = `${this.configPath}.${process.pid}.${Date.now()}.tmp`;
+        try {
+            if (this.configReadFailure) throw new Error('Configuration is unreadable; originals preserved');
+            await this.queueConfig(() => this.writeConfig());
+        }
+        catch { console.error(t('session.manager.failedSaveConfig')); }
+    }
+
+    private async writeConfig(speech = this.storedSpeechState, owner = this.operatorJid, current: () => boolean = () => true, commit: 'ordinary' | 'atomic' = 'ordinary', finalAfterAttachments = this.finalAfterAttachments, replyStats = this.storedReplyStats, groupReplies = this.storedGroupReplies, optionalOutputs = this.storedOptionalOutputs, replyReporting = this.storedReplyReporting, sttConfig = this.sttConfig): Promise<void> {
+        this.assertStorageReady();
+        const tempPath = `${this.configPath}.${process.pid}.${randomUUID()}.tmp`;
         try {
             this.hasAuthState = this.hasAuthState || await this.hasCredentialsFile();
-            const config = {
-                allowList: this.allowList,
-                allowedGroups: this.allowedGroups,
-                ignoredNumbers: this.ignoredNumbers,
-                status: this.status,
-                hasAuthState: this.hasAuthState,
-                openaiKey: this.openaiKey,
-                visionModel: this.visionModel,
-                ...this.sttConfig,
-                operatorJid: this.operatorJid
-            };
+            const serialized = JSON.stringify({
+                allowList: this.allowList, allowedGroups: this.allowedGroups, ignoredNumbers: this.ignoredNumbers,
+                status: this.status, hasAuthState: this.hasAuthState, openaiKey: this.openaiKey,
+                visionModel: this.visionModel, ...sttConfig, operatorJid: owner,
+                finalAfterAttachments, ...(replyStats === undefined ? {} : { replyStats }), ...(groupReplies === undefined ? {} : { groupReplies }), ...(optionalOutputs === undefined ? {} : { optionalOutputs }), ...(replyReporting === undefined ? {} : { replyReporting }), ...speech
+            }, null, 2);
             await mkdir(this.storagePaths.root, { recursive: true, mode: 0o700 });
             await chmod(this.storagePaths.root, 0o700);
-            const serialized = JSON.stringify(config, null, 2);
-            await writeFile(tempPath, serialized, { mode: 0o600 });
+            if (!current()) throw new Error('Settings request expired');
+            await writeFile(tempPath, serialized, { mode: 0o600, flag: 'wx' });
             await chmod(tempPath, 0o600);
-            try {
-                await rename(tempPath, this.configPath);
-            } catch {
-                // Windows EPERM: atomic rename failed (file locked). Fall back to direct write.
+            // Last authority check before the atomic commit. Once rename is
+            // submitted, this already-authorized global change cannot be recalled.
+            if (!current()) throw new Error('Settings request expired');
+            try { await rename(tempPath, this.configPath); }
+            catch (error) {
+                if (commit === 'atomic') throw error;
+                // Preserve the existing Windows compatibility path for ordinary state saves.
                 await writeFile(this.configPath, serialized, { mode: 0o600 });
                 await chmod(this.configPath, 0o600);
-                await this.removeConfigTempFile(tempPath);
             }
-        } catch (error) {
-            await this.removeConfigTempFile(tempPath);
-            console.error(t('session.manager.failedSaveConfig'), error);
-        }
+        } finally { await this.removeConfigTempFile(tempPath); }
+    }
+
+    getSpeechSettings(): SpeechSettings {
+        if (this.configReadFailure || this.speechConfigInvalid) throw new Error('Invalid saved voice settings; repair them in terminal /whatsapp > Voice');
+        return structuredClone(this.speechSettings);
+    }
+    getSpeechRevision(): number { return this.speechRevision; }
+    getOperatorRevision(): number { return this.operatorRevision; }
+
+    async setSpeechSettings(value: SpeechSettings, expectedRevision: number, current: () => boolean = () => true): Promise<void> {
+        const next = validateSpeechSettings(value);
+        await this.ensureInitialized();
+        if (!this.configLoaded || this.configReadFailure) throw new Error('Configuration is unreadable; originals preserved');
+        return this.queueConfig(async () => {
+            if (this.speechRevision !== expectedRevision || !current()) throw new Error('Settings request expired');
+            const fields = storedSpeechFields(next);
+            await this.writeConfig(fields, this.operatorJid, current, 'atomic');
+            for (const key of new Set([...Object.keys(this.speechSettings.chats), ...Object.keys(next.chats)])) {
+                if (this.speechSettings.chats[key]?.automaticReplies !== next.chats[key]?.automaticReplies) {
+                    if (this.chatReplyVersions.size >= 500 && !this.chatReplyVersions.has(key)) { this.chatReplyVersions.clear(); this.admissionEra = randomUUID(); }
+                    this.chatReplyVersions.set(key, randomUUID());
+                }
+            }
+            this.speechSettings = next;
+            this.storedSpeechState = fields;
+            this.speechConfigInvalid = false;
+            this.speechRevision++;
+        });
+    }
+
+    getReplyAdmissionKey(jid: string, canonical: (jid: string) => string | undefined): string {
+        if (this.configReadFailure || this.speechConfigInvalid) throw new Error('Invalid saved voice settings');
+        const target = canonical(settingsJid(jid));
+        if (!target) throw new Error('Conversation identity unavailable');
+        const keys = new Set(matchingChatPreferences(this.speechSettings, jid, canonical).map(([key]) => key));
+        for (const key of this.chatReplyVersions.keys()) if (canonical(key) === target) keys.add(key);
+        return JSON.stringify([this.admissionEra, [...keys].sort((left, right) => left.localeCompare(right)).map(key => [key, this.chatReplyVersions.get(key) ?? 'initial'])]);
+    }
+
+    /** Re-adding an allowed chat grants new work, never its pre-revocation output. */
+    private retireReplyAdmission(value: string): void {
+        let key: string;
+        try { key = settingsJid(value); } catch { this.admissionEra = randomUUID(); return; }
+        if (this.chatReplyVersions.size >= 500 && !this.chatReplyVersions.has(key)) { this.chatReplyVersions.clear(); this.admissionEra = randomUUID(); }
+        this.chatReplyVersions.set(key, randomUUID());
     }
 
     private async cleanupStaleConfigTempFiles() {
@@ -234,9 +411,8 @@ export class SessionManager {
             return;
         }
 
-        await Promise.all(files
-            .filter(fileName => fileName.startsWith(`${configFileName}.`) && fileName.endsWith('.tmp'))
-            .map(fileName => this.removeConfigTempFile(join(this.storagePaths.root, fileName))));
+        await Promise.all(files.flatMap(fileName => fileName.startsWith(`${configFileName}.`) && fileName.endsWith('.tmp')
+            ? [this.removeConfigTempFile(join(this.storagePaths.root, basename(fileName)))] : []));
     }
 
     private async removeConfigTempFile(tempPath: string) {
@@ -283,7 +459,6 @@ export class SessionManager {
         }
 
         if (typeof cleanNumber !== 'string') {
-            console.warn(t('session.manager.invalidNumber'), cleanNumber);
             return;
         }
 
@@ -306,13 +481,13 @@ export class SessionManager {
     }
 
     async removeNumber(number: string) {
+        if (this.allowList.some(contact => contact.number === number)) this.retireReplyAdmission(number);
         this.allowList = this.allowList.filter(c => c.number !== number);
         await this.saveConfig();
     }
 
     async addAllowedGroup(groupJid: string, name?: string) {
         if (!SessionManager.isGroupJid(groupJid)) {
-            console.warn(t('session.manager.invalidNumber'), groupJid);
             return;
         }
 
@@ -331,6 +506,7 @@ export class SessionManager {
     }
 
     async removeAllowedGroup(groupJid: string) {
+        if (this.allowedGroups.some(group => group.number === groupJid)) this.retireReplyAdmission(groupJid);
         this.allowedGroups = this.allowedGroups.filter(c => c.number !== groupJid);
         await this.saveConfig();
     }
@@ -356,7 +532,7 @@ export class SessionManager {
             return;
         }
 
-        delete contact.name;
+        contact.name = undefined;
         await this.saveConfig();
     }
 
@@ -370,7 +546,7 @@ export class SessionManager {
     async removeContactSendNumber(number: string) {
         const contact = this.getAllowedContact(number);
         if (!contact) return;
-        delete contact.sendNumber;
+        contact.sendNumber = undefined;
         await this.saveConfig();
     }
 
@@ -395,7 +571,7 @@ export class SessionManager {
             return;
         }
 
-        delete group.name;
+        group.name = undefined;
         await this.saveConfig();
     }
 
@@ -541,9 +717,16 @@ export class SessionManager {
         return { ...this.sttConfig };
     }
 
-    async setSttConfig(config: SttConfig) {
-        this.sttConfig = { sttEndpoint: config.sttEndpoint, sttModel: config.sttModel, sttEnv: config.sttEnv };
-        await this.saveConfig();
+    async setSttConfig(config: SttConfig, current: () => boolean = () => true): Promise<void> {
+        const next = { sttEndpoint: config.sttEndpoint, sttModel: config.sttModel, sttEnv: config.sttEnv, sttLanguage: config.sttLanguage };
+        await this.ensureInitialized();
+        if (!this.configLoaded || this.configReadFailure) throw new Error('Configuration is unreadable; originals preserved');
+        await this.queueConfig(async () => {
+            if (!current()) throw new Error('Settings request expired');
+            await this.writeConfig(this.storedSpeechState, this.operatorJid, current, 'atomic', this.finalAfterAttachments,
+                this.storedReplyStats, this.storedGroupReplies, this.storedOptionalOutputs, this.storedReplyReporting, next);
+            this.sttConfig = next;
+        });
     }
 
     getVisionModel(): string {
@@ -559,9 +742,24 @@ export class SessionManager {
         return this.operatorJid;
     }
 
-    async setOperatorJid(jid: string) {
-        this.operatorJid = jid;
-        await this.saveConfig();
+    async setOperatorJid(jid: string, current: () => boolean = () => true) {
+        const next = jid ? settingsJid(jid) : '';
+        if (next.endsWith('@g.us')) throw new Error('Owner must be a person, not a group');
+        await this.ensureInitialized();
+        if (!this.configLoaded || this.configReadFailure) throw new Error('Configuration is unreadable; originals preserved');
+        await this.queueConfig(async () => {
+            if (!current()) throw new Error('Settings request expired');
+            let outputs = this.storedOptionalOutputs;
+            if (next !== this.operatorJid && outputs !== undefined) {
+                try { outputs = { imageTools: validateOptionalOutputs(outputs).imageTools }; }
+                catch { /* Preserve invalid originals, which cannot authorize forwarding. */ }
+            }
+            await this.writeConfig(this.storedSpeechState, next, current, 'atomic', this.finalAfterAttachments, this.storedReplyStats, this.storedGroupReplies, outputs);
+            this.storedOptionalOutputs = outputs; this.optionalOutputsRevision++;
+            this.operatorJid = next;
+            this.operatorRevision++;
+            this.speechRevision++;
+        });
     }
 
     getArchiveStorageOptions() {

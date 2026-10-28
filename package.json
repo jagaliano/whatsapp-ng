@@ -16,6 +16,8 @@
   "files": [
     "whatsapp-ng.ts",
     "src",
+    "docs/crispasr.md",
+    "docs/reference.md",
     "SECURITY.md",
     "LICENSING.md",
     "CHANGELOG.md",
@@ -32,7 +34,10 @@
   "author": "Rapha",
   "license": "MIT",
   "contributors": [
-    { "name": "jagaliano", "url": "https://github.com/jagaliano" }
+    {
+      "name": "jagaliano",
+      "url": "https://github.com/jagaliano"
+    }
   ],
   "publishConfig": {
     "tag": "next",
@@ -44,13 +49,14 @@
     "@sinclair/typebox": "*"
   },
   "scripts": {
-    "lint": "eslint whatsapp-ng.ts \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "lint": "eslint whatsapp-ng.ts \"src/**/*.ts\" \"src/**/*.mjs\" \"tests/**/*.ts\"",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@llamaindex/liteparse": "2.17.0",
     "baileys": "7.0.0-rc14",
+    "msedge-tts": "2.1.1",
     "pino": "^10.3.1",
     "qrcode-terminal": "^0.12.0",
     "whisper-cpp-node": "^0.2.12"
@@ -70,8 +76,8 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0",
-    "vitest": "5.0.5",
-    "vite": "8.3.5"
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
   },
   "pi": {
     "extensions": [

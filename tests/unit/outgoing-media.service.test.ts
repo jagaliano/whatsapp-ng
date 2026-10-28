@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { OutgoingMediaService } from '../../src/services/outgoing-media.service.ts';
@@ -44,6 +44,22 @@ describe('OutgoingMediaService file egress', () => {
         const result = await service.prepare({ path: join(media, 'image.png'), type: 'image', caption: 'Image' });
         prepared.push(result);
         expect(result.content).toMatchObject({ image: { url: expect.any(String) }, mimetype: 'image/png', caption: 'Image' });
+    });
+    it('prepares actual tool image bytes privately and removes staging before returning the owned snapshot', async () => {
+        const upload = await service.prepareImage(png.toString('base64'), 'image/png'); prepared.push(upload);
+        expect(await readdir(media)).toEqual([]);
+        const path = (upload.content as { image: { url: string } }).image.url;
+        expect(await readFile(path)).toEqual(png); expect((await stat(path)).mode & 0o777).toBe(0o600);
+        await upload.dispose(); await expect(access(path)).rejects.toThrow();
+    });
+    it('rejects malformed, oversized, mismatched or cancelled image bytes without staging leftovers', async () => {
+        for (const [data, mime] of [['https://example.invalid/a.png', 'image/png'], [png.toString('base64'), 'image/jpeg'], ['', 'image/png'], [Buffer.from('secret text').toString('base64'), 'image/png']]) {
+            await expect(service.prepareImage(data, mime)).rejects.toThrow();
+        }
+        const tiny = new OutgoingMediaService({ workspaceRoot: workspace, mediaRoot: media, maxBytes: 8 });
+        await expect(tiny.prepareImage(png.toString('base64'), 'image/png')).rejects.toThrow();
+        const abort = new AbortController(); abort.abort(); await expect(service.prepareImage(png.toString('base64'), 'image/png', abort.signal)).rejects.toThrow();
+        expect(await readdir(media)).toEqual([]);
     });
     it('rejects type mismatch, URLs, missing, empty and directory inputs', async () => {
         const file = join(workspace, 'not-an-image.png');

@@ -7,6 +7,9 @@ import { showMessageReplyView } from './message-reply.view.js';
 import * as qrcode from 'qrcode-terminal';
 import type { ExtensionCommandContext } from '@mariozechner/pi-coding-agent';
 import { t } from '../i18n.js';
+import { groupReplyModes, validateGroupReplies, type GroupReplies, type GroupReplyMode } from '../services/group-message.policy.js';
+import { chooseWhatsAppSetting } from './whatsapp-settings.view.js';
+import { METADATA_LOG_POLICY } from '../services/whatsapp-ng.logger.js';
 
 interface HistoryOptionEntry {
     label: string;
@@ -26,13 +29,18 @@ export class MenuHandler {
     constructor(
         private readonly whatsappService: WhatsAppService,
         private readonly sessionManager: SessionManager,
-        private readonly recentsService: RecentsService
+        private readonly recentsService: RecentsService,
+        private readonly settings?: { voice(ctx: ExtensionCommandContext): Promise<void>; owner(ctx: ExtensionCommandContext): Promise<void>; connect?(): void; captureCurrent?(): () => boolean; groupChanged?(): void; optional?(ctx: ExtensionCommandContext): Promise<void>; off?(ctx: ExtensionCommandContext): Promise<void>; enabled?(): boolean }
     ) {}
 
     async handleCommand(ctx: ExtensionCommandContext) {
-        const status = this.whatsappService.getEffectiveStatus();
+        const settingsCurrent = this.settings?.captureCurrent?.() ?? (() => true);
+        const checkCurrent = () => {
+            if (settingsCurrent()) return true;
+            ctx.ui.notify('Settings changed while this menu was open. Reopen /whatsapp.', 'info');
+            return false;
+        };
         const registered = await this.sessionManager.isRegistered();
-        const title = t('menu.whatsapp.title', { status });
         const recentsLabel = t('menu.root.recents');
         const allowedContactsLabel = t('menu.root.allowedNumbers');
         const allowedGroupsLabel = t('menu.root.allowedGroups');
@@ -40,49 +48,75 @@ export class MenuHandler {
         const connectWhatsAppLabel = t('menu.root.connectWhatsApp');
         const logoffDeleteSessionLabel = t('menu.root.logoffDeleteSession');
         const backLabel = t('menu.root.back');
-        const options: string[] = [];
-
-        if (status === 'connected') {
-            options.push(recentsLabel);
-            options.push(allowedContactsLabel);
-            options.push(allowedGroupsLabel);
-            options.push(disconnectWhatsAppLabel);
-        } else {
-            options.push(connectWhatsAppLabel);
-        }
-
-        if (registered) {
-            options.push(logoffDeleteSessionLabel);
-        }
-
+        const replyDeliveryLabel = t('menu.replyDelivery.title');
         const historyScopeLabel = t('archive.menu.scope');
-        if (this.recentsService.getArchiveState?.()?.enabled) {
-            if (status !== 'connected') options.push(recentsLabel);
-            options.push(historyScopeLabel);
-        }
-        options.push(backLabel);
-
-        const choice = await ctx.ui.select(title, options);
+        const choice = await chooseWhatsAppSetting(ctx, () => ({ status: this.whatsappService.getEffectiveStatus(), enabled: this.settings?.enabled?.() ?? true, registered,
+            archive: Boolean(this.recentsService.getArchiveState?.()?.enabled), optional: Boolean(this.settings?.optional), owner: Boolean(this.settings) }), checkCurrent);
+        if (!choice || !checkCurrent()) return;
 
         switch (choice) {
+            case 'Privacy and logs':
+                ctx.ui.notify(METADATA_LOG_POLICY, 'info');
+                break;
+            case 'Optional outputs':
+                await this.settings?.optional?.(ctx);
+                break;
+            case t('voice.menu'):
+                await this.settings?.voice(ctx);
+                break;
+            case t('voice.owner'):
+                await this.settings?.owner(ctx);
+                break;
+            case 'Group replies':
+                await this.manageGroupReplies(ctx, settingsCurrent);
+                break;
+            case replyDeliveryLabel: {
+                const explain = t('menu.replyDelivery.explain');
+                const legacy = t('menu.replyDelivery.legacy');
+                const current = this.sessionManager.getFinalAfterAttachments() ? explain : legacy;
+                const statsOn = t('menu.replyDelivery.statsOn'); const statsOff = t('menu.replyDelivery.statsOff');
+                const statsRevision = this.sessionManager.getReplyStatsRevision();
+                const reportingRevision = this.sessionManager.getReplyReportingRevision();
+                let flags = { changedFiles: false, interimText: false, liveActivity: false };
+                try { flags = this.sessionManager.getReplyReporting(); }
+                catch { ctx.ui.notify('Saved reporting settings are invalid. A reporting choice explicitly replaces them; other choices preserve them.', 'warning'); }
+                const reporting = ([['changedFiles', 'observed file paths'], ['interimText', 'interim assistant text'], ['liveActivity', 'live tool activity']] as const)
+                    .map(([key, label]) => ({ key, label: `${flags[key] ? 'Disable' : 'Enable'} ${label}` }));
+                const selected = await ctx.ui.select(t('menu.replyDelivery.current', { current }) + ` — final stats: ${this.sessionManager.getReplyStats() ? 'On' : 'Off'}; files ${flags.changedFiles ? 'On' : 'Off'}, interim ${flags.interimText ? 'On' : 'Off'}, activity ${flags.liveActivity ? 'On' : 'Off'}`,
+                    [explain, legacy, statsOn, statsOff, ...reporting.map(option => option.label), backLabel]);
+                const report = reporting.find(option => option.label === selected);
+                if (report) {
+                    if (!flags[report.key] && !await ctx.ui.confirm('Enable optional reply reporting?', 'Share observed workspace-relative file paths, completed intermediate assistant text or tool names with allowed WhatsApp chats, according to the selected setting? Never thinking/tool bodies. Applies only to future owned inputs; already-issued sends cannot be recalled.')) break;
+                    await this.sessionManager.setReplyReporting({ ...flags, [report.key]: !flags[report.key] }, reportingRevision, settingsCurrent);
+                    ctx.ui.notify('Reply reporting saved for future owned WhatsApp inputs; prior reporting work is withdrawn.', 'info');
+                } else if (selected === statsOn || selected === statsOff) {
+                    await this.sessionManager.setReplyStats(selected === statsOn, () => settingsCurrent() && statsRevision === this.sessionManager.getReplyStatsRevision());
+                    ctx.ui.notify(t('menu.replyDelivery.statsSaved'), 'info');
+                } else if (selected === explain || selected === legacy) {
+                    await this.sessionManager.setFinalAfterAttachments(selected === explain, settingsCurrent);
+                    ctx.ui.notify(t('menu.replyDelivery.saved'), 'info');
+                }
+                break;
+            }
             case connectWhatsAppLabel:
-                if (status === 'connected') {
+                if (this.whatsappService.getEffectiveStatus() === 'connected' && (this.settings?.enabled?.() ?? true)) {
                     ctx.ui.notify(t('menu.root.alreadyConnected'), 'info');
                     break;
                 }
                 this.whatsappService.setQRCodeCallback((qr) => {
                     qrcode.generate(qr, { small: true });
                 });
+                this.settings?.connect?.();
                 await this.whatsappService.start();
                 ctx.ui.notify(registered ? t('menu.root.reconnectStarted') : t('menu.root.pairingStarted'), 'info');
                 break;
+            case 'Turn WhatsApp off':
             case disconnectWhatsAppLabel:
-                if (status !== 'connected') {
-                    ctx.ui.notify(t('menu.root.alreadyDisconnected'), 'info');
-                    break;
-                }
-                await this.whatsappService.stop();
-                ctx.ui.notify(t('menu.root.agentDisconnected'), 'warning');
+                if (!await ctx.ui.confirm('Turn WhatsApp off?', 'Stop intake, abort shared Pi work and cancel pending WhatsApp output? Login/history are retained; withdrawn WhatsApp inputs are not replayed. Already-issued external effects cannot be recalled.')) break;
+                if (!checkCurrent()) return;
+                if (this.settings?.off) await this.settings.off(ctx);
+                else await this.whatsappService.stop();
+                ctx.ui.notify('WhatsApp is off. Login and history retained; re-enable from Connection.', 'warning');
                 break;
             case logoffDeleteSessionLabel: {
                 const confirmLogoff = await ctx.ui.confirm(t('menu.root.logoffTitle'), t('menu.root.logoffConfirmMessage'));
@@ -113,6 +147,27 @@ export class MenuHandler {
                 break;
             }
         }
+    }
+
+    private async manageGroupReplies(ctx: ExtensionCommandContext, current: () => boolean): Promise<void> {
+        let settings: GroupReplies; let invalid = false;
+        try { settings = this.sessionManager.getGroupReplies(); } catch { settings = validateGroupReplies(undefined); invalid = true; }
+        const revision = this.sessionManager.getGroupRepliesRevision();
+        const labels: Record<GroupReplyMode, string> = { 'mentions-or-replies': 'Mentions or replies (default)', mentions: 'Mentions only', replies: 'Replies only', all: 'Every allowed group message' };
+        const context = settings.context ? 'Disable preceding text context' : 'Enable preceding text context';
+        const back = t('menu.root.back');
+        const choice = await ctx.ui.select(invalid ? 'Invalid saved group policy; choose explicitly to repair' : `Shared group replies: ${labels[settings.mode]} / preceding context ${settings.context ? 'On' : 'Off'}`,
+            [...groupReplyModes.map(mode => labels[mode]), context, back]);
+        if (!choice || choice === back) return;
+        if (choice === context) {
+            if (!settings.context && !await ctx.ui.confirm('Enable group context?', 'Future allowed group text may be sent with triggered model requests and stored in normal Pi history. The memory buffer holds at most 20 messages, 2000 characters each, expiring after 30 minutes. No media is downloaded for context. All chats share Pi context.')) return;
+            settings = { ...settings, context: !settings.context };
+        } else {
+            const mode = groupReplyModes.find(mode => labels[mode] === choice); if (!mode) return;
+            settings = { ...settings, mode };
+        }
+        await this.sessionManager.setGroupReplies(settings, revision, current); this.settings?.groupChanged?.();
+        ctx.ui.notify('Shared group reply policy saved for new requests. Paused chats remain paused; old work is not replayed.', 'info');
     }
 
     private async manageAllowList(ctx: ExtensionCommandContext) {

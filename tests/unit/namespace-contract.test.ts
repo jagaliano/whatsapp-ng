@@ -5,18 +5,19 @@ import { describe, expect, it } from 'vitest';
 import { getDefaultStorageRoot, getDefaultLegacyStorageRoot } from '../../src/services/storage-path.js';
 
 const root = resolve(import.meta.dirname, '../..');
-const readme = readFileSync(resolve(root, 'README.md'), 'utf8');
-// The README is the authority for historical names; do not embed a second legacy namespace in code.
-const legacy = /Legacy project identifier: `([^`]+)`/.exec(readme)?.[1];
+const historicalDocs = new Set(['README.md', 'docs/reference.md']);
+const reference = readFileSync(resolve(root, 'docs/reference.md'), 'utf8');
+// Keep historical names in attribution/migration docs, not current code or filenames.
+const legacy = /Legacy project identifier: `([^`]+)`/.exec(reference)?.[1];
 
 describe('independent maintained namespace', () => {
-    it('keeps the legacy identifier only in the README, not current files or filenames', () => {
+    it('keeps the legacy identifier only in attribution and migration docs, not current code or filenames', () => {
         expect(legacy).toMatch(/^[a-z]+-[a-z]+$/);
         const pattern = new RegExp(legacy!.replace('-', '[-_ ]?'), 'i');
         const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { cwd: root, encoding: 'utf8' }).split('\0');
         const offenders: string[] = [];
         for (const name of new Set(files)) {
-            if (!name || name === 'README.md' || name.startsWith('.pi/') || name.startsWith('node_modules/') || !existsSync(resolve(root, name))) continue;
+            if (!name || historicalDocs.has(name) || name.startsWith('.pi/') || name.startsWith('node_modules/') || !existsSync(resolve(root, name))) continue;
             if (pattern.test(name) || pattern.test(readFileSync(resolve(root, name), 'utf8'))) offenders.push(name);
         }
         expect(offenders).toEqual([]);

@@ -49,6 +49,14 @@ describe('IncomingMediaService', () => {
         vi.spyOn(Date, 'now').mockReturnValue(1234567890);
     });
 
+    it.each(['audio', 'image', 'video', 'document'])('keeps incoming %s names, captions and speech out of log messages', async kind => {
+        const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+        const service = new IncomingMediaService(audioService as any, logger as any);
+        audioService.transcribe.mockResolvedValue('PRIVATE-C4-SPEECH');
+        const data = { fileName: 'PRIVATE-C4-FILENAME.pdf', mimetype: 'application/pdf', caption: 'PRIVATE-C4-CAPTION' };
+        await service.process({ kind, text: 'PRIVATE-C4-CAPTION', [`${kind}Message`]: data } as any, 'PRIVATE-C4-NAME');
+        expect(JSON.stringify(logger.log.mock.calls)).not.toContain('PRIVATE-C4-');
+    });
     it('passes through non-media resolved content', async () => {
         const service = new IncomingMediaService(audioService as any);
 

@@ -20,8 +20,7 @@ import { IncomingMessage, SessionStatus, type IncomingMessageEnvelope, type Inco
 import { MessageSender } from './message.sender.js';
 import { installBaileysConsoleFilter } from './baileys-console-filter.js';
 import { t } from '../i18n.js';
-import { appendFileSync } from 'fs';
-import { createStoragePaths } from './storage-path.js';
+import { WhatsAppNgLogger } from './whatsapp-ng.logger.js';
 import { extractIncomingText } from './incoming-message.resolver.js';
 import type { RecentsService } from './recents.service.js';
 import { JidResolver } from './jid-resolver.service.js';
@@ -29,17 +28,10 @@ import { MessageStore } from './message-store.service.js';
 import { HistorySyncService } from './history-sync.service.js';
 import { TransportLease, type AuthOperationScope } from './transport-lease.service.js';
 import type { LifecycleUpdate } from '../models/message-archive.types.js';
-import { dirname } from 'node:path';
-import { StateMigrationService } from './state-migration.service.js';
+import { groupAddressing } from './group-message.policy.js';
 
-const LOG_FILE = createStoragePaths().logPath;
-function fileLog(msg: string) {
-    try {
-        StateMigrationService.assertReady(dirname(LOG_FILE));
-        appendFileSync(LOG_FILE, `[${new Date().toISOString()}] [WhatsApp-NG] ${msg}\n`); } catch {
-        // File logging is best-effort.
-    }
-}
+const transportLogger = new WhatsAppNgLogger(false);
+function fileLog(message: string): void { transportLogger.log(`[WhatsApp-NG] ${message}`); }
 
 export interface WhatsAppStartOptions {
     allowPairingOnAuthFailure?: boolean;
@@ -140,6 +132,7 @@ export class WhatsAppService {
     private intentionalStop = false;
     private onQRCode?: (qr: string) => void;
     private onMessage?: (message: IncomingMessageEnvelope) => void | Promise<void>;
+    private onPollVote?: (message: IncomingMessageEnvelope) => void | Promise<void>;
     private incomingLedger = new Map<string, { key: WAMessageKey; scope: string; state: IncomingProcessingState; expiresAt: number }>();
     private readonly jidResolver = new JidResolver(() => {
         this.reindexIncomingLedger();
@@ -272,6 +265,18 @@ export class WhatsAppService {
         return { key: { ...record.key }, message: record.message };
     }
 
+    /** Reuse only a retained same-chat image; never trust incoming quoted media URLs/keys. */
+    public getIncomingQuotedImage(message: IncomingMessageLike): NonNullable<proto.IMessage['imageMessage']> | undefined {
+        const chat = message.key.remoteJid;
+        if (!chat?.endsWith('@g.us')) return undefined;
+        const quote = groupAddressing(message.message, chat, jid => this.isOwnJid(jid)).quote;
+        if (!quote) return undefined;
+        const stored = this.getQuotedMessage(chat, { messageId: quote.id, conversationJid: chat,
+            fromMe: this.isOwnJid(quote.participant), participant: quote.participant });
+        const image = stored?.message ? extractMessageContent(stored.message)?.imageMessage : undefined;
+        return image && !image.viewOnce && image.mediaKey && (image.directPath || image.url) ? image : undefined;
+    }
+
     public invalidateMessage(key: WAMessageKey): void {
         if (key.id) this.messageStore.remove(key);
         else if (key.remoteJid) this.messageStore.clearChat(key.remoteJid);
@@ -347,6 +352,25 @@ export class WhatsAppService {
 
     public canonicalConversation(jid: string): string | undefined {
         return this.jidResolver.canonical(jid);
+    }
+
+    /** Own identity comes from the authenticated socket, including its verified LID. */
+    public isOwnJid(jid: string): boolean {
+        if (!/^\d+(?::\d+)?@(s\.whatsapp\.net|lid)$/.test(jid)) return false;
+        const normalized = this.jidResolver.normalize(jid);
+        return [this.socket?.user?.id, this.socket?.user?.lid].some(own => {
+            if (!own) return false;
+            const canonical = this.jidResolver.canonical(own);
+            return normalized === this.jidResolver.normalize(own) || (!!canonical && canonical === this.jidResolver.canonical(jid));
+        });
+    }
+
+    public resolveIncomingActor(key: WAMessageKey): string | undefined {
+        this.updateIdentityAccount();
+        const actor = key.fromMe === true ? this.identityAccount : key.fromMe === false
+            ? (key.remoteJid?.endsWith('@g.us') ? key.participant : key.remoteJid) : undefined;
+        const canonical = actor ? this.jidResolver.canonical(actor) : undefined;
+        return canonical && /^\d+@(s\.whatsapp\.net|lid)$/.test(canonical) ? actor ?? undefined : undefined;
     }
 
     public isVerbose(): boolean {
@@ -455,8 +479,8 @@ export class WhatsAppService {
             
             try {
                 await this.start(options);
-            } catch (error) {
-                fileLog(`[scheduleReconnect] Reconnect failed: ${error instanceof Error ? error.message : String(error)}`);
+            } catch {
+                fileLog('[scheduleReconnect] Reconnect failed');
                 if (!this.intentionalStop) {
                     this.scheduleReconnect(options);
                 }
@@ -470,11 +494,10 @@ export class WhatsAppService {
         this.groupMetadataCache.clear();
 
         if (!this.socket) {
+            this.restoreBaileysConsoleFilter?.();
+            this.restoreBaileysConsoleFilter = undefined;
             return;
         }
-
-        this.restoreBaileysConsoleFilter?.();
-        this.restoreBaileysConsoleFilter = undefined;
         this.socket.ev.removeAllListeners('connection.update');
         this.socket.ev.removeAllListeners('creds.update');
         this.socket.ev.removeAllListeners('messages.upsert');
@@ -495,6 +518,8 @@ export class WhatsAppService {
         }
 
         this.socket = undefined;
+        this.restoreBaileysConsoleFilter?.();
+        this.restoreBaileysConsoleFilter = undefined;
     }
 
     private setSocket(socket: WhatsAppSocketLike) {
@@ -627,7 +652,8 @@ export class WhatsAppService {
         this.rawSaveCreds = save;
         this.saveCreds = () => scope.run(save);
 
-        const logger = P({ level: this.verboseMode ? 'trace' : 'silent' });
+        // Protocol traces can contain decrypted bodies and key material; verbose is metadata-only.
+        const logger = P({ level: 'silent' });
         const keys = makeCacheableSignalKeyStore(state.keys, logger);
         const guardedKeys: SignalKeyStore = {
             get: (type, ids) => scope.run(() => keys.get(type, ids)),
@@ -689,16 +715,10 @@ export class WhatsAppService {
 
         this.cleanupSocket();
 
-        const originalConsoleLog = console.log;
-        const originalConsoleWarn = console.warn;
-        const originalConsoleError = console.error;
         let socketInitialized = false;
-
-        if (!this.verboseMode) {
-            console.log = () => {};
-            console.warn = () => {};
-            console.error = () => {};
-        }
+        // Filter only known secret-bearing libsignal noise, including during auth/socket awaits.
+        // Ordinary application errors must keep their normal console path.
+        this.restoreBaileysConsoleFilter = installBaileysConsoleFilter(false);
 
         try {
             await this.retireAuthScope(true);
@@ -717,13 +737,9 @@ export class WhatsAppService {
             }
             throw error;
         } finally {
-            if (!this.verboseMode) {
-                console.log = originalConsoleLog;
-                console.warn = originalConsoleWarn;
-                console.error = originalConsoleError;
-                if (socketInitialized) {
-                    this.restoreBaileysConsoleFilter = installBaileysConsoleFilter(this.verboseMode);
-                }
+            if (!socketInitialized) {
+                this.restoreBaileysConsoleFilter?.();
+                this.restoreBaileysConsoleFilter = undefined;
             }
         }
     }
@@ -733,7 +749,7 @@ export class WhatsAppService {
         const allowPairingOnAuthFailure = options.allowPairingOnAuthFailure ?? true;
 
         if (this.verboseMode) {
-            fileLog(`[connection.update] connection=${connection}, hasDisconnect=${!!lastDisconnect}, qr=${!!qr}, isReconnecting=${this.isReconnecting}`);
+            fileLog(`[connection.update] stateKnown=${connection === 'open' || connection === 'close' || connection === 'connecting'}, hasDisconnect=${Boolean(lastDisconnect)}, qr=${Boolean(qr)}, isReconnecting=${this.isReconnecting}`);
         }
 
         if (qr) {
@@ -759,7 +775,7 @@ export class WhatsAppService {
         }
 
         if (this.verboseMode && connection !== undefined) {
-            fileLog(`[connection.update] Ignoring unexpected connection state: ${connection}`);
+            fileLog('[connection.update] Ignoring unexpected connection state');
         }
     }
 
@@ -807,7 +823,8 @@ export class WhatsAppService {
         if (!socket || !rawId) return;
         const context = this.getSessionContext();
         const selfJid = this.normalizeJidForComparison(rawId);
-        await this.sessionManager.setOperatorJid(selfJid);
+        // Ownership is an explicit terminal setting. Pairing must neither appoint
+        // a new owner nor overwrite an owner selected before reconnect/relink.
         if (socket !== this.socket || !this.isSessionContextCurrent(context)) return;
         try {
             const id = generateMessageIDV2();
@@ -847,7 +864,7 @@ export class WhatsAppService {
         const isBadMac = this.isBadMacError(errorMessage);
         const isAuthRejected = this.isAuthRejected(statusCode, errorMessage);
 
-        fileLog(`[handleConnectionClosed] statusCode=${statusCode}, errorMessage="${errorMessage}", shouldReconnect=${shouldReconnect}, isBadMac=${isBadMac}, isAuthRejected=${isAuthRejected}, intentionalStop=${this.intentionalStop}, isReconnecting=${this.isReconnecting}`);
+        fileLog(`[handleConnectionClosed] statusCode=${statusCode}, shouldReconnect=${shouldReconnect}, isBadMac=${isBadMac}, isAuthRejected=${isAuthRejected}, intentionalStop=${this.intentionalStop}, isReconnecting=${this.isReconnecting}`);
 
 
         if (this.intentionalStop) {
@@ -988,6 +1005,8 @@ export class WhatsAppService {
         }
         this.identityAccount = normalized;
         this.identityAuthDir = authDir;
+        const lid = this.socket?.user?.lid;
+        if (lid && /^\d+@s\.whatsapp\.net$/.test(normalized) && /^\d+(?::\d+)?@lid$/.test(lid)) this.jidResolver.bind(lid, normalized);
     }
 
     private clearIdentityState(): void {
@@ -1075,9 +1094,9 @@ export class WhatsAppService {
             text,
             timestamp: this.getIncomingTimestamp(message.messageTimestamp),
             quotedMessage
-        })).catch(error => {
+        })).catch(() => {
             if (this.verboseMode) {
-                console.error(t('service.whatsapp.failedRecordRecentMessage'), error);
+                console.error(t('service.whatsapp.failedRecordRecentMessage'));
             }
         });
     }
@@ -1090,9 +1109,9 @@ export class WhatsAppService {
             if (!this.isSessionContextCurrent(context) || this.sessionManager.getStatus() !== 'connected') break;
             try {
                 await this.handleIncomingMessage(message, payload.type !== 'append' && !payload.requestId, context);
-            } catch (error) {
+            } catch {
                 if (message?.key && this.isSessionContextCurrent(context)) this.markIncomingProcessing(message.key, 'failed');
-                console.error(t('service.whatsapp.failedRecordRecentMessage'), error instanceof Error ? error.message : 'Message processing failed');
+                console.error(t('service.whatsapp.failedRecordRecentMessage'));
             }
         }
         if (this.isSessionContextCurrent(context) && payload.requestId) {
@@ -1108,14 +1127,24 @@ export class WhatsAppService {
         const { id, remoteJid } = message?.key ?? {};
         if (!id || !remoteJid || !message.message) return;
         if (this.boundGroupJid && remoteJid !== this.boundGroupJid) return;
-        if (live && message.key.fromMe && this.isPiGeneratedMessage(this.extractText(message.message))) return;
-
         await this.observeIncomingIdentity(message.key, context);
         if (!this.isSessionContextCurrent(context)) return;
+        if (live && message.key.fromMe && !this.isOwnJid(remoteJid) && this.isPiGeneratedMessage(this.extractText(message.message))) return;
         const isGroup = remoteJid.endsWith('@g.us');
         const senderNumber = this.jidResolver.senderNumber(remoteJid);
         if (!senderNumber) return;
-        const protocol = extractMessageContent(message.message)?.protocolMessage;
+        const content = extractMessageContent(message.message);
+        const protocol = content?.protocolMessage;
+        if (content?.pollUpdateMessage || content?.pollCreationMessage || content?.pollCreationMessageV2 || content?.pollCreationMessageV3) {
+            // rc14's automatic poll-vote decryption is commented out. Use the
+            // same admitted intake, before raw/projection storage, for ephemeral
+            // command menus. Unknown/imported votes must never become prompts.
+            if (live && content.pollUpdateMessage && this.sessionManager.isConversationAllowed(senderNumber) && this.reserveIncoming(message.key)) {
+                try { await this.onPollVote?.({ ...message, key: { ...message.key, id, remoteJid }, senderNumber, sessionContext: context }); }
+                finally { if (this.isSessionContextCurrent(context)) this.markIncomingProcessing(message.key, 'consumed'); }
+            }
+            return;
+        }
 
         const resolved = extractIncomingText(message.message, this.recentsService);
         if (!this.sessionManager.isConversationAllowed(senderNumber)) {
@@ -1165,6 +1194,10 @@ export class WhatsAppService {
         this.onMessage = callback;
     }
 
+    setPollVoteCallback(callback: (message: IncomingMessageEnvelope) => void | Promise<void>) {
+        this.onPollVote = callback;
+    }
+
     setStatusCallback(callback: (status: string) => void) {
         this.onStatusUpdate = callback;
     }
@@ -1189,20 +1222,20 @@ export class WhatsAppService {
     public async prepareGroupSession(jid: string): Promise<void> {
         if (!jid.endsWith('@g.us')) return;
         if (this.groupMetadataCache.has(jid)) {
-            fileLog(`Group metadata cache HIT for ${jid}`);
+            fileLog('Group metadata cache hit');
             return;
         }
         const socket = this.getActiveSocket();
         if (!socket) return;
         const context = this.getSessionContext();
         try {
-            fileLog(`Fetching group metadata for ${jid}...`);
+            fileLog('Fetching group metadata');
             const metadata = await socket.groupMetadata(jid);
             if (socket !== this.socket || !this.isSessionContextCurrent(context)) return;
             this.groupMetadataCache.set(jid, metadata);
-            fileLog(`Cached group metadata for ${jid} (${metadata.participants?.length ?? 0} participants)`);
-        } catch (error) {
-            fileLog(`FAILED to fetch group metadata for ${jid}: ${error instanceof Error ? error.message : String(error)}`);
+            fileLog(`Cached group metadata (${metadata.participants?.length ?? 0} participants)`);
+        } catch {
+            fileLog('Failed to fetch group metadata');
         }
     }
 
@@ -1226,7 +1259,7 @@ export class WhatsAppService {
         if (this.isSessionContextCurrent(sessionContext)) await this.sendPresence(recipientJid, 'paused');
 
         if (!result.success) {
-            console.error(t('service.whatsapp.failedSendMessage', { jid: recipientJid, error: result.error ?? t('message.sender.unknownError') }));
+            console.error('[WhatsApp-NG] Message send failed');
         }
 
         return result;
@@ -1258,7 +1291,7 @@ export class WhatsAppService {
             });
         } catch (error: unknown) {
             if (this.isSessionContextCurrent(sessionContext)) await this.sendPresence(normalizedJid, 'paused');
-            console.error(t('service.whatsapp.failedSendMenuMessage', { jid: normalizedJid }), error);
+            console.error('[WhatsApp-NG] Menu send failed');
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Unknown error',
@@ -1274,9 +1307,9 @@ export class WhatsAppService {
         if (!socket) return;
         try {
             await socket.sendPresenceUpdate(presence, jid);
-        } catch (error) {
+        } catch {
             if (this.verboseMode) {
-                console.error(t('service.whatsapp.failedPresenceUpdate', { jid }), error);
+                console.error('[WhatsApp-NG] Presence update failed');
             }
         }
     }
@@ -1287,9 +1320,9 @@ export class WhatsAppService {
         if (key.remoteJid.endsWith('@g.us') && !key.participant) return;
         try {
             await socket.readMessages([{ ...key }]);
-        } catch (error) {
+        } catch {
             if (this.verboseMode) {
-                console.error(t('service.whatsapp.failedMarkRead'), error);
+                console.error(t('service.whatsapp.failedMarkRead'));
             }
         }
     }
@@ -1331,9 +1364,9 @@ export class WhatsAppService {
         return this.runLifecycle(async () => {
             try {
                 try { await this.closeTransportState(true); }
-                catch (error) {
-                    if (this.verboseMode) console.error(t('service.whatsapp.failedPersistAuthState'), error);
-                    fileLog(`[stop] Failed to save credentials: ${error instanceof Error ? error.message : String(error)}`);
+                catch {
+                    if (this.verboseMode) console.error(t('service.whatsapp.failedPersistAuthState'));
+                    fileLog('[stop] Failed to save credentials');
                 }
                 this.messageStore.clear();
                 this.isReconnecting = false;

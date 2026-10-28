@@ -13,6 +13,7 @@ beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'ng-native-whisper-')); model = join(root, 'light.bin');
     await writeFile(model, 'SYNTHETIC_MODEL_NOT_LOADED');
     vi.stubEnv('WHISPER_MODEL_PATH', model); vi.stubEnv('WHISPER_LANGUAGE', '');
+    vi.stubEnv('CRISPASR_MODEL_PATH', ''); vi.stubEnv('CRISPASR_LANGUAGE', '');
     mocks.create.mockReturnValue({ free: mocks.free });
     mocks.transcribe.mockResolvedValue({ segments: [[0, 1, ' local text ']] });
     mocks.download.mockImplementation(() => { throw new Error('Network forbidden'); });
@@ -25,6 +26,15 @@ describe('optional native Whisper model configuration', () => {
         expect(mocks.create).toHaveBeenCalledWith({ model, use_gpu: false, no_prints: true });
         expect(mocks.transcribe).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ language: 'auto' }));
         expect(mocks.download).not.toHaveBeenCalled();
+    });
+    it('uses CrispASR model/language overrides ahead of the Whisper fallbacks', async () => {
+        const selected = join(root, 'selected.bin'); await writeFile(selected, 'SYNTHETIC'); vi.stubEnv('CRISPASR_MODEL_PATH', selected); vi.stubEnv('CRISPASR_LANGUAGE', 'pt'); vi.stubEnv('WHISPER_LANGUAGE', 'es');
+        const { tryCreateWhisperNodeAudioTranscriber } = await import('../../src/services/whisper-cpp-node.transcriber.js'); await tryCreateWhisperNodeAudioTranscriber(logger)!.transcribe('fixture.wav');
+        expect(mocks.create).toHaveBeenCalledWith({ model: selected, use_gpu: false, no_prints: true }); expect(mocks.transcribe).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ language: 'pt' })); expect(mocks.download).not.toHaveBeenCalled();
+    });
+    it('refuses an invalid CrispASR model without falling back or downloading', async () => {
+        vi.stubEnv('CRISPASR_MODEL_PATH', join(root, 'absent.bin')); const { tryCreateWhisperNodeAudioTranscriber } = await import('../../src/services/whisper-cpp-node.transcriber.js');
+        await expect(tryCreateWhisperNodeAudioTranscriber(logger)!.transcribe('fixture.wav')).rejects.toThrow(/CRISPASR_MODEL_PATH/); expect(mocks.download).not.toHaveBeenCalled(); expect(mocks.create).not.toHaveBeenCalled();
     });
     it('honors an explicit language', async () => {
         vi.stubEnv('WHISPER_LANGUAGE', 'es');

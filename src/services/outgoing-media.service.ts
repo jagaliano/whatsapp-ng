@@ -1,5 +1,5 @@
 import { constants, type Stats } from 'node:fs';
-import { mkdtemp, open, realpath, rm, stat, lstat, chmod, readFile, type FileHandle } from 'node:fs/promises';
+import { mkdtemp, open, realpath, rm, stat, lstat, chmod, readFile, mkdir, writeFile, type FileHandle } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
@@ -51,6 +51,27 @@ export class OutgoingMediaService {
     constructor(private readonly options: MediaOptions) {
         this.mediaRoot = options.mediaRoot ?? createStoragePaths().mediaDir;
         this.maxBytes = options.maxBytes ?? 25 * 1024 * 1024;
+    }
+
+    /** Explicit tool image bytes only; text paths/URLs are never resolved by this entry. */
+    public async prepareImage(data: string, mimeType: string, signal?: AbortSignal): Promise<PreparedOutgoingMedia> {
+        this.checkAbort(signal);
+        if (!data || data.length > Math.ceil(this.maxBytes / 3) * 4 || data.length % 4) throw new Error(t('media.tooLarge', { maxMiB: this.maxBytes / 1024 / 1024 }));
+        const bytes = Buffer.from(data, 'base64');
+        const extensions: Record<string, string> = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif' };
+        if (!extensions[mimeType] || !bytes.length || bytes.length > this.maxBytes || bytes.toString('base64') !== data || this.imageMime(bytes) !== mimeType) throw new Error(t('media.unsupported'));
+        await mkdir(this.mediaRoot, { recursive: true, mode: 0o700 });
+        const directory = await mkdtemp(join(this.mediaRoot, 'tool-image-'));
+        let prepared: PreparedOutgoingMedia | undefined;
+        try {
+            const path = join(directory, 'image' + extensions[mimeType]);
+            await writeFile(path, bytes, { flag: 'wx', mode: 0o600 });
+            this.checkAbort(signal);
+            prepared = await this.prepare({ path, type: 'image' }, signal);
+        } catch (error) { await rm(directory, { recursive: true, force: true }); throw error; }
+        try { await rm(directory, { recursive: true, force: true }); }
+        catch (error) { await prepared.dispose(); throw error; }
+        return prepared;
     }
 
     public async prepare(request: OutgoingMediaRequest, signal?: AbortSignal): Promise<PreparedOutgoingMedia> {

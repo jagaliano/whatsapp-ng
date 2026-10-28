@@ -25,6 +25,7 @@ beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'ng-model-download-')); mocks.root = root;
     const cli = join(root, 'synthetic-cli'); await writeFile(cli, 'NOT_EXECUTED'); await chmod(cli, 0o700);
     vi.stubEnv('WHISPER_CLI_PATH', cli); vi.stubEnv('WHISPER_MODEL_PATH', '');
+    for (const name of ['CRISPASR_CLI_PATH', 'CRISPASR_MODEL_PATH', 'CRISPASR_LANGUAGE']) vi.stubEnv(name, '');
     mocks.execute.mockResolvedValue({ stdout: 'fixture text' });
 });
 afterEach(async () => { vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); });

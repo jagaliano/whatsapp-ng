@@ -47,14 +47,14 @@ export class IncomingMediaService {
         return { text: resolved.text };
     }
 
-    private async processAudio(audioMessage: any, pushName: string, options?: AudioTranscriptionOptions): Promise<ProcessedIncomingContent> {
-        this.logger.log(t('incoming.media.audioTranscribing', { pushName }));
+    private async processAudio(audioMessage: any, _pushName: string, options?: AudioTranscriptionOptions): Promise<ProcessedIncomingContent> {
+        this.logger.log('[WhatsApp-NG] Transcribing incoming audio');
         const transcription = options ? await this.audioService.transcribe(audioMessage, options) : await this.audioService.transcribe(audioMessage);
         return { text: t('incoming.media.audioTranscribed', { transcription }) };
     }
 
-    private async processImage(imageMessage: any, fallbackText: string, pushName: string): Promise<ProcessedIncomingContent> {
-        this.logger.log(t('incoming.media.imageDownloading', { pushName }));
+    private async processImage(imageMessage: any, fallbackText: string, _pushName: string): Promise<ProcessedIncomingContent> {
+        this.logger.log('[WhatsApp-NG] Downloading incoming image');
 
         try {
             const imageBuffer = await this.downloadMessage(imageMessage, 'image');
@@ -62,7 +62,7 @@ export class IncomingMediaService {
             let imageMimeType = rawMime.toLowerCase().split(';')[0].trim();
             if (imageMimeType === 'image/jpg') imageMimeType = 'image/jpeg';
 
-            this.logger.log(t('incoming.media.imageDownloaded', { imageMimeType, rawMime, size: imageBuffer.length }));
+            this.logger.log(`[WhatsApp-NG] Image downloaded: bytes=${imageBuffer.length}`);
             await this.saveMediaFile('image', imageMimeType, imageBuffer);
 
             return {
@@ -72,18 +72,19 @@ export class IncomingMediaService {
             };
         } catch (error) {
             this.logger.error(t('incoming.media.imageDownloadFailed'), error);
-            return { text: t('incoming.media.imageDownloadFailedText') };
+            const failure = t('incoming.media.imageDownloadFailedText');
+            return { text: fallbackText && fallbackText !== t('incoming.media.image') ? `${fallbackText}\n${failure}` : failure };
         }
     }
 
-    private async processVideo(videoMessage: any, fallbackText: string, pushName: string): Promise<ProcessedIncomingContent> {
-        this.logger.log(`[WhatsApp-NG] Downloading video from ${pushName}...`);
+    private async processVideo(videoMessage: any, fallbackText: string, _pushName: string): Promise<ProcessedIncomingContent> {
+        this.logger.log('[WhatsApp-NG] Downloading incoming video');
 
         try {
             const buffer = await this.downloadMessage(videoMessage, 'video');
             const mimeType = (videoMessage.mimetype || 'video/mp4').toLowerCase().split(';')[0].trim();
             const absolutePath = await this.saveMediaFile('video', mimeType, buffer);
-            this.logger.log(`[WhatsApp-NG] Video saved to ${absolutePath} (${buffer.length} bytes)`);
+            this.logger.log(`[WhatsApp-NG] Video saved: bytes=${buffer.length}`);
 
             return { text: `${fallbackText || t('incoming.media.video')}\n[Video saved: ${absolutePath}]` };
         } catch (error) {
@@ -102,18 +103,18 @@ export class IncomingMediaService {
         return absolutePath;
     }
 
-    private async processDocument(documentMessage: any, pushName: string): Promise<ProcessedIncomingContent> {
+    private async processDocument(documentMessage: any, _pushName: string): Promise<ProcessedIncomingContent> {
         const fileName = documentMessage.fileName || 'unnamed_document';
         const mimeType = documentMessage.mimetype || 'application/octet-stream';
         const fileSize = documentMessage.fileLength ? Number(documentMessage.fileLength) : 0;
 
-        this.logger.log(t('incoming.media.documentDownloading', { pushName, fileName }));
+        this.logger.log('[WhatsApp-NG] Downloading incoming document');
 
         try {
             const buffer = await this.downloadMessage(documentMessage, 'document');
             const relativePath = await this.saveDocument(fileName, buffer);
 
-            this.logger.log(t('incoming.media.documentSaved', { relativePath, size: buffer.length }));
+            this.logger.log(`[WhatsApp-NG] Document saved: bytes=${buffer.length}`);
 
             let text = t('incoming.media.documentReceived', { fileName }) + '\n'
                 + t('incoming.media.documentMimeType', { mimeType }) + '\n'

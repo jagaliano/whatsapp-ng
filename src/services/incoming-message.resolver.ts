@@ -74,7 +74,7 @@ const getTypeName = (payload: any): string => {
  * Extracts contextInfo from various message types.
  * Baileys stores contextInfo in different locations depending on message type.
  */
-const extractContextInfo = (resolved: any): any => {
+export const extractContextInfo = (resolved: any): any => {
     return resolved?.extendedTextMessage?.contextInfo
         || resolved?.imageMessage?.contextInfo
         || resolved?.videoMessage?.contextInfo
@@ -82,7 +82,11 @@ const extractContextInfo = (resolved: any): any => {
         || resolved?.documentMessage?.contextInfo
         || resolved?.stickerMessage?.contextInfo
         || resolved?.buttonsMessage?.contextInfo
-        || resolved?.templateMessage?.contextInfo;
+        || resolved?.templateMessage?.contextInfo
+        || resolved?.contactMessage?.contextInfo
+        || resolved?.contactsArrayMessage?.contextInfo
+        || resolved?.locationMessage?.contextInfo
+        || resolved?.liveLocationMessage?.contextInfo;
 };
 
 /**

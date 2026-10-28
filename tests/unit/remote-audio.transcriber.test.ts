@@ -19,6 +19,7 @@ describe('OpenAI-compatible remote audio transcription', () => {
         root = await mkdtemp(join(tmpdir(), 'whatsapp-ng-stt-'));
         audio = join(root, 'audio.wav');
         await writeFile(audio, Buffer.from('RIFF-fixture-WAVE'), { mode: 0o600 });
+        vi.stubEnv('WHATSAPP_NG_ALLOW_PLAIN_HTTP', '');
         vi.stubEnv(config.sttEnv, 'fixture-key-not-a-real-credential');
         vi.stubGlobal('fetch', fetchMock);
         fetchMock.mockReset().mockResolvedValue(Response.json({ text: '  transcribed speech  ' }));
@@ -74,6 +75,25 @@ describe('OpenAI-compatible remote audio transcription', () => {
         expect(Buffer.from(await file.arrayBuffer())).toEqual(Buffer.from('RIFF-fixture-WAVE'));
     });
 
+    it.each(['http://127.0.0.1:8096/v1', 'http://127.0.0.2/v1', 'http://[::1]:8096/v1', 'http://localhost:8096/v1'])('accepts loopback HTTP without changing multipart/auth/redirect rules: %s', async sttEndpoint => {
+        const transcriber = createRemoteAudioTranscriber({ ...config, sttEndpoint })!; await transcriber.transcribe(audio);
+        expect(fetchMock.mock.calls[0][0].toString()).toBe(sttEndpoint + '/audio/transcriptions');
+        expect(fetchMock.mock.calls[0][1]).toMatchObject({ redirect: 'error', headers: { Authorization: 'Bearer fixture-key-not-a-real-credential' } });
+        expect(transcriber.hostname).toBe(new URL(sttEndpoint).host);
+    });
+    it('allows LAN HTTP only with the exact opt-in and still rejects credentials/query/fragment', () => {
+        vi.stubEnv('WHATSAPP_NG_ALLOW_PLAIN_HTTP', '1'); expect(createRemoteAudioTranscriber({ ...config, sttEndpoint: 'http://192.168.1.20/v1' })).not.toBeNull();
+        for (const sttEndpoint of ['http://user:pass@127.0.0.1/v1', 'http://127.0.0.1/v1?q=x', 'http://127.0.0.1/v1#x', 'ftp://127.0.0.1/v1']) expect(() => createRemoteAudioTranscriber({ ...config, sttEndpoint })).toThrow(/Remote STT configuration/);
+        vi.stubEnv('WHATSAPP_NG_ALLOW_PLAIN_HTTP', 'true'); expect(() => createRemoteAudioTranscriber({ ...config, sttEndpoint: 'http://192.168.1.20/v1' })).toThrow();
+    });
+    it.each([undefined, 'auto', 'es', 'pt-BR'])('sends only an explicit remote language, treating auto as protocol omission (%s)', async sttLanguage => {
+        await createRemoteAudioTranscriber({ ...config, sttLanguage } as any)!.transcribe(audio);
+        expect(fetchMock.mock.calls[0][1].body.get('language')).toBe(!sttLanguage || sttLanguage === 'auto' ? null : sttLanguage);
+    });
+    it.each(['english', 'en_US', 'es\r\nheader', 42])('rejects invalid language before local-mode early exit: %s', sttLanguage => {
+        expect(() => createRemoteAudioTranscriber({ sttLanguage } as any)).toThrow(/Remote STT configuration/);
+        expect(() => createRemoteAudioTranscriber({ ...config, sttLanguage } as any)).toThrow(/Remote STT configuration/);
+    });
     it('resolves only sttEnv, at request time, without falling back to other keys', async () => {
         const transcriber = createRemoteAudioTranscriber(config)!;
         vi.stubEnv(config.sttEnv, '');

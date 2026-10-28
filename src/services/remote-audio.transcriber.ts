@@ -1,6 +1,7 @@
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import type { AudioTranscriber, AudioTranscriptionOptions, SttConfig } from './audio-transcriber.js';
+import { allowsPlainHttp } from './endpoint-policy.js';
 
 export const REMOTE_STT_MAX_BYTES = 25 * 1024 * 1024;
 const RESPONSE_MAX_BYTES = 1024 * 1024;
@@ -10,24 +11,28 @@ const REQUEST_TIMEOUT_MS = 60_000;
 class RemoteSttError extends Error {}
 
 export function createRemoteAudioTranscriber(config: SttConfig): RemoteAudioTranscriber | null {
-    const { sttEndpoint, sttModel, sttEnv } = config;
+    const { sttEndpoint, sttModel, sttEnv, sttLanguage } = config;
+    const invalid = () => new RemoteSttError('Remote STT configuration requires HTTPS, or HTTP on loopback / with WHATSAPP_NG_ALLOW_PLAIN_HTTP=1, a model, sttEnv name and optional language code or auto');
+    if (sttLanguage !== undefined && sttLanguage !== '' && (typeof sttLanguage !== 'string'
+        || (sttLanguage !== 'auto' && !/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/.test(sttLanguage)))) throw invalid();
     if ([sttEndpoint, sttModel, sttEnv].every(value => value === undefined || value === '')) return null;
-    const invalid = () => new RemoteSttError('Remote STT configuration requires an HTTPS base URL, model and sttEnv environment-variable name');
     if (typeof sttEndpoint !== 'string' || typeof sttModel !== 'string' || typeof sttEnv !== 'string'
         || !sttModel.trim() || sttModel.length > 256 || /[\r\n\0]/.test(sttModel)
         || sttEndpoint.length > 2048 || sttEnv.length > 128 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(sttEnv)) throw invalid();
     let endpoint: URL;
     try { endpoint = new URL(sttEndpoint); } catch { throw invalid(); }
-    if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) throw invalid();
+    if (!allowsPlainHttp(endpoint) || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) throw invalid();
     endpoint.pathname = `${endpoint.pathname.replace(/\/+$/, '')}/audio/transcriptions`;
-    return new RemoteAudioTranscriber(endpoint, sttModel.trim(), sttEnv);
+    return new RemoteAudioTranscriber(endpoint, sttModel.trim(), sttEnv, sttLanguage === 'auto' ? undefined : sttLanguage);
 }
 
 class RemoteAudioTranscriber implements AudioTranscriber {
     readonly hostname: string;
+    readonly origin: string;
 
-    constructor(private readonly endpoint: URL, private readonly model: string, private readonly env: string) {
+    constructor(private readonly endpoint: URL, private readonly model: string, private readonly env: string, private readonly language?: string) {
         this.hostname = endpoint.host;
+        this.origin = endpoint.origin;
     }
 
     async transcribe(inputPath: string, options: AudioTranscriptionOptions = {}): Promise<string> {
@@ -51,6 +56,7 @@ class RemoteAudioTranscriber implements AudioTranscriber {
             body.set('file', new Blob([new Uint8Array(bytes)], { type: 'audio/wav' }), 'audio.wav');
             body.set('model', this.model);
             body.set('response_format', 'json');
+            if (this.language) body.set('language', this.language);
             const response = await fetch(this.endpoint, {
                 method: 'POST', redirect: 'error', headers: { Authorization: `Bearer ${key}` }, body, signal
             });

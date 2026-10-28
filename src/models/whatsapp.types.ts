@@ -4,6 +4,14 @@ export type SessionStatus = 'logged-out' | 'pairing' | 'connected' | 'disconnect
 
 export type IncomingProcessingState = 'reserved' | 'prepared' | 'handed-off' | 'consumed' | 'failed' | 'interrupted';
 
+export type WhatsAppInputKind = 'text' | 'audio' | 'image' | 'video' | 'document' | 'contact' | 'location' | 'unknown';
+
+/** Verified request metadata, never derived from rendered model context. */
+export interface WhatsAppRequestMetadata {
+    readonly inputKind: WhatsAppInputKind;
+    readonly actorJid?: string;
+}
+
 export interface WhatsAppSessionContext {
     readonly accountScope: string;
     readonly generation: number;
@@ -52,6 +60,8 @@ export interface QuoteTarget {
 export interface TextSendOptions {
     quote?: QuoteTarget;
     signal?: AbortSignal;
+    /** Trusted finalization check, revalidated synchronously before transmission. */
+    isCurrent?: () => boolean;
     onSettled?: (result: MessageResult) => void | Promise<void>;
 }
 
@@ -63,7 +73,11 @@ export interface MessageRequest {
     sendOptions?: MiscMessageGenerationOptions;
     sessionContext?: WhatsAppSessionContext;
     signal?: AbortSignal;
+    /** Internal predicate, never a model-provided tool argument. */
+    isCurrent?: () => boolean;
     sendTimeoutMs?: number;
+    /** Internal control polls: protocol secrets belong only to the bounded menu lifetime. */
+    ephemeralProtocol?: boolean;
     onSettled?: (result: MessageResult) => void | Promise<void>;
     options?: {
         brand?: boolean;

@@ -12,6 +12,7 @@ describe('MessageSender', () => {
         prepareGroupSession: vi.fn().mockResolvedValue(undefined),
         cacheSentMessage: vi.fn(),
         registerOutgoing: vi.fn(),
+        prepareArchive: vi.fn().mockResolvedValue(undefined),
         recordSendOutcome: vi.fn()
     };
 
@@ -23,6 +24,8 @@ describe('MessageSender', () => {
         whatsappService.getStatus.mockReturnValue('connected');
         whatsappService.isVerbose.mockReturnValue(false);
         whatsappService.isSessionContextCurrent.mockReturnValue(true);
+        whatsappService.prepareArchive.mockReset().mockResolvedValue(undefined);
+        whatsappService.recordSendOutcome.mockReset();
     });
 
     it('sends branded text through the active socket', async () => {
@@ -46,6 +49,21 @@ describe('MessageSender', () => {
         expect(whatsappService.cacheSentMessage).toHaveBeenCalledWith('MSG123', message, {
             id: 'MSG123', remoteJid: '5511999998888@s.whatsapp.net', fromMe: true
         });
+    });
+
+    it('does not dump native send errors or message bodies into console diagnostics', async () => {
+        whatsappService.getSocket.mockReturnValue({ sendMessage: vi.fn().mockRejectedValueOnce(new Error('PRIVATE-C4-NATIVE-BODY')) });
+        await new MessageSender(whatsappService as any).send({ recipientJid: '15550000001@s.whatsapp.net', text: 'PRIVATE-C4-ANSWER', options: { maxRetries: 1 } });
+        expect(console.error).toHaveBeenCalledExactlyOnceWith('[MessageSender] Send attempt 1 failed');
+    });
+    it('keeps ephemeral poll protocol material out of the general transport/archive cache', async () => {
+        const secret = Buffer.alloc(32, 7);
+        const message = { pollCreationMessageV3: { name: 'Menu' }, messageContextInfo: { messageSecret: secret } };
+        const sendMessage = vi.fn().mockResolvedValue({ key: { id: 'poll-id' }, message });
+        whatsappService.getSocket.mockReturnValue({ sendMessage });
+        const result = await new MessageSender(whatsappService as any).send({ recipientJid: '15550000001@s.whatsapp.net', text: '', ephemeralProtocol: true,
+            content: { poll: { name: 'Menu', values: ['One', 'Two'], selectableCount: 1, messageSecret: secret } }, options: { maxRetries: 1 } });
+        expect(result.success).toBe(true); expect(whatsappService.cacheSentMessage).not.toHaveBeenCalled();
     });
 
     it('returns failure when no socket is available and retries are exhausted', async () => {
@@ -174,6 +192,31 @@ describe('MessageSender', () => {
             expect(onSettled).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
             expect(sendMessage).toHaveBeenCalledOnce();
         } finally { vi.useRealTimers(); }
+    });
+
+    it('settles media ownership when archive preflight fails before transmission', async () => {
+        whatsappService.prepareArchive.mockRejectedValueOnce(new Error('fixture archive failure'));
+        const sendMessage = vi.fn(); whatsappService.getSocket.mockReturnValue({ sendMessage }); const onSettled = vi.fn();
+        const result = await new MessageSender(whatsappService as any).send({ recipientJid: '15550000001@s.whatsapp.net', text: '', onSettled });
+        expect(result).toMatchObject({ success: false, attempts: 0 }); expect(result.delivery).toBeUndefined();
+        expect(onSettled).toHaveBeenCalledExactlyOnceWith(result); expect(sendMessage).not.toHaveBeenCalled();
+    });
+    it('does not change an accepted transport outcome or skip disposal when outcome recording throws', async () => {
+        whatsappService.recordSendOutcome.mockImplementation(() => { throw new Error('fixture recording failure'); });
+        whatsappService.getSocket.mockReturnValue({ sendMessage: vi.fn().mockResolvedValue({ key: { id: 'accepted' }, message: { conversation: 'fixture' } }) });
+        const onSettled = vi.fn();
+        const result = await new MessageSender(whatsappService as any).send({ recipientJid: '15550000001@s.whatsapp.net', text: 'fixture', onSettled });
+        expect(result.success).toBe(true); expect(onSettled).toHaveBeenCalledExactlyOnceWith(result);
+    });
+    it('still reports unknown on cancellation when outcome recording throws, retaining resources until settlement', async () => {
+        whatsappService.recordSendOutcome.mockImplementation(() => { throw new Error('fixture recording failure'); });
+        let finish!: (value: any) => void; let begin!: () => void; const started = new Promise<void>(resolve => { begin = resolve; });
+        whatsappService.getSocket.mockReturnValue({ sendMessage: vi.fn(() => { begin(); return new Promise(resolve => { finish = resolve; }); }) });
+        const controller = new AbortController(); const onSettled = vi.fn();
+        const pending = new MessageSender(whatsappService as any).send({ recipientJid: '15550000001@s.whatsapp.net', text: 'fixture', signal: controller.signal, onSettled });
+        await started; controller.abort(); expect((await pending).delivery).toBe('unknown'); expect(onSettled).not.toHaveBeenCalled();
+        finish({ key: { id: 'late' }, message: { conversation: 'fixture' } });
+        await vi.waitFor(() => expect(onSettled).toHaveBeenCalledOnce());
     });
 
     it('logs retry delay when send fails', async () => {

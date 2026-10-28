@@ -43,7 +43,7 @@ function loadWhisperModule(): WhisperModule {
 }
 
 function getModelPath(): string {
-    const configured = process.env.WHISPER_MODEL_PATH?.trim();
+    const configured = process.env.CRISPASR_MODEL_PATH?.trim() || process.env.WHISPER_MODEL_PATH?.trim();
     if (configured) return resolve(configured);
     const { root } = createStoragePaths();
     return join(root, 'whisper', 'models', MODEL_FILENAME);
@@ -110,8 +110,9 @@ async function ensureWhisperModel(logger: AudioLogger): Promise<string> {
         // download below
     }
 
-    if (process.env.WHISPER_MODEL_PATH?.trim()) {
-        throw new Error('WHISPER_MODEL_PATH must point to an existing nonempty Whisper.cpp model file; no replacement downloaded');
+    const override = process.env.CRISPASR_MODEL_PATH?.trim() ? 'CRISPASR_MODEL_PATH' : process.env.WHISPER_MODEL_PATH?.trim() ? 'WHISPER_MODEL_PATH' : undefined;
+    if (override) {
+        throw new Error(`${override} must point to an existing nonempty Whisper.cpp model file; no replacement downloaded`);
     }
     logger.log(`[WhatsApp-NG] Whisper.cpp model download: ${modelPath}`);
     await downloadFile(DEFAULT_MODEL_URL, modelPath);
@@ -163,7 +164,7 @@ export function tryCreateWhisperNodeAudioTranscriber(logger: AudioLogger): Audio
             logger.log('[WhatsApp-NG] Whisper.cpp transcribe');
             const result = await transcribeAsync(context, {
                 fname_inp: inputPath,
-                language: process.env.WHISPER_LANGUAGE?.trim() || 'auto',
+                language: process.env.CRISPASR_LANGUAGE?.trim() || process.env.WHISPER_LANGUAGE?.trim() || 'auto',
                 no_timestamps: true,
                 no_context: false,
                 detect_language: false

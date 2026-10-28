@@ -10,7 +10,7 @@ type AudioLogger = Pick<WhatsAppNgLogger, 'log' | 'error'>;
 export function tryCreateWhisperCppAudioTranscriber(logger: AudioLogger): AudioTranscriber | null {
     // An installed CLI does not depend on this Node version's optional native addon.
     const cli = tryCreateWhisperCliAudioTranscriber(logger);
-    if (cli || process.env.WHISPER_CLI_PATH?.trim()) return cli;
+    if (cli || process.env.CRISPASR_CLI_PATH?.trim() || process.env.WHISPER_CLI_PATH?.trim()) return cli;
     if (process.platform === 'win32' || process.platform === 'darwin') return tryCreateWhisperNodeAudioTranscriber(logger);
     return null;
 }

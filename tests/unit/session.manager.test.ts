@@ -18,6 +18,109 @@ describe('SessionManager', () => {
         await rm(dataDir, { recursive: true, force: true });
     });
 
+    it('guards phone reply-policy changes at atomic commit and leaves disk/memory unchanged on revocation', async () => {
+        await sessionManager.setFinalAfterAttachments(true);
+        const before = await readFile(join(dataDir, 'config.json'), 'utf8'); let checks = 0;
+        await expect(sessionManager.setFinalAfterAttachments(false, () => ++checks < 3)).rejects.toThrow('expired');
+        expect(sessionManager.getFinalAfterAttachments()).toBe(true);
+        expect(await readFile(join(dataDir, 'config.json'), 'utf8')).toBe(before);
+        const restored = new SessionManager(dataDir); await restored.ensureInitialized(); expect(restored.getFinalAfterAttachments()).toBe(true);
+    });
+
+    it('refuses a phone reply-policy write over unreadable existing configuration', async () => {
+        const path = join(dataDir, 'config.json'); await writeFile(path, 'broken-original');
+        await expect(sessionManager.setFinalAfterAttachments(false)).rejects.toThrow('unreadable');
+        expect(await readFile(path, 'utf8')).toBe('broken-original'); expect(sessionManager.getFinalAfterAttachments()).toBe(true);
+    });
+
+    it('never revives captured output after allowed chat removal and re-addition', async () => {
+        await sessionManager.ensureInitialized(); const canonical = (jid: string) => jid;
+        const phone = '+15550000001'; const jid = '15550000001@s.whatsapp.net'; const group = '120363000001@g.us';
+        await sessionManager.addNumber(phone); await sessionManager.addAllowedGroup(group);
+        const before = sessionManager.getReplyAdmissionKey(jid, canonical); const other = sessionManager.getReplyAdmissionKey('15550000002@s.whatsapp.net', canonical);
+        await sessionManager.removeNumber(phone); await sessionManager.addNumber(phone);
+        expect(sessionManager.getReplyAdmissionKey(jid, canonical)).not.toBe(before); expect(sessionManager.getReplyAdmissionKey('15550000002@s.whatsapp.net', canonical)).toBe(other);
+        const groupBefore = sessionManager.getReplyAdmissionKey(group, canonical); await sessionManager.removeAllowedGroup(group); await sessionManager.addAllowedGroup(group);
+        expect(sessionManager.getReplyAdmissionKey(group, canonical)).not.toBe(groupBefore);
+    });
+    it('round-trips default-off reporting flags defensively without changing existing stats or voice', async () => {
+        expect(sessionManager.getReplyReporting()).toEqual({ changedFiles: false, interimText: false, liveActivity: false });
+        await sessionManager.setReplyStats(true); await sessionManager.setReplyReporting({ changedFiles: true, interimText: false, liveActivity: true }, 0);
+        const copy = sessionManager.getReplyReporting(); copy.liveActivity = false; expect(sessionManager.getReplyReporting().liveActivity).toBe(true);
+        const restored = new SessionManager(dataDir); await restored.ensureInitialized(); expect(restored.getReplyReporting()).toEqual({ changedFiles: true, interimText: false, liveActivity: true }); expect(restored.getReplyStats()).toBe(true);
+        await expect(sessionManager.setReplyReporting(copy, 0)).rejects.toThrow('expired');
+        await restored.setStatus('disconnected'); expect(JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')).replyReporting.liveActivity).toBe(true);
+    });
+    it('preserves malformed reporting flags and rejects revoked atomic writes', async () => {
+        const invalid = { liveActivity: 'yes' }; await writeFile(join(dataDir, 'config.json'), JSON.stringify({ replyReporting: invalid }));
+        await sessionManager.ensureInitialized(); expect(() => sessionManager.getReplyReporting()).toThrow('report');
+        await sessionManager.setStatus('disconnected'); expect(JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')).replyReporting).toEqual(invalid);
+        const before = await readFile(join(dataDir, 'config.json'), 'utf8'); let checks = 0;
+        await expect(sessionManager.setReplyReporting({ changedFiles: true, interimText: false, liveActivity: false }, 0, () => ++checks < 3)).rejects.toThrow('expired');
+        expect(await readFile(join(dataDir, 'config.json'), 'utf8')).toBe(before); expect(sessionManager.getReplyReportingRevision()).toBe(0);
+    });
+    it('defaults final stats off and round-trips explicit settings without altering other preferences', async () => {
+        expect(sessionManager.getReplyStats()).toBe(false);
+        await sessionManager.setFinalAfterAttachments(false); const original = JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8'));
+        await sessionManager.setReplyStats(true); expect(sessionManager.getReplyStats()).toBe(true); expect(sessionManager.getReplyStatsRevision()).toBe(1);
+        const saved = JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')); expect(saved).toEqual({ ...original, replyStats: true });
+        const restored = new SessionManager(dataDir); await restored.ensureInitialized(); expect(restored.getReplyStats()).toBe(true);
+        await restored.setStatus('disconnected'); expect(JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')).replyStats).toBe(true);
+        await restored.setReplyStats(false); expect(restored.getReplyStatsRevision()).toBe(1);
+    });
+    it('guards final stats at atomic commit and does not overwrite unreadable or invalid legacy state', async () => {
+        await writeFile(join(dataDir, 'config.json'), JSON.stringify({ replyStats: 'invalid-preserve', finalAfterAttachments: false }));
+        await sessionManager.ensureInitialized(); expect(sessionManager.getReplyStats()).toBe(false);
+        await sessionManager.setStatus('disconnected'); expect(JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')).replyStats).toBe('invalid-preserve');
+        const before = await readFile(join(dataDir, 'config.json'), 'utf8'); let checks = 0;
+        await expect(sessionManager.setReplyStats(true, () => ++checks < 3)).rejects.toThrow('expired');
+        expect(await readFile(join(dataDir, 'config.json'), 'utf8')).toBe(before); expect(sessionManager.getReplyStatsRevision()).toBe(0);
+        await expect(sessionManager.setReplyStats('true' as any)).rejects.toThrow('boolean');
+    });
+    it('defaults groups to mentions-or-replies without context and atomically preserves other settings', async () => {
+        expect(sessionManager.getGroupReplies()).toEqual({ mode: 'mentions-or-replies', context: false });
+        await sessionManager.setReplyStats(true);
+        const speech = sessionManager.getSpeechSettings(); speech.chats['120363000001@g.us'] = { automaticReplies: false };
+        await sessionManager.setSpeechSettings(speech, 0);
+        await sessionManager.setGroupReplies({ mode: 'mentions', context: true }, 0);
+        const snapshot = sessionManager.getGroupReplies(); snapshot.context = false;
+        expect(sessionManager.getGroupReplies()).toEqual({ mode: 'mentions', context: true });
+        const restored = new SessionManager(dataDir); await restored.ensureInitialized();
+        expect(restored.getGroupReplies()).toEqual({ mode: 'mentions', context: true }); expect(restored.getReplyStats()).toBe(true);
+        expect(restored.getSpeechSettings().chats['120363000001@g.us'].automaticReplies).toBe(false);
+        await expect(sessionManager.setGroupReplies({ mode: 'all', context: false }, 0)).rejects.toThrow('expired');
+        await expect(sessionManager.setGroupReplies({ mode: 'all', context: false }, 1, () => false)).rejects.toThrow('expired');
+        expect(sessionManager.getGroupRepliesRevision()).toBe(1);
+    });
+    it('does not silently adopt invalid group preferences or erase them on unrelated saves', async () => {
+        const invalid = { mode: 'unknown', context: true };
+        await writeFile(join(dataDir, 'config.json'), JSON.stringify({ groupReplies: invalid }));
+        await sessionManager.ensureInitialized(); expect(() => sessionManager.getGroupReplies()).toThrow('group');
+        await sessionManager.setStatus('disconnected'); expect(JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')).groupReplies).toEqual(invalid);
+        await expect(sessionManager.setGroupReplies({ mode: 'all', context: 'yes' } as any, 0)).rejects.toThrow('group');
+    });
+    it('round-trips optional outputs defensively, preserving group/stats preferences and revoking owner consent', async () => {
+        const owner = '15550000001@s.whatsapp.net';
+        expect(sessionManager.getOptionalOutputs()).toEqual({ imageTools: [] });
+        await sessionManager.setOperatorJid(owner); await sessionManager.setReplyStats(true);
+        await sessionManager.setGroupReplies({ mode: 'replies', context: false }, 0);
+        await sessionManager.setOptionalOutputs({ imageTools: ['screenshot'], terminal: { ownerJid: owner, accountScope: 'fixture' } }, sessionManager.getOptionalOutputsRevision());
+        sessionManager.getOptionalOutputs().imageTools.push('read'); expect(sessionManager.getOptionalOutputs().imageTools).toEqual(['screenshot']);
+        const restored = new SessionManager(dataDir); await restored.ensureInitialized(); expect(restored.getOptionalOutputs()).toEqual(sessionManager.getOptionalOutputs());
+        expect(restored.getReplyStats()).toBe(true); expect(restored.getGroupReplies().mode).toBe('replies');
+        await restored.setOperatorJid('15550000002@s.whatsapp.net'); await restored.setOperatorJid(owner);
+        expect(restored.getOptionalOutputs()).toEqual({ imageTools: ['screenshot'] });
+    });
+    it('preserves invalid optional settings and rejects stale/revoked commits', async () => {
+        const invalid = { imageTools: ['*'] }; await writeFile(join(dataDir, 'config.json'), JSON.stringify({ optionalOutputs: invalid }));
+        await sessionManager.ensureInitialized(); expect(() => sessionManager.getOptionalOutputs()).toThrow();
+        await sessionManager.setStatus('disconnected'); expect(JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')).optionalOutputs).toEqual(invalid);
+        const before = await readFile(join(dataDir, 'config.json'), 'utf8'); let checks = 0;
+        await expect(sessionManager.setOptionalOutputs({ imageTools: [] }, 0, () => ++checks < 3)).rejects.toThrow('expired');
+        expect(await readFile(join(dataDir, 'config.json'), 'utf8')).toBe(before);
+        await sessionManager.setOptionalOutputs({ imageTools: [] }, 0);
+        await expect(sessionManager.setOptionalOutputs({ imageTools: ['read'] }, 0)).rejects.toThrow('expired');
+    });
     it('should initialize with logged-out status', () => {
         expect(sessionManager.getStatus()).toBe('logged-out');
     });
@@ -95,12 +198,13 @@ describe('SessionManager', () => {
         const stt = {
             sttEndpoint: 'https://speech.example.test/openai/v1',
             sttModel: 'fixture-model',
-            sttEnv: 'WHATSAPP_NG_TEST_STT_KEY'
+            sttEnv: 'WHATSAPP_NG_TEST_STT_KEY', sttLanguage: 'pt'
         };
         vi.stubEnv(stt.sttEnv, 'fixture-secret-value-not-for-config');
         await writeFile(join(dataDir, 'config.json'), JSON.stringify(stt));
         await sessionManager.ensureInitialized();
         expect(sessionManager.getSttConfig()).toEqual(stt);
+        await sessionManager.setSttConfig(stt);
         await sessionManager.setStatus('disconnected');
         const saved = JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8'));
         expect(saved).toMatchObject(stt);
@@ -110,6 +214,15 @@ describe('SessionManager', () => {
         expect(reopened.getSttConfig()).toEqual(stt);
     });
 
+    it('rejects saved LAN HTTP speech without opt-in while preserving stored preferences for repair', async () => {
+        vi.stubEnv('WHATSAPP_NG_ALLOW_PLAIN_HTTP', '1'); await sessionManager.ensureInitialized();
+        const settings = sessionManager.getSpeechSettings(); settings.config = { ttsEndpoint: 'http://192.168.1.20/speech', ttsModel: 'fixture', ttsEnv: 'FIXTURE_KEY', ttsVoice: 'fixture' };
+        await sessionManager.setSpeechSettings(settings, sessionManager.getSpeechRevision()); const path = join(dataDir, 'config.json'); const before = await readFile(path, 'utf8');
+        vi.stubEnv('WHATSAPP_NG_ALLOW_PLAIN_HTTP', ''); const reopened = new SessionManager(dataDir); await reopened.ensureInitialized();
+        expect(() => reopened.getSpeechSettings()).toThrow(/Invalid saved voice settings/);
+        expect(() => reopened.getReplyAdmissionKey('15550000001@s.whatsapp.net', jid => jid)).toThrow(/Invalid saved voice settings/);
+        expect(await readFile(path, 'utf8')).toBe(before);
+    });
     it('returns an isolated STT config snapshot and can explicitly disable remote mode', async () => {
         await sessionManager.ensureInitialized();
         await sessionManager.setSttConfig({ sttEndpoint: 'https://speech.example.test/v1', sttModel: 'fixture', sttEnv: 'STT_KEY' });
@@ -120,6 +233,31 @@ describe('SessionManager', () => {
         const reopened = new SessionManager(dataDir);
         await reopened.ensureInitialized();
         expect(reopened.getSttConfig().sttEndpoint).toBeUndefined();
+    });
+
+    it('defaults to explaining attachments and round-trips the explicit legacy setting', async () => {
+        expect(sessionManager.getFinalAfterAttachments()).toBe(true);
+        await writeFile(join(dataDir, 'config.json'), JSON.stringify({
+            allowList: [{ number: '+15550000001', name: 'Fixture' }],
+            sttEndpoint: 'https://speech.example.test/v1', sttModel: 'fixture-model', sttEnv: 'FIXTURE_STT_KEY',
+            operatorJid: '15550000001@s.whatsapp.net'
+        }));
+        await sessionManager.setFinalAfterAttachments(false);
+        const reopened = new SessionManager(dataDir);
+        await reopened.ensureInitialized();
+        expect(reopened.getFinalAfterAttachments()).toBe(false);
+        expect(reopened.getAllowList()).toEqual([{ number: '+15550000001', name: 'Fixture' }]);
+        expect(reopened.getSttConfig()).toEqual({ sttEndpoint: 'https://speech.example.test/v1', sttModel: 'fixture-model', sttEnv: 'FIXTURE_STT_KEY' });
+        await reopened.setFinalAfterAttachments(true);
+        const again = new SessionManager(dataDir);
+        await again.ensureInitialized();
+        expect(again.getFinalAfterAttachments()).toBe(true);
+    });
+
+    it('rejects non-boolean reply policy updates without changing the selected mode', async () => {
+        await sessionManager.setFinalAfterAttachments(false);
+        await expect(sessionManager.setFinalAfterAttachments('false' as any)).rejects.toThrow('must be a boolean');
+        expect(sessionManager.getFinalAfterAttachments()).toBe(false);
     });
 
     it('should clean up stale config temp files during initialization', async () => {

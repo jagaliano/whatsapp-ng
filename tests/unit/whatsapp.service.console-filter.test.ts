@@ -18,7 +18,7 @@ const baileysMocks = vi.hoisted(() => {
 
     return {
         socket,
-        makeWASocket: vi.fn(() => socket),
+        makeWASocket: vi.fn((_options: unknown) => socket),
         fetchLatestBaileysVersion: vi.fn().mockResolvedValue({ version: [2, 3000, 0] }),
         makeCacheableSignalKeyStore: vi.fn((_keys, _logger) => _keys)
     };
@@ -83,7 +83,27 @@ describe('WhatsAppService console filtering', () => {
         errorSpy.mockRestore();
     });
 
-    it('does not suppress Baileys decrypt noise in verbose mode', async () => {
+    it('keeps the narrow noise filter through socket end and restores ordinary errors afterwards', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const service = new ServiceUnderTest(createSessionManager() as any); service.setVerboseMode(true); await service.start();
+        baileysMocks.socket.end.mockImplementationOnce(() => console.error('Failed to decrypt message with any known session...'));
+        await service.stop(); console.error('[WhatsApp-NG] ordinary error after stop');
+        expect(errorSpy).toHaveBeenCalledExactlyOnceWith('[WhatsApp-NG] ordinary error after stop');
+    });
+    it('reports a send failure without printing the native error body', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const { MessageSender } = await import('../../src/services/message.sender.ts');
+        vi.spyOn(MessageSender.prototype, 'send').mockResolvedValueOnce({ success: false, attempts: 1, error: 'PRIVATE-C4-NATIVE-BODY' });
+        const result = await new ServiceUnderTest(createSessionManager() as any).sendMessage('15550000001@s.whatsapp.net', 'PRIVATE-C4-ANSWER', true);
+        expect(result.success).toBe(false); expect(errorSpy).toHaveBeenCalledExactlyOnceWith('[WhatsApp-NG] Message send failed');
+    });
+    it('does not blanket-mute ordinary errors during asynchronous socket construction', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        baileysMocks.makeWASocket.mockImplementationOnce(() => { console.error('[WhatsApp-NG] startup application error'); return baileysMocks.socket; });
+        const service = new ServiceUnderTest(createSessionManager() as any); await service.start();
+        expect(errorSpy).toHaveBeenCalledWith('[WhatsApp-NG] startup application error');
+    });
+    it('keeps secret-bearing protocol noise filtered even in metadata-verbose mode', async () => {
         const { WhatsAppService } = await import('../../src/services/whatsapp.service.ts');
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         const service = new WhatsAppService(createSessionManager() as any);
@@ -93,7 +113,10 @@ describe('WhatsAppService console filtering', () => {
 
         console.error('Failed to decrypt message with any known session...');
 
-        expect(errorSpy).toHaveBeenCalledWith('Failed to decrypt message with any known session...');
+        console.error('[WhatsApp-NG] ordinary application error');
+        expect(errorSpy).toHaveBeenCalledExactlyOnceWith('[WhatsApp-NG] ordinary application error');
+        const options = baileysMocks.makeWASocket.mock.calls[0]?.[0] as any;
+        expect(options.logger.level).toBe('silent');
 
         await service.stop();
         errorSpy.mockRestore();

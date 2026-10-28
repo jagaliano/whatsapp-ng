@@ -121,7 +121,7 @@ Record the original non-secret STT fields before any changes, approve each uploa
 
 | Case | Setup/action | Expected result |
 | --- | --- | --- |
-| Remote STT | Keep/configure the approved HTTPS endpoint, model and environment-variable name via `configure_wa_stt`; send one consented voice note. | Expected remote host/model used, useful transcript, no local Whisper initialization/model download. API-key value is never entered into tool parameters or evidence. |
+| Remote STT | Keep/configure the approved endpoint (HTTPS or explicitly permitted HTTP), model and environment-variable name via `configure_wa_stt`; send one consented voice note. | Expected remote host/model used, useful transcript, no local Whisper initialization/model download. API-key value is never entered into tool parameters or evidence. |
 | Partial configuration | After full setup, change only the model; separately try an invalid endpoint. | Omitted fields preserved; invalid updates rejected without overwriting working settings. |
 | Local CLI | Pass `configure_wa_stt({})` through the config tool after approval; use installed CLI and an existing `WHISPER_MODEL_PATH`; send one short voice note. | Local CPU transcription; no remote upload or replacement-model download. Establish which backend actually ran. |
 | Native Node addon | On a separate compatible host, use a controlled setup with no CLI discovered, or an isolated harness invoking the actual Node backend with an existing model and converted WAV. | Packaged native addon transcribes without installing `whisper-cli`. Do not count a CLI-produced transcript as native-addon evidence. |
@@ -159,7 +159,7 @@ Do not induce these by corrupting real archives, deleting saved auth, changing t
 - Missing FFmpeg/codecs, conversion timeout/cancellation, private snapshots and child-process cleanup.
 - Local Whisper CLI timeout, abort/session change, stalled model-download responses and atomic model publication; use synthetic executables/HTTP streams, not new real downloads.
 - Incoming image/video/document advertised-size and streamed-size limits, exact-boundary acceptance, private file permissions and same-timestamp filename uniqueness.
-- Remote-STT HTTPS/redirect/response/upload limits, redaction, timeout and session changes using intercepted requests. Do not deliberately leak a real key to a test endpoint.
+- Remote-STT HTTPS/loopback/explicit-cleartext policy, redirect/response/upload limits, redaction, timeout and session changes using intercepted requests. Include optional language present/omitted and loss-of-HTTP-opt-in refusal; preserve stored settings for repair. Do not deliberately leak a real key to a test endpoint.
 - Corrupt/future-version archives, writer-lock conflicts and write failures: explicit degraded state with originals preserved.
 - Logout/re-pair, destructive reset, retention expiry and migration recovery only in a separately authorized disposable profile. Do not reset the saved production login to complete a checklist.
 

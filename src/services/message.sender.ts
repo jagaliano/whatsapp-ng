@@ -1,16 +1,11 @@
 import { WhatsAppService } from './whatsapp.service.js';
 import { MessageRequest, MessageResult, WhatsAppError, type WhatsAppSessionContext } from '../models/whatsapp.types.js';
 import { t } from '../i18n.js';
-import { appendFileSync } from 'fs';
-import { createStoragePaths } from './storage-path.js';
+import { WhatsAppNgLogger } from './whatsapp-ng.logger.js';
 import { generateMessageIDV2 } from 'baileys';
 
-const LOG_FILE = createStoragePaths().logPath;
-function fileLog(msg: string) {
-    try { appendFileSync(LOG_FILE, `[${new Date().toISOString()}] [MessageSender] ${msg}\n`); } catch {
-        // File logging is best-effort.
-    }
-}
+const senderLogger = new WhatsAppNgLogger(false);
+function fileLog(message: string): void { senderLogger.log(`[MessageSender] ${message}`); }
 
 export class MessageSender {
     private whatsappService: WhatsAppService;
@@ -60,7 +55,6 @@ export class MessageSender {
      * @returns Promise resolving to a result object indicating success or failure.
      */
     public async send(request: MessageRequest): Promise<MessageResult> {
-        await this.whatsappService.prepareArchive?.();
         const context = request.sessionContext ?? this.whatsappService.getSessionContext();
         const messageId = request.sendOptions?.messageId ?? generateMessageIDV2();
         const abort = new AbortController();
@@ -73,7 +67,9 @@ export class MessageSender {
             const result: MessageResult = started
                 ? { success: false, delivery: 'unknown', messageId, error: t('message.sender.deliveryUnknown'), attempts: 1 }
                 : { success: false, error: t('media.aborted'), attempts: 0 };
-            if (started && this.whatsappService.isSessionContextCurrent(context)) this.whatsappService.recordSendOutcome(request.recipientJid, messageId, result);
+            try {
+                if (started && this.whatsappService.isSessionContextCurrent(context)) this.whatsappService.recordSendOutcome(request.recipientJid, messageId, result);
+            } catch { console.error(t('media.finalizeFailed')); }
             interrupt(result);
         };
         request.signal?.addEventListener('abort', cancel, { once: true });
@@ -88,7 +84,9 @@ export class MessageSender {
         const settled = work.then(async result => {
             request.signal?.removeEventListener('abort', cancel);
             if (timer) clearTimeout(timer);
-            if (this.whatsappService.isSessionContextCurrent(context)) this.whatsappService.recordSendOutcome(request.recipientJid, messageId, result);
+            try {
+                if (this.whatsappService.isSessionContextCurrent(context)) this.whatsappService.recordSendOutcome(request.recipientJid, messageId, result);
+            } catch { console.error(t('media.finalizeFailed')); }
             try {
                 await request.onSettled?.(result);
             } catch {
@@ -106,6 +104,9 @@ export class MessageSender {
 
     private async sendAttempt(request: MessageRequest, onStarted: () => void): Promise<MessageResult> {
         const context = request.sessionContext ?? this.whatsappService.getSessionContext();
+        // Keep preflight inside the settled work: media consumers must always
+        // receive onSettled, even when archive preparation fails before sending.
+        await this.whatsappService.prepareArchive?.();
         const isGroup = request.recipientJid.endsWith('@g.us');
         // Groups need more retries because the first send bootstraps
         // the Signal sender-key session (causes "No sessions" on first attempts)
@@ -146,25 +147,30 @@ export class MessageSender {
                 if (request.quote && !quoted) throw new WhatsAppError('QUOTE_UNAVAILABLE', t('quote.unavailable'));
                 // 4. Send the message
                 // Note: Branding π is applied here to ensure consistency
-                this.whatsappService.registerOutgoing(request.recipientJid, messageId, content);
+                this.whatsappService.registerOutgoing(request.recipientJid, messageId, request.ephemeralProtocol ? undefined : content);
                 await this.whatsappService.flushArchive?.();
                 this.assertCurrentSession(context);
                 if (request.signal?.aborted) throw new WhatsAppError('ABORTED', t('media.aborted'));
                 if (socket !== this.whatsappService.getSocket()) throw new WhatsAppError('SOCKET_NOT_INIT', t('message.sender.socketNotInitialized'));
                 quoted = request.quote ? this.whatsappService.getQuotedMessage(request.recipientJid, request.quote) : undefined;
                 if (request.quote && !quoted) throw new WhatsAppError('QUOTE_UNAVAILABLE', t('quote.unavailable'));
+                // No await between this authority check and socket transmission.
+                // A polling signal alone cannot fence revocation during preflight.
+                if (request.isCurrent && !request.isCurrent()) {
+                    return { success: false, error: t('message.sender.sessionChanged'), attempts };
+                }
                 transmissionStarted = true;
                 onStarted();
                 const response = await socket.sendMessage(request.recipientJid, content, { ...request.sendOptions, ...(quoted ? { quoted } : {}), messageId });
                 if (!this.whatsappService.isSessionContextCurrent(context) || !response?.key?.id) {
                     return { success: false, delivery: 'unknown', messageId, error: t('message.sender.deliveryUnknown'), attempts };
                 }
-                this.whatsappService.cacheSentMessage(response.key.id, response.message, {
+                if (!request.ephemeralProtocol) this.whatsappService.cacheSentMessage(response.key.id, response.message, {
                     ...response.key, remoteJid: request.recipientJid, fromMe: true,
                     ...(isGroup ? { participant: response.key.participant ?? response.participant } : {})
                 });
 
-                fileLog(`SUCCESS sending to ${request.recipientJid} on attempt ${attempts}`);
+                fileLog(`Send accepted: attempt=${attempts}, group=${isGroup}`);
                 return {
                     success: true,
                     messageId: response?.key?.id,
@@ -172,11 +178,9 @@ export class MessageSender {
                 };
             } catch (error: unknown) {
                 lastError = error;
-                console.error(t('message.sender.attemptFailed', {
-                    attempt: attempts,
-                    recipientJid: request.recipientJid,
-                    error: error instanceof Error ? error.message : String(error)
-                }));
+                // Native send errors may embed message bodies or transport material.
+                fileLog(`Send failed: attempt=${attempts}, group=${isGroup}`);
+                console.error(`[MessageSender] Send attempt ${attempts} failed`);
                 
                 const message = error instanceof Error ? error.message : String(error);
                 const statusCode = (error as { output?: { statusCode?: number } } | null)?.output?.statusCode;

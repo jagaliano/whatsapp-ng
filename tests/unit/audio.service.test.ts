@@ -128,9 +128,9 @@ describe('AudioService', () => {
         expect(logger.log).toHaveBeenCalledWith('[WhatsApp-NG] Audio total: 0 ms');
     });
 
-    it('selects remote settings lazily without initializing or falling back to local Whisper', async () => {
-        const config = { sttEndpoint: 'https://speech.example.test/v1', sttModel: 'fixture', sttEnv: 'STT_KEY' };
-        const remote = { hostname: 'speech.example.test', transcribe: vi.fn().mockResolvedValue('remote text') };
+    it.each(['https', 'http'])('selects remote settings lazily and announces the %s scheme without local fallback', async scheme => {
+        const config = { sttEndpoint: `${scheme}://speech.example.test/v1`, sttModel: 'fixture', sttEnv: 'STT_KEY' };
+        const remote = { hostname: 'speech.example.test', origin: `${scheme}://speech.example.test`, transcribe: vi.fn().mockResolvedValue('remote text') };
         const getConfig = vi.fn(() => config);
         const service = new AudioService(logger, undefined, getConfig);
         expect(getConfig).not.toHaveBeenCalled();
@@ -140,7 +140,7 @@ describe('AudioService', () => {
         expect(mocks.createRemote).toHaveBeenCalledWith(config);
         expect(mocks.createLocal).not.toHaveBeenCalled();
         expect(whisperTranscriber.transcribe).not.toHaveBeenCalled();
-        expect(logger.log).toHaveBeenCalledWith(expect.stringContaining('audio will be uploaded to speech.example.test'));
+        expect(logger.log).toHaveBeenCalledWith(expect.stringContaining(`audio will be uploaded to ${scheme}://speech.example.test`));
         expect(mocks.execFile.mock.calls[0][1]).toContain('-fs');
         remote.transcribe.mockRejectedValue(new Error('Remote STT HTTP 401'));
         mocks.downloadContentFromMessage.mockResolvedValue(createStream(Buffer.from('next')));
@@ -166,7 +166,7 @@ describe('AudioService', () => {
 
     it('checks account/session ownership again before the remote upload', async () => {
         let current = true;
-        const remote = { hostname: 'speech.example.test', transcribe: vi.fn() };
+        const remote = { hostname: 'speech.example.test', origin: 'https://speech.example.test', transcribe: vi.fn() };
         mocks.createRemote.mockReturnValue(remote);
         mocks.execFile.mockImplementation((...args: unknown[]) => {
             current = false;
@@ -208,6 +208,12 @@ describe('AudioService', () => {
         );
     });
 
+    it('never dumps speech from a failed transcriber error into diagnostics', async () => {
+        whisperTranscriber.transcribe.mockRejectedValueOnce(new Error('PRIVATE-C4-SPEECH-STDOUT'));
+        await setupService().transcribe({ id: 'synthetic-audio' });
+        expect(console.error).toHaveBeenCalledExactlyOnceWith('[AudioService] Transcription error:');
+        expect(JSON.stringify(logger.log.mock.calls)).not.toContain('PRIVATE-C4-SPEECH-STDOUT');
+    });
     it('returns formatted error when audio download fails', async () => {
         mocks.downloadContentFromMessage.mockRejectedValue(new Error('download failed'));
 
@@ -217,6 +223,6 @@ describe('AudioService', () => {
             '[Transcription error: download failed]'
         );
 
-        expect(console.error).toHaveBeenCalledWith('[AudioService] Transcription error:', expect.any(Error));
+        expect(console.error).toHaveBeenCalledExactlyOnceWith('[AudioService] Transcription error:');
     });
 });

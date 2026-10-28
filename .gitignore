@@ -25,6 +25,9 @@ Thumbs.db
 /PR2.md
 /PR3.md
 
+# Local product-development plan
+/specs/039-extension-improvements/plan.md
+
 # Local Pi settings, runtime state, review evidence and test caches
 /.pi/agent/
 /.pi/cache/
