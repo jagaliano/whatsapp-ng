@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext } from '@mariozechner/pi-coding-agent';
+import { fuzzyFilter } from '@mariozechner/pi-tui';
 import type { IncomingMessageEnvelope, MessageResult } from '../models/whatsapp.types.js';
 import type { SessionManager } from './session.manager.js';
 import { CommandMenuService, safeLabel, type CommandMenuBinding, type CommandPollInput } from './command-menu.service.js';
@@ -8,7 +9,7 @@ import { resolveTtsConfig } from './tts-config.js';
 
 type Model = NonNullable<ExtensionContext['model']>;
 type Thinking = ReturnType<ExtensionAPI['getThinkingLevel']>;
-type Action = { command: 'model' | 'think' | 'voice' | 'replies' | 'new' | 'off' | 'quit'; value: string; revision?: number };
+type Action = { command: 'model' | 'think' | 'voice' | 'replies' | 'new' | 'off' | 'quit'; value: string; revision?: number; query?: string };
 interface Frame extends CommandMenuBinding { revision: number }
 interface ResumeTicket { profile: string; account: string; sessionId: string; actor: string; chat: string; expires: number }
 const handoffs = globalThis as typeof globalThis & { __whatsappNgControlHandoffs?: Map<string, ResumeTicket> };
@@ -91,7 +92,7 @@ export class WhatsAppCommandRouter {
         try {
             if (text.length > 2048) { await this.reply(frame, 'Command is too long.'); return true; }
             if (command === 'help') {
-                await this.reply(frame, `/help /status /stop (/abort) /model [provider/model] /think [level] /compact [focus] /new /voice [text|voice|both|mirror] /replies /off /quit\n${SHARED}\nState-changing commands are owner-only. Menu choices expire after five minutes.\nCurrent chat mode: ${chatReplyPolicy(this.ports.session.getSpeechSettings(), chat, this.ports.canonical).mode}.`);
+                await this.reply(frame, `/help /status /stop (/abort) /model [provider/model or search] /think [level] /compact [focus] /new /voice [text|voice|both|mirror] /replies /off /quit\n${SHARED}\nState-changing commands are owner-only. Menu choices expire after five minutes.\nCurrent chat mode: ${chatReplyPolicy(this.ports.session.getSpeechSettings(), chat, this.ports.canonical).mode}.`);
             } else if (command === 'status') {
                 const usage = ctx.getContextUsage(); const speech = this.ports.session.getSpeechSettings();
                 await this.reply(frame, `WhatsApp: ${this.ports.session.getStatus()}\nPi: ${this.idle(ctx) ? 'idle' : 'busy'}\nModel: ${ctx.model ? modelLabel(ctx.model) : 'unavailable'}\nThinking: ${this.ports.pi.getThinkingLevel()}\nContext: ${usage?.percent == null ? 'unknown' : `${Math.round(usage.percent)}%`}\nReplies: ${this.ports.session.getFinalAfterAttachments() ? 'explain after attachments' : 'caption/tool only'}\nAutomatic replies: ${chatReplyPolicy(speech, chat, this.ports.canonical).automaticReplies ? 'Enabled' : 'Paused'}\nVoice: ${chatReplyPolicy(speech, chat, this.ports.canonical).mode}\nFinal stats: ${this.ports.session.getReplyStats() ? 'On' : 'Off'}\n${SHARED}`);
@@ -158,22 +159,29 @@ export class WhatsAppCommandRouter {
             if ((poll.success || poll.delivery === 'unknown') && poll.messageId) this.menus.activate(menu.id, poll.messageId, true);
         }
     }
-    private async models(frame: Frame, argument: string, page = 0): Promise<void> {
+    private async models(frame: Frame, argument: string, page?: number): Promise<void> {
         const ctx = this.ports.context(); if (!ctx) return;
-        if (argument) { await this.apply({ command: 'model', value: argument }, frame); return; }
         const models = await ctx.modelRegistry.getAvailable(); if (!frame.current()) return;
-        const choices = [...models].sort((a, b) => `${a.provider}/${a.id}`.localeCompare(`${b.provider}/${b.id}`));
-        if (!choices.length) { await this.reply(frame, 'No authenticated models available. Configure provider login in the terminal.'); return; }
-        const options: Array<{ label: string; value: Action }> = choices.slice(page * 10, page * 10 + 10)
+        // Only a typed exact identifier selects directly; navigation always stays a menu.
+        if (argument && page === undefined && models.some(model => `${model.provider}/${model.id}` === argument)) {
+            await this.apply({ command: 'model', value: argument }, frame); return;
+        }
+        if (!models.length) { await this.reply(frame, 'No authenticated models available. Configure provider login in the terminal.'); return; }
+        const ordered = [...models].sort((a, b) => `${a.provider}/${a.id}`.localeCompare(`${b.provider}/${b.id}`));
+        // Private identifiers stay browsable, but neither their paths nor placeholders are search terms.
+        const choices = argument ? fuzzyFilter(ordered, argument, model => publicModelIdentifier(model) ?? '') : ordered;
+        if (!choices.length) { await this.reply(frame, 'No authenticated models match. Use /model to browse or /model <provider or model search>.'); return; }
+        const currentPage = Math.min(page ?? 0, Math.floor((choices.length - 1) / 10));
+        const options: Array<{ label: string; value: Action }> = choices.slice(currentPage * 10, currentPage * 10 + 10)
             .map(model => ({ label: modelLabel(model), value: { command: 'model', value: `${model.provider}/${model.id}` } }));
-        if (page > 0) options.push({ label: 'Previous page', value: { command: 'model', value: `page:${page - 1}` } });
-        if ((page + 1) * 10 < choices.length) options.push({ label: 'Next page', value: { command: 'model', value: `page:${page + 1}` } });
-        await this.menu(frame, `Authenticated models, page ${page + 1}. ${SHARED}`, options);
+        if (currentPage > 0) options.push({ label: 'Previous page', value: { command: 'model', value: `page:${currentPage - 1}`, query: argument } });
+        if ((currentPage + 1) * 10 < choices.length) options.push({ label: 'Next page', value: { command: 'model', value: `page:${currentPage + 1}`, query: argument } });
+        await this.menu(frame, `Authenticated ${argument ? 'model matches' : 'models'}, page ${currentPage + 1}. ${SHARED}`, options);
     }
     private async apply(action: Action, frame: Frame): Promise<void> {
         const ctx = this.ports.context(); if (!ctx || !frame.current()) return;
         if (action.value === 'cancel') { await this.reply(frame, 'Cancelled.'); return; }
-        if (action.command === 'model' && /^page:\d+$/.test(action.value)) { await this.models(frame, '', Number(action.value.slice(5))); return; }
+        if (action.command === 'model' && /^page:\d+$/.test(action.value)) { await this.models(frame, action.query ?? '', Number(action.value.slice(5))); return; }
         if (!['off', 'quit'].includes(action.command) && !this.idle(ctx)) { await this.reply(frame, BUSY); return; }
         const release = this.lock();
         try {
@@ -267,9 +275,14 @@ export class WhatsAppCommandRouter {
     }
 }
 
-function modelLabel(model: Model): string {
+function publicModelIdentifier(model: Model): string | undefined {
     const privatePath = (value: string) => /^(?:[\\/]|\.{1,2}[\\/]|~[^\\/]*[\\/]|[a-z]:|file:)|(?:^|[\\/])(?:Users|home|private|tmp)[\\/]/i.test(value.trim());
-    return privatePath(model.provider) || privatePath(model.id) ? 'Configured model (private identifier hidden)' : safeLabel(`${model.provider}/${model.id}`);
+    return privatePath(model.provider) || privatePath(model.id) ? undefined : `${model.provider}/${model.id}`;
+}
+
+function modelLabel(model: Model): string {
+    const identifier = publicModelIdentifier(model);
+    return identifier === undefined ? 'Configured model (private identifier hidden)' : safeLabel(identifier);
 }
 
 /** Mirrors the public model capability map; never request a level Pi would silently clamp. */

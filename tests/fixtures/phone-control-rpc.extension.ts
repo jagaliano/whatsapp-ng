@@ -7,7 +7,8 @@ export default function (pi: ExtensionAPI) {
     const stats = process.env.WA_PHONE_RPC_STATS === '1'; const groups = process.env.WA_PHONE_RPC_GROUPS === '1';
     const optional = process.env.WA_PHONE_RPC_OPTIONAL; const images = optional === 'images'; const terminal = optional === 'terminal';
     const reporting = process.env.WA_PHONE_RPC_REPORTING === '1';
-    const selfAuto = process.env.WA_PHONE_RPC_SELF_AUTO === '1'; const modelFixture = stats || groups || selfAuto || images || terminal || reporting;
+    const search = process.env.WA_PHONE_RPC_MODELS === '1';
+    const selfAuto = process.env.WA_PHONE_RPC_SELF_AUTO === '1'; const modelFixture = stats || groups || selfAuto || images || terminal || reporting || search;
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEElEQVR4nGP4z8DwHwohFABFzAf5Zsv/OQAAAABJRU5ErkJggg==';
     if (images) pi.registerTool({ name: 'fixture_image', label: 'Synthetic image', description: 'Isolated fixture image result only', parameters: Type.Object({}),
         execute: async () => ({ content: [{ type: 'image', mimeType: 'image/png', data: png }, { type: 'image', mimeType: 'image/png', data: png }], details: {} }) });
@@ -64,6 +65,11 @@ export default function (pi: ExtensionAPI) {
         else if (args === 'off') { await state.deliver('/off', menuResponses); await state.deliver('2'); }
         else if (args === 'status') await state.deliver('/status');
         else if (args === 'poll-next') { await state.deliver('/model', 2); await state.voteNext(); }
+        else if (search && args === 'models-search') await state.deliver('/model fxtr-phn/mdl');
+        else if (search && args === 'models-next') await state.deliver('11');
+        else if (search && args === 'models-previous') await state.deliver('2');
+        else if (search && args === 'models-select') await state.deliver('1');
+        else if (search && args === 'models-missing') await state.deliver('/model no-such-model');
         else if (args === 'reload') await ctx.reload();
         else if (args === 'tools') { state.metrics.activeTools = pi.getActiveTools(); state.save(); }
         else if (modelFixture && args === 'stats-start') await state.deliver(selfAuto ? 'Explain π' : 'Fixture stats task', 0);

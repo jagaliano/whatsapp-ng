@@ -63,9 +63,97 @@ describe('exact owner phone controls', () => {
         const h = fixture(); if (state === 'busy') h.busy(); else h.queued();
         await h.handle('/model fixture/chat/exact'); expect(h.ports.pi.setModel).not.toHaveBeenCalled(); expect(h.ports.stop).not.toHaveBeenCalled(); expect(h.sent.join()).toContain('/stop');
     });
-    it('selects only an exact authenticated model with no fallback', async () => {
+    it('preserves exact authenticated selection ahead of fuzzy matches', async () => {
+        const h = fixture(); h.ctx.modelRegistry.getAvailable.mockResolvedValue([model, { ...model, id: 'chat/exact-extra' }]);
+        await h.handle('/model fixture/chat/exact'); expect(h.ports.pi.setModel).toHaveBeenCalledExactlyOnceWith(model);
+        expect(h.sent.at(-1)).toContain('Shared model selected: fixture/chat/exact.');
+    });
+    it.each(['acme', 'cld', 'ACME / CLD', 'cld acme'])('finds fuzzy provider/model matches for %s without silently selecting', async query => {
+        const h = fixture(); const candidate = { ...model, provider: 'acme', id: 'claude-chat' };
+        h.ctx.modelRegistry.getAvailable.mockResolvedValue([model, candidate]);
+        await h.handle('/model ' + query);
+        expect(h.sent.at(-1)).toContain('1. acme/claude-chat'); expect(h.sent.at(-1)).not.toContain('fixture/chat/exact');
+        expect(h.ports.pi.setModel).not.toHaveBeenCalled(); await h.handle('1');
+        expect(h.ports.pi.setModel).toHaveBeenCalledExactlyOnceWith(candidate);
+    });
+    it.each(['DeepSeek', 'Deepseek', 'deepseek'])('shows %s models across every authenticated provider', async query => {
+        const h = fixture(); const choices = [
+            { ...model, provider: 'deepseek', id: 'deepseek-chat' },
+            { ...model, provider: 'opencode-go', id: 'deepseek-v4.1-flash' },
+            { ...model, provider: 'openrouter', id: 'deepseek/deepseek-v4.1-flash' }
+        ];
+        h.ctx.modelRegistry.getAvailable.mockResolvedValue([model, ...choices]); await h.handle('/model ' + query);
+        for (const candidate of choices) expect(h.sent.at(-1)).toContain(`${candidate.provider}/${candidate.id}`);
+        expect(h.sent.at(-1)).not.toContain('fixture/chat/exact'); expect(h.ports.pi.setModel).not.toHaveBeenCalled();
+        const option = h.sent.at(-1)!.split('\n').find(line => line.includes('openrouter/deepseek/'))!;
+        await h.handle(option.split('.')[0]); expect(h.ports.pi.setModel).toHaveBeenCalledExactlyOnceWith(choices[2]);
+    });
+    it('requires confirmation even for a single model-only match', async () => {
         const h = fixture(); await h.handle('/model chat/exact'); expect(h.ports.pi.setModel).not.toHaveBeenCalled();
-        await h.handle('/model fixture/chat/exact'); expect(h.ports.pi.setModel).toHaveBeenCalledWith(model);
+        expect(h.sent.at(-1)).toContain('1. fixture/chat/exact'); await h.handle('1'); expect(h.ports.pi.setModel).toHaveBeenCalledWith(model);
+    });
+    it('ranks a tight model match before a sparse subsequence', async () => {
+        const h = fixture(); const tight = { ...model, id: 'cld' }; const sparse = { ...model, id: 'claude' };
+        h.ctx.modelRegistry.getAvailable.mockResolvedValue([sparse, tight]); await h.handle('/model cld');
+        expect(h.sent.at(-1)).toContain('1. fixture/cld\n2. fixture/claude'); expect(h.ports.pi.setModel).not.toHaveBeenCalled();
+    });
+    it('does not select a fallback or echo raw queries when no models match', async () => {
+        const h = fixture(); await h.handle('/model missing-secret-search');
+        expect(h.sent.at(-1)).toContain('No authenticated models match'); expect(h.sent.join()).not.toContain('missing-secret-search');
+        await h.handle('1'); expect(h.ports.pi.setModel).not.toHaveBeenCalled();
+    });
+    it('retains the fuzzy filter through next/previous pages and selects the exact displayed model', async () => {
+        const h = fixture(); const choices = Array.from({ length: 23 }, (_, index) => ({ ...model, provider: 'search-provider', id: `chat-${String(index + 1).padStart(2, '0')}` }));
+        h.ctx.modelRegistry.getAvailable.mockResolvedValue([{ ...model, provider: 'unrelated', id: 'chat-00' }, ...choices]);
+        await h.handle('/model search-provider/chat'); expect(h.sent.at(-1)).toContain('1. search-provider/chat-01');
+        await h.handle('11'); expect(h.sent.at(-1)).toContain('1. search-provider/chat-11');
+        await h.handle('12'); expect(h.sent.at(-1)).toContain('1. search-provider/chat-21');
+        await h.handle('4'); expect(h.sent.at(-1)).toContain('1. search-provider/chat-11');
+        expect(h.sent.join()).not.toContain('unrelated/chat-00'); expect(h.ports.pi.setModel).not.toHaveBeenCalled();
+        await h.handle('1'); expect(h.ports.pi.setModel).toHaveBeenCalledExactlyOnceWith(choices[10]);
+    });
+    it('clamps a filtered page after authenticated model availability shrinks', async () => {
+        const h = fixture(); const choices = Array.from({ length: 11 }, (_, index) => ({ ...model, provider: 'search-provider', id: `chat-${index}` }));
+        h.ctx.modelRegistry.getAvailable.mockResolvedValue(choices); await h.handle('/model search-provider');
+        h.ctx.modelRegistry.getAvailable.mockResolvedValue([choices[0]]); await h.handle('11');
+        expect(h.sent.at(-1)).toContain('1. search-provider/chat-0'); expect(h.ports.pi.setModel).not.toHaveBeenCalled();
+    });
+    it('never treats raw search text as an internal pagination action', async () => {
+        const h = fixture(); await h.handle('/model page:1');
+        expect(h.sent.at(-1)).toContain('No authenticated models match'); expect(h.ports.pi.setModel).not.toHaveBeenCalled();
+    });
+    it.each(['hidden-marker', 'hidden', 'open', 'gpt', 'config', 'model'])('does not search private identifiers or their redaction placeholder for %s', async query => {
+        const h = fixture(); const privateModel = { ...model, id: '/Users/private/models/hidden-marker.gguf' };
+        h.ctx.modelRegistry.getAvailable.mockResolvedValue([privateModel]); await h.handle('/model ' + query);
+        expect(h.sent.at(-1)).toContain('No authenticated models match'); expect(h.sent.join()).not.toContain(privateModel.id);
+        await h.handle('/model'); expect(h.sent.at(-1)).toContain('Configured model (private identifier hidden)');
+    });
+    it('keeps genuine provider matches without adding identical private placeholders', async () => {
+        const h = fixture(); const publicModel = { ...model, provider: 'openrouter', id: 'chat' };
+        h.ctx.modelRegistry.getAvailable.mockResolvedValue([publicModel, { ...model, id: '/Users/private/model.gguf' }]);
+        await h.handle('/model open'); expect(h.sent.at(-1)).toContain('1. openrouter/chat');
+        expect(h.sent.at(-1)).not.toContain('Configured model'); await h.handle('1'); expect(h.ports.pi.setModel).toHaveBeenCalledExactlyOnceWith(publicModel);
+    });
+    it('searches the full public identifier even beyond the displayed label length', async () => {
+        const h = fixture(); const candidate = { ...model, id: 'long-'.repeat(30) + 'distinct-suffix' };
+        h.ctx.modelRegistry.getAvailable.mockResolvedValue([candidate]); await h.handle('/model distinct-suffix');
+        expect(h.sent.at(-1)).toContain('1. fixture/long-'); expect(h.ports.pi.setModel).not.toHaveBeenCalled();
+        await h.handle('1'); expect(h.ports.pi.setModel).toHaveBeenCalledExactlyOnceWith(candidate);
+    });
+    it('rechecks owner authority before publishing fuzzy discovery results', async () => {
+        const h = fixture(); let release!: (models: any[]) => void;
+        h.ctx.modelRegistry.getAvailable.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+        const work = h.handle('/model chat'); h.revoke(); release([model]); await work;
+        expect(h.sent).toEqual([]); expect(h.ports.pi.setModel).not.toHaveBeenCalled();
+    });
+    it('does not resolve an expired fuzzy choice to a newly available model', async () => {
+        const h = fixture(); await h.handle('/model chat'); h.ctx.modelRegistry.getAvailable.mockResolvedValue([{ ...model, id: 'chat/replacement' }]);
+        await h.handle('1'); expect(h.ports.pi.setModel).not.toHaveBeenCalled(); expect(h.sent.at(-1)).toContain('Exact authenticated model unavailable');
+    });
+    it('retains busy-session and group quote guards for fuzzy selections', async () => {
+        const h = fixture(); await h.handle('/model chat', owner, group); await h.handle('1', owner, group);
+        expect(h.ports.pi.setModel).not.toHaveBeenCalled(); await h.handle('/model chat', owner, group); h.busy();
+        await h.handle('1', owner, group, 'sent-2'); expect(h.ports.pi.setModel).not.toHaveBeenCalled(); expect(h.sent.at(-1)).toContain('/stop');
     });
     it('rechecks authority and busy state after asynchronous model discovery', async () => {
         const h = fixture(); let release!: (models: any[]) => void;

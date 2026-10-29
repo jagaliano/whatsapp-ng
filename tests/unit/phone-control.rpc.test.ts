@@ -9,11 +9,11 @@ import { resolveTtsConfig } from '../../src/services/tts-config.ts';
 
 /** Real Pi command context/lifecycle; WhatsApp transport and fixture model streams are synthetic. */
 describe('production phone-control Pi RPC gateway', () => {
-    it.each(['direct', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting'])('exercises production phone controls and lifecycle fences (%s)', async mode => {
+    it.each(['direct', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models'])('exercises production phone controls and lifecycle fences (%s)', async mode => {
         const root = await mkdtemp(join(tmpdir(), 'wa-phone-rpc-')); const home = join(root, 'home'); const workspace = join(root, 'workspace');
         const data = join(home, '.pi/agent/extensions/whatsapp-ng'); const metricsPath = join(root, 'metrics.json'); const networkPath = join(root, 'network.json');
         await mkdir(join(data, 'auth'), { recursive: true }); await mkdir(workspace);
-        const selfChat = mode === 'self-lid' || mode === 'self-auto'; const modelFixture = ['stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting'].includes(mode);
+        const selfChat = mode === 'self-lid' || mode === 'self-auto'; const modelFixture = ['stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models'].includes(mode);
         const owner = selfChat ? '15550000009@s.whatsapp.net' : '15550000001@s.whatsapp.net';
         await writeFile(join(data, 'config.json'), JSON.stringify({ operatorJid: owner, allowList: [{ number: '+' + owner.split('@')[0] }],
             ...(mode === 'self-lid' ? { voicePreferences: { enabled: true, mode: 'text', approvedDestinationKey: resolveTtsConfig({}).destinationKey,
@@ -30,7 +30,7 @@ describe('production phone-control Pi RPC gateway', () => {
         const env = Object.fromEntries(['PATH', 'TMPDIR', 'LANG'].flatMap(key => process.env[key] ? [[key, process.env[key]!]] : []));
         Object.assign(env, { HOME: home, PI_CODING_AGENT_DIR: join(root, 'agent'), PI_OFFLINE: '1', WHATSAPP_NG_LOCALE: 'en',
             WA_PHONE_RPC_METRICS: metricsPath, WA_PHONE_RPC_CONFIG: join(data, 'config.json'), WA_PHONE_RPC_SELF_LID: selfChat ? '1' : '0', WA_PHONE_RPC_STATS: mode === 'stats' ? '1' : '0',
-            WA_PHONE_RPC_GROUPS: ['groups', 'settings'].includes(mode) ? '1' : '0', WA_PHONE_RPC_SELF_AUTO: mode === 'self-auto' ? '1' : '0',
+            WA_PHONE_RPC_GROUPS: ['groups', 'settings'].includes(mode) ? '1' : '0', WA_PHONE_RPC_SELF_AUTO: mode === 'self-auto' ? '1' : '0', WA_PHONE_RPC_MODELS: mode === 'models' ? '1' : '0',
             WA_PHONE_RPC_OPTIONAL: ['images', 'terminal'].includes(mode) ? mode : '', WA_PHONE_RPC_REPORTING: mode === 'reporting' ? '1' : '0',
             NODE_OPTIONS: `--import=${guard} --import=${join(repo, 'tests/fixtures/phone-control-preload.mjs')}` });
         const child = spawn(process.execPath, ['--experimental-test-module-mocks', cli, '--mode', 'rpc', '--no-session', '--no-extensions', '--no-skills', '--no-prompt-templates', '--tools', 'read,send_wa_message,send_wa_media,send_reaction,list_wa_conversations,get_wa_conversation_history,check_wa_new_messages,request_wa_history,configure_wa_stt,configure_wa_tts'.split(',').filter(name => mode !== 'settings' || name !== 'send_reaction').join(',') + (mode === 'images' ? ',fixture_image' : mode === 'reporting' ? ',write,edit' : ''),
@@ -73,6 +73,24 @@ describe('production phone-control Pi RPC gateway', () => {
         };
         try {
             const initial = await request('get_state');
+            if (mode === 'models') {
+                expect(initial.model).toMatchObject({ provider: 'fixture-phone', id: 'model-01' });
+                await prompt('/phone-fixture models-search');
+                expect((await metrics()).messages.at(-1)).toContain('1. fixture-phone/model-01');
+                expect((await request('get_state')).model.id).toBe('model-01');
+                await prompt('/phone-fixture models-next');
+                expect((await metrics()).messages.at(-1)).toContain('1. fixture-phone/model-11');
+                await prompt('/phone-fixture models-previous');
+                expect((await metrics()).messages.at(-1)).toContain('1. fixture-phone/model-01');
+                await prompt('/phone-fixture models-next'); await prompt('/phone-fixture models-select');
+                expect((await request('get_state')).model).toMatchObject({ provider: 'fixture-phone', id: 'model-11' });
+                expect((await metrics()).messages.at(-1)).toContain('Shared model selected: fixture-phone/model-11.');
+                await prompt('/phone-fixture models-missing'); expect((await metrics()).messages.at(-1)).toContain('No authenticated models match');
+                expect((await request('get_state')).model.id).toBe('model-11');
+                expect((await metrics()).modelStarts).toBe(0); expect((await metrics()).providerRequests ?? 0).toBe(0);
+                expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
+                expect(records.filter(record => record.type === 'agent_start' || record.type === 'extension_error')).toEqual([]); return;
+            }
             if (mode === 'reporting') {
                 await prompt('/phone-fixture stats-start');
                 await expect.poll(async () => (await metrics()).statsConsumed, { timeout: 10_000 }).toBe(1);

@@ -146,7 +146,7 @@ Allowed people can use `/help` and `/status`. State-changing commands require th
 
 | Command | Action |
 | --- | --- |
-| `/model [provider/model]` | Choose an authenticated model. |
+| `/model [provider/model or search]` | Select an exact authenticated model, or search providers/models and confirm a match. |
 | `/think [level]` | Change thinking level. |
 | `/stop`, `/abort` | Stop current work and withdraw queued WhatsApp input. |
 | `/compact [focus]` | Compact session context. |
@@ -155,6 +155,8 @@ Allowed people can use `/help` and `/status`. State-changing commands require th
 | `/replies` | Change reply delivery and optional reporting. |
 | `/off` | Confirm WhatsApp shutdown without logging out. Re-enable from the terminal Connection menu. |
 | `/quit` | Confirm graceful Pi shutdown. |
+
+Use `/model` to browse, `/model anthropic` to filter by provider, or `/model anthropic/opus` (also `opus anthropic`) for case-insensitive fuzzy matching across provider/model identifiers. `/model DeepSeek`, `/model Deepseek` and `/model deepseek` show matching models across all authenticated providers, with provider/model labels kept distinct. Search results require a numbered selection even when only one matches; an exact `provider/model` still selects directly. Previous/next pages retain the search. Only currently authenticated models are offered; no match leaves the current model unchanged. Private filesystem identifiers stay redacted and are reachable through browsing, not fuzzy search.
 
 Menus use numbered replies. Group selections must quote the menu. Native polls are experimental and require `--whatsapp-ng-native-polls`. Configuration changes require idle Pi; stop active work explicitly rather than interrupting it through a settings change.
 
@@ -204,7 +206,7 @@ npm run typecheck
 pi --no-extensions -e ./whatsapp-ng.ts
 ```
 
-Maintainers can use the [release guide](docs/releases.md) for explicit local version bumps, validated tarball preparation and separately confirmed publication. PR/main CI and a default-off, environment-gated tag-triggered OIDC workflow are provided; npm requires a first manual package publication before trusted publishing can be configured. RC1 is already versioned; preparing it does not bump or publish it.
+Maintainers can use the [release guide](docs/releases.md) for explicit local version bumps, validated tarball preparation and separately confirmed publication. PR/main CI and a default-off, environment-gated tag-triggered OIDC workflow are provided; npm requires a first manual package publication before trusted publishing can be configured. RC1 is published; the working version is `1.1.0-rc.2`. Preparing a candidate does not bump or publish it.
 
 System tools must be installed separately. Add `--verbose` for extension diagnostics, not message bodies or protocol-key traces. See [dependencies and platform checks](DEPENDENCIES.md), the [manual acceptance guide](tests/manual/prerelease-acceptance.md), and [design records](specs/README.md).
 

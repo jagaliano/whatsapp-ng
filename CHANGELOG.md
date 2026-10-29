@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Prepare `1.1.0-rc.2`: add case-insensitive fuzzy `/model` search across authenticated provider/model identifiers. Require explicit selection for search results, retain filters through pagination, and preserve exact selection, owner/group authorization, idle guards and private-identifier redaction. No dependency changes or publication.
+
 - Prepare PR/main validation and default-off tag-triggered GitHub/npm OIDC publishing. Require exact version-tag/main ancestry, protected-environment approval and the same checksummed candidate; reject rerun publication and token fallback, retain attempt evidence, and verify registry integrity/tags. First publication still needs a separately approved manual bootstrap; no tokens, environment settings, tags or releases are created automatically.
 
 - Add dependency-free local release commands for explicit version/lockfile updates, clean-commit validation and tarball preparation, plus separately confirmed publication of the checksummed artifact. Keep prereleases on `next`, reserve `latest` for explicit stable versions, and retain publication-attempt evidence instead of retrying uncertain outcomes. No automatic commits, tags, pushes or release promotion.
