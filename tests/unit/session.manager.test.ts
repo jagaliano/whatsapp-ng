@@ -1,4 +1,5 @@
 import { SessionManager } from '../../src/services/session.manager.ts';
+import { spawnSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -16,6 +17,152 @@ describe('SessionManager', () => {
     afterEach(async () => {
         vi.unstubAllEnvs();
         await rm(dataDir, { recursive: true, force: true });
+    });
+
+    it('defaults auto-connect off and round-trips it without changing other preferences', async () => {
+        expect(sessionManager.getAutoConnect()).toBe(false); expect(sessionManager.getAutoConnectRevision()).toBe(0);
+        await sessionManager.setFinalAfterAttachments(false); const path = join(dataDir, 'config.json'); const original = JSON.parse(await readFile(path, 'utf8'));
+        await sessionManager.setAutoConnect(true, 0); expect(sessionManager.getAutoConnect()).toBe(true);
+        expect(sessionManager.getAutoConnectRevision()).toBe(1); expect(JSON.parse(await readFile(path, 'utf8'))).toEqual({ ...original, autoConnect: true });
+        const restored = new SessionManager(dataDir); await restored.ensureInitialized(); expect(restored.getAutoConnect()).toBe(true);
+        await restored.setStatus('disconnected'); expect(JSON.parse(await readFile(path, 'utf8')).autoConnect).toBe(true);
+        await restored.setAutoConnect(false, 0); const again = new SessionManager(dataDir); await again.ensureInitialized(); expect(again.getAutoConnect()).toBe(false);
+    });
+    it.each(['true', 1, {}, null])('does not enable malformed auto-connect %j or erase it on unrelated saves', async value => {
+        const path = join(dataDir, 'config.json'); await writeFile(path, JSON.stringify({ autoConnect: value, finalAfterAttachments: false }));
+        await sessionManager.ensureInitialized(); expect(sessionManager.getAutoConnect()).toBe(false);
+        await sessionManager.setStatus('disconnected'); expect(JSON.parse(await readFile(path, 'utf8')).autoConnect).toEqual(value);
+        await sessionManager.setAutoConnect(true, 0); expect(sessionManager.getAutoConnect()).toBe(true);
+    });
+    it('does not change auto-connect disk or memory after revocation, stale revision or invalid input', async () => {
+        await sessionManager.setAutoConnect(false, 0); const path = join(dataDir, 'config.json'); const before = await readFile(path, 'utf8'); let checks = 0;
+        await expect(sessionManager.setAutoConnect(true, 1, () => ++checks < 3)).rejects.toThrow('expired');
+        expect(sessionManager.getAutoConnect()).toBe(false); expect(sessionManager.getAutoConnectRevision()).toBe(1); expect(await readFile(path, 'utf8')).toBe(before);
+        await expect(sessionManager.setAutoConnect(true, 0)).rejects.toThrow('expired');
+        await expect(sessionManager.setAutoConnect('true' as any, 1)).rejects.toThrow('boolean'); expect(await readFile(path, 'utf8')).toBe(before);
+    });
+    it('serializes competing auto-connect changes and rejects the obsolete request', async () => {
+        await sessionManager.ensureInitialized(); const first = sessionManager.setAutoConnect(true, 0); const second = expect(sessionManager.setAutoConnect(false, 0)).rejects.toThrow('expired');
+        await first; await second; expect(sessionManager.getAutoConnect()).toBe(true);
+        const restored = new SessionManager(dataDir); await restored.ensureInitialized(); expect(restored.getAutoConnect()).toBe(true);
+    });
+    it('preserves unreadable config when asked to set auto-connect', async () => {
+        const path = join(dataDir, 'config.json'); await writeFile(path, 'broken-original');
+        await expect(sessionManager.setAutoConnect(true, 0)).rejects.toThrow('unreadable');
+        expect(sessionManager.getAutoConnect()).toBe(false); expect(await readFile(path, 'utf8')).toBe('broken-original');
+    });
+    it('keeps auto-connect unchanged when its atomic publication fails', async () => {
+        await sessionManager.setAutoConnect(false, 0); const path = join(dataDir, 'config.json'); const before = await readFile(path, 'utf8');
+        const failure = vi.spyOn(sessionManager as any, 'writeConfig').mockRejectedValueOnce(new Error('Synthetic publication failure'));
+        try { await expect(sessionManager.setAutoConnect(true, 1)).rejects.toThrow('publication failure'); }
+        finally { failure.mockRestore(); }
+        expect(sessionManager.getAutoConnect()).toBe(false); expect(sessionManager.getAutoConnectRevision()).toBe(1); expect(await readFile(path, 'utf8')).toBe(before);
+    });
+
+    it.each([true, false])('does not let an older manager overwrite a saved auto-connect change from %s', async original => {
+        await sessionManager.setAutoConnect(original, 0); const older = new SessionManager(dataDir); await older.ensureInitialized();
+        const revision = older.getAutoConnectRevision(); await sessionManager.setAutoConnect(!original, 1); await older.setStatus('disconnected');
+        expect(JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')).autoConnect).toBe(!original);
+        expect(older.getAutoConnect()).toBe(!original); expect(older.getAutoConnectRevision()).toBeGreaterThan(revision);
+        await older.setReplyStats(true); expect(JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')).autoConnect).toBe(!original);
+    });
+    it('preserves Disabled saved by a separate Node process before an older instance status write', async () => {
+        await sessionManager.setAutoConnect(true, 0);
+        const source = new URL('../../src/services/session.manager.ts', import.meta.url).href;
+        const script = `
+            import net from 'node:net';
+            import tls from 'node:tls';
+            let networkAttempts = 0;
+            const block = () => { networkAttempts++; throw new Error('Network forbidden in config fixture'); };
+            globalThis.fetch = block;
+            net.Socket.prototype.connect = block;
+            tls.connect = block;
+            const { SessionManager } = await import(${JSON.stringify(source)});
+            const manager = new SessionManager(process.argv[1]);
+            await manager.ensureInitialized();
+            await manager.setAutoConnect(false, manager.getAutoConnectRevision());
+            console.log(JSON.stringify({ networkAttempts }));
+        `;
+        const env = Object.fromEntries(['PATH', 'TMPDIR', 'LANG'].flatMap(key => process.env[key] ? [[key, process.env[key]!]] : []));
+        Object.assign(env, { HOME: dataDir, PI_CODING_AGENT_DIR: join(dataDir, 'agent'), PI_OFFLINE: '1' });
+        const child = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script, dataDir], { env, encoding: 'utf8', timeout: 20_000 });
+        expect(child.status).toBe(0); expect(JSON.parse(child.stdout)).toEqual({ networkAttempts: 0 });
+        await sessionManager.setStatus('disconnected'); expect(sessionManager.getAutoConnect()).toBe(false);
+        expect(JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')).autoConnect).toBe(false);
+        await expect(access(join(dataDir, 'config.json.lock'))).rejects.toThrow();
+    }, 30_000);
+    it('refreshes auto-connect from disk on later session initialization', async () => {
+        await sessionManager.setAutoConnect(true, 0); const older = new SessionManager(dataDir); await older.ensureInitialized();
+        await sessionManager.setAutoConnect(false, 1); await older.ensureInitialized();
+        expect(older.getAutoConnect()).toBe(false); expect(older.getAutoConnectRevision()).toBe(1);
+    });
+    it('rejects an explicit auto-connect choice made against another manager previous value', async () => {
+        await sessionManager.setAutoConnect(true, 0); const older = new SessionManager(dataDir); await older.ensureInitialized();
+        await sessionManager.setAutoConnect(false, 1); const before = await readFile(join(dataDir, 'config.json'), 'utf8');
+        await expect(older.setAutoConnect(true, 0)).rejects.toThrow('expired');
+        expect(await readFile(join(dataDir, 'config.json'), 'utf8')).toBe(before); expect(older.getAutoConnect()).toBe(false);
+    });
+    it('refuses config writes while another cooperative writer lock is held', async () => {
+        await sessionManager.setAutoConnect(false, 0); const path = join(dataDir, 'config.json'); const before = await readFile(path, 'utf8');
+        await writeFile(path + '.lock', 'SYNTHETIC-OTHER-WRITER', { mode: 0o600 });
+        await expect(sessionManager.setAutoConnect(true, 1)).rejects.toThrow('busy');
+        expect(await readFile(path, 'utf8')).toBe(before); expect(sessionManager.getAutoConnect()).toBe(false);
+        expect(await readFile(path + '.lock', 'utf8')).toBe('SYNTHETIC-OTHER-WRITER');
+    }, 10_000);
+    it('loads saved settings without erasing a retained writer lock or active temp during initialization', async () => {
+        const path = join(dataDir, 'config.json'); const allowList = [{ number: '+15550000001' }]; const operatorJid = '15550000001@s.whatsapp.net';
+        await writeFile(path, JSON.stringify({ autoConnect: true, allowList, operatorJid, status: 'disconnected' })); const original = await readFile(path, 'utf8');
+        const temporary = path + '.123.active.tmp'; await writeFile(temporary, 'SYNTHETIC-ACTIVE-WRITE');
+        await writeFile(path + '.lock', 'SYNTHETIC-OTHER-WRITER', { mode: 0o600 });
+        const notice = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            await sessionManager.ensureInitialized(); expect(await readFile(temporary, 'utf8')).toBe('SYNTHETIC-ACTIVE-WRITE');
+            expect(sessionManager.getAutoConnect()).toBe(true); expect(sessionManager.getAllowList()).toEqual(allowList); expect(sessionManager.getOperatorJid()).toBe(operatorJid);
+            expect(() => sessionManager.getReplyAdmissionKey(operatorJid, jid => jid)).not.toThrow();
+            expect(notice).toHaveBeenCalledWith(expect.stringContaining('Configuration writer lock retained at '));
+            expect(await readFile(path, 'utf8')).toBe(original); expect(await readFile(path + '.lock', 'utf8')).toBe('SYNTHETIC-OTHER-WRITER');
+            await rm(path + '.lock'); await sessionManager.setAutoConnect(false, 0);
+            const recovered = JSON.parse(await readFile(path, 'utf8')); expect(recovered.autoConnect).toBe(false); expect(recovered.allowList).toEqual(allowList); expect(recovered.operatorJid).toBe(operatorJid);
+        } finally { notice.mockRestore(); }
+    }, 10_000);
+    it('still reconciles auth metadata in an initialized manager while the writer lock is busy', async () => {
+        await sessionManager.setAutoConnect(true, 0); await sessionManager.setStatus('connected');
+        await writeFile(join(dataDir, 'config.json.lock'), 'SYNTHETIC-OTHER-WRITER');
+        const notice = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try { await sessionManager.ensureInitialized(); expect(sessionManager.getAutoConnect()).toBe(true); expect(sessionManager.getStatus()).toBe('disconnected'); }
+        finally { notice.mockRestore(); }
+    }, 10_000);
+    it.each(['broken-reread', '[]'])('isolates an invalid auto-connect re-read (%s) from loaded reply settings and recovers', async invalid => {
+        const path = join(dataDir, 'config.json'); await writeFile(path, JSON.stringify({ autoConnect: true, status: 'disconnected', allowList: [{ number: '+15550000001' }] }));
+        await sessionManager.ensureInitialized(); const original = await readFile(path, 'utf8'); const jid = '15550000001@s.whatsapp.net';
+        const admission = sessionManager.getReplyAdmissionKey(jid, value => value); const voice = sessionManager.getSpeechSettings();
+        const notice = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            await writeFile(path, invalid); await sessionManager.setStatus('disconnected');
+            expect(await readFile(path, 'utf8')).toBe(invalid); expect(sessionManager.getAutoConnect()).toBe(false);
+            expect(sessionManager.getReplyAdmissionKey(jid, value => value)).toBe(admission); expect(sessionManager.getSpeechSettings()).toEqual(voice);
+            expect(() => sessionManager.getGroupReplies()).not.toThrow(); expect(() => sessionManager.getReplyReporting()).not.toThrow();
+            await writeFile(path, original); await sessionManager.ensureInitialized(); expect(sessionManager.getAutoConnect()).toBe(true);
+            await sessionManager.setAutoConnect(false, 0); expect(sessionManager.getAutoConnect()).toBe(false);
+        } finally { notice.mockRestore(); }
+    });
+    it('reports a committed preference accurately even if lock cleanup cannot be confirmed', async () => {
+        await sessionManager.setAutoConnect(false, 0); const path = join(dataDir, 'config.json');
+        const cleanup = vi.spyOn(sessionManager as any, 'removeConfigTempFile').mockImplementationOnce(async () => { await rm(path + '.lock'); });
+        const notice = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            await expect(sessionManager.setAutoConnect(true, 1)).resolves.toBeUndefined();
+            expect(sessionManager.getAutoConnect()).toBe(true); expect(sessionManager.getAutoConnectRevision()).toBe(2);
+            expect(JSON.parse(await readFile(path, 'utf8')).autoConnect).toBe(true);
+            expect(notice).toHaveBeenCalledWith(expect.stringContaining('Configuration writer lock cleanup unconfirmed at '));
+        } finally { cleanup.mockRestore(); notice.mockRestore(); }
+    });
+    it('preserves the original operation error when writer lock cleanup also fails', async () => {
+        await sessionManager.ensureInitialized(); const path = join(dataDir, 'config.json.lock'); const notice = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            await expect((sessionManager as any).withConfigWriter(async () => { await rm(path); throw new Error('SYNTHETIC-ORIGINAL-FAILURE'); })).rejects.toThrow('SYNTHETIC-ORIGINAL-FAILURE');
+            expect(notice).toHaveBeenCalledWith(expect.stringContaining('Configuration writer lock cleanup unconfirmed at '));
+        } finally { notice.mockRestore(); }
     });
 
     it('guards phone reply-policy changes at atomic commit and leaves disk/memory unchanged on revocation', async () => {

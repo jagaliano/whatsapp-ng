@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
         getAllowedGroups: vi.fn().mockReturnValue([]),
         setGroupJidForAuth: vi.fn(),
         getFinalAfterAttachments: vi.fn().mockReturnValue(true),
+        getAutoConnect: vi.fn().mockReturnValue(false),
         getGroupReplies: vi.fn().mockReturnValue({ mode: 'all', context: false }), getGroupRepliesRevision: vi.fn().mockReturnValue(0),
         getSpeechSettings: vi.fn().mockReturnValue({ config: {}, enabled: false, mode: 'text', chats: {} }),
         getSpeechRevision: vi.fn().mockReturnValue(0), getReplyAdmissionKey: vi.fn().mockReturnValue('fixture-admission-0'),
@@ -139,6 +140,8 @@ interface MockPi {
     appendEntry: ReturnType<typeof vi.fn>;
     exec: ReturnType<typeof vi.fn>;
     sendUserMessage: ReturnType<typeof vi.fn>;
+    getActiveTools: ReturnType<typeof vi.fn>;
+    setActiveTools: ReturnType<typeof vi.fn>;
 }
 
 const createMockPi = (): MockPi => {
@@ -159,11 +162,14 @@ const createMockPi = (): MockPi => {
         getFlag: vi.fn().mockReturnValue(false),
         appendEntry: vi.fn(),
         exec: vi.fn().mockResolvedValue({ code: 0 }),
-        sendUserMessage: vi.fn()
+        sendUserMessage: vi.fn(),
+        getActiveTools: vi.fn().mockReturnValue([]),
+        setActiveTools: vi.fn()
     };
 };
 
 const createMockContext = () => ({
+    mode: 'tui' as 'tui' | 'rpc' | 'json' | 'print',
     cwd: '/fixture/workspace',
     ui: {
         setStatus: vi.fn(),
@@ -581,6 +587,66 @@ describe('whatsapp-ng extension', () => {
 
         expect(mocks.sessionManager.setStatus).toHaveBeenCalledWith('connected');
         expect(mocks.whatsappService.start).toHaveBeenCalledOnce();
+    });
+
+    it.each([[false, false, false], [true, false, true], [false, true, true], [true, true, true]])('combines saved startup preference %s with online flag %s', async (saved, flag, expected) => {
+        const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext();
+        pi.getFlag.mockImplementation(name => name === 'whatsapp-ng-online' && flag); mocks.sessionManager.getAutoConnect.mockReturnValue(saved);
+        mocks.sessionManager.isRegistered.mockResolvedValue(true); register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
+        expect(mocks.whatsappService.start).toHaveBeenCalledTimes(expected ? 1 : 0);
+        if (expected) expect(mocks.whatsappService.start).toHaveBeenCalledWith({ allowPairingOnAuthFailure: false });
+    });
+    it.each(['json', 'print'] as const)('does not implicitly auto-connect a %s process but honors its explicit flag', async mode => {
+        const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); ctx.mode = mode;
+        mocks.sessionManager.getAutoConnect.mockReturnValue(true); mocks.sessionManager.isRegistered.mockResolvedValue(true); register(pi as any);
+        await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx); expect(mocks.whatsappService.start).not.toHaveBeenCalled();
+        pi.getFlag.mockImplementation(name => name === 'whatsapp-ng-online');
+        await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx); expect(mocks.whatsappService.start).toHaveBeenCalledExactlyOnceWith({ allowPairingOnAuthFailure: false });
+    });
+    it('treats an occupied profile as one informational skip on saved-preference startup', async () => {
+        vi.useFakeTimers();
+        try {
+            const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext();
+            mocks.sessionManager.getAutoConnect.mockReturnValue(true); mocks.sessionManager.isRegistered.mockResolvedValue(true);
+            mocks.whatsappService.start.mockRejectedValue(Object.assign(new Error('Synthetic occupied profile'), { code: 'WHATSAPP_NG_PROFILE_IN_USE' })); register(pi as any);
+            await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx); await vi.advanceTimersByTimeAsync(15_000);
+            expect(mocks.whatsappService.start).toHaveBeenCalledOnce(); expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining('already in use'), 'info');
+            expect(ctx.ui.notify.mock.calls.filter(([message]) => String(message).includes('Retrying'))).toHaveLength(0);
+            expect(ctx.ui.setStatus).toHaveBeenCalledWith('whatsapp', '| WhatsApp: Disconnected');
+        } finally { vi.clearAllTimers(); vi.useRealTimers(); }
+    });
+    it('loads the saved auto-connect preference before deciding whether to connect', async () => {
+        const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext();
+        mocks.sessionManager.ensureInitialized.mockImplementationOnce(async () => { mocks.sessionManager.getAutoConnect.mockReturnValue(true); });
+        mocks.sessionManager.isRegistered.mockResolvedValue(true); register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
+        expect(mocks.whatsappService.start).toHaveBeenCalledExactlyOnceWith({ allowPairingOnAuthFailure: false });
+    });
+    it('never starts pairing when saved auto-connect is enabled without credentials', async () => {
+        const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext();
+        mocks.sessionManager.getAutoConnect.mockReturnValue(true); register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
+        expect(mocks.whatsappService.start).not.toHaveBeenCalled(); expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining('no saved WhatsApp credentials'), 'warning');
+    });
+    it('does not restore an auto-connect preference from an old Pi session entry', async () => {
+        const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); mocks.sessionManager.isRegistered.mockResolvedValue(true);
+        ctx.sessionManager.getEntries.mockReturnValue([{ type: 'custom', customType: 'whatsapp-ng-state', data: { status: 'connected', autoConnect: true } }]);
+        register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
+        expect(mocks.whatsappService.start).not.toHaveBeenCalled(); expect(mocks.sessionManager.setStatus).toHaveBeenCalledWith('disconnected');
+    });
+    it('keeps saved connected status when the preference requests startup without an online flag', async () => {
+        const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); mocks.sessionManager.isRegistered.mockResolvedValue(true);
+        mocks.sessionManager.getAutoConnect.mockReturnValue(true); ctx.sessionManager.getEntries.mockReturnValue([{ type: 'custom', customType: 'whatsapp-ng-state', data: { status: 'connected' } }]);
+        register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
+        expect(mocks.sessionManager.setStatus).toHaveBeenCalledWith('connected'); expect(mocks.whatsappService.start).toHaveBeenCalledOnce();
+    });
+    it('keeps deliberate Off above saved auto-connect through session reload and extension recreation', async () => {
+        (globalThis as any).__whatsappNgPhoneOffProfiles = new Set(['/synthetic-profile']);
+        mocks.sessionManager.getAutoConnect.mockReturnValue(true); mocks.sessionManager.isRegistered.mockResolvedValue(true);
+        for (const reason of ['startup', 'new', 'reload']) {
+            const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); register(pi as any);
+            await pi.handlers.get('session_start')!({ reason }, ctx);
+            expect(ctx.ui.setStatus).toHaveBeenCalledWith('whatsapp', '| WhatsApp: Off');
+        }
+        expect(mocks.whatsappService.start).not.toHaveBeenCalled();
     });
 
     it('auto-connects when flag is enabled and auth is registered', async () => {

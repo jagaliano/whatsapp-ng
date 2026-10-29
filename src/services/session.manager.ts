@@ -2,7 +2,7 @@ import { useMultiFileAuthState, type SignalKeyStore, type SignalDataTypeMap } fr
 import { basename, join, relative } from 'path';
 import { randomUUID } from 'node:crypto';
 import { loadSpeechSettings, speechDefaults, storedSpeechFields, validateSpeechSettings, matchingChatPreferences, settingsJid, TTS_CONFIG_FIELDS, type SpeechSettings } from './speech-settings.js';
-import { readFile, writeFile, mkdir, rm, rename, readdir, chmod } from 'fs/promises';
+import { readFile, writeFile, mkdir, rm, rename, readdir, chmod, open, lstat } from 'fs/promises';
 import { SessionStatus } from '../models/whatsapp.types.js';
 import type { SttConfig } from './audio-transcriber.js';
 import { t } from '../i18n.js';
@@ -20,6 +20,8 @@ import {
     migrateLegacyStorage,
     type StoragePaths
 } from './storage-path.js';
+
+class ConfigWriterBusyError extends Error {}
 
 export interface Contact {
     number: string;
@@ -55,6 +57,10 @@ export class SessionManager {
     private sttConfig: SttConfig = {};
     private operatorJid: string = '';
     private finalAfterAttachments = true;
+    private storedAutoConnect: unknown;
+    private autoConnectRevision = 0;
+    private autoConnectReadFailure = false;
+    private configLockDiagnostic = '';
     private storedReplyStats: unknown;
     private replyStatsRevision = 0;
     private storedReplyReporting: unknown;
@@ -115,10 +121,21 @@ export class SessionManager {
             await this.migrateLegacyStorageIfNeeded();
             try { await chmod(this.configPath, 0o600); }
             catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+            let writerBusy: ConfigWriterBusyError | undefined;
             if (!this.configLoaded) {
-                await this.queueConfig(() => this.cleanupStaleConfigTempFiles());
+                try { await this.queueConfig(() => this.withConfigWriter(() => this.cleanupStaleConfigTempFiles())); }
+                catch (error) { if (error instanceof ConfigWriterBusyError) writerBusy = error; else throw error; }
+                // A retained writer lock protects mutations, not existing readable settings.
                 await this.loadConfig();
                 this.configLoaded = true;
+            }
+            if (!writerBusy) {
+                try { await this.queueConfig(() => this.withConfigWriter(() => this.refreshAutoConnect())); }
+                catch (error) { if (error instanceof ConfigWriterBusyError) writerBusy = error; else throw error; }
+            }
+            if (writerBusy) {
+                this.reportConfigLock(writerBusy.message);
+                await this.queueConfig(() => this.refreshAutoConnect());
             }
             await this.syncAuthStateFromDisk();
         } catch {
@@ -161,6 +178,7 @@ export class SessionManager {
             this.sttConfig = { sttEndpoint: config.sttEndpoint, sttModel: config.sttModel, sttEnv: config.sttEnv, sttLanguage: config.sttLanguage };
             this.operatorJid = config.operatorJid || '';
             this.finalAfterAttachments = config.finalAfterAttachments !== false;
+            this.storedAutoConnect = config.autoConnect;
             this.storedReplyStats = config.replyStats;
             this.storedReplyReporting = config.replyReporting;
             this.storedGroupReplies = config.groupReplies;
@@ -175,6 +193,21 @@ export class SessionManager {
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== 'ENOENT') this.configReadFailure = true;
         }
+    }
+
+    public getAutoConnect(): boolean { return !this.configReadFailure && !this.autoConnectReadFailure && this.storedAutoConnect === true; }
+    public getAutoConnectRevision(): number { return this.autoConnectRevision; }
+    public async setAutoConnect(enabled: boolean, expectedRevision: number, current: () => boolean = () => true): Promise<void> {
+        if (typeof enabled !== 'boolean') throw new Error('Auto-connect preference must be a boolean');
+        await this.ensureInitialized();
+        if (!this.configLoaded || this.configReadFailure) throw new Error('Configuration is unreadable; originals preserved');
+        await this.queueConfig(async () => {
+            const valid = () => expectedRevision === this.autoConnectRevision && current();
+            if (!valid()) throw new Error('Settings request expired');
+            await this.writeConfig(this.storedSpeechState, this.operatorJid, valid, 'atomic', this.finalAfterAttachments,
+                this.storedReplyStats, this.storedGroupReplies, this.storedOptionalOutputs, this.storedReplyReporting, this.sttConfig, enabled);
+            this.storedAutoConnect = enabled; this.autoConnectRevision++;
+        });
     }
 
     public getFinalAfterAttachments(): boolean {
@@ -327,33 +360,91 @@ export class SessionManager {
         catch { console.error(t('session.manager.failedSaveConfig')); }
     }
 
-    private async writeConfig(speech = this.storedSpeechState, owner = this.operatorJid, current: () => boolean = () => true, commit: 'ordinary' | 'atomic' = 'ordinary', finalAfterAttachments = this.finalAfterAttachments, replyStats = this.storedReplyStats, groupReplies = this.storedGroupReplies, optionalOutputs = this.storedOptionalOutputs, replyReporting = this.storedReplyReporting, sttConfig = this.sttConfig): Promise<void> {
+    private reportConfigLock(message: string): void {
+        if (message !== this.configLockDiagnostic) { this.configLockDiagnostic = message; console.error(message); }
+    }
+
+    /** Serialize cooperating config writers and startup temp cleanup; never break an unknown lock. */
+    private async withConfigWriter<T>(operation: () => Promise<T>): Promise<T> {
         this.assertStorageReady();
-        const tempPath = `${this.configPath}.${process.pid}.${randomUUID()}.tmp`;
-        try {
-            this.hasAuthState = this.hasAuthState || await this.hasCredentialsFile();
-            const serialized = JSON.stringify({
-                allowList: this.allowList, allowedGroups: this.allowedGroups, ignoredNumbers: this.ignoredNumbers,
-                status: this.status, hasAuthState: this.hasAuthState, openaiKey: this.openaiKey,
-                visionModel: this.visionModel, ...sttConfig, operatorJid: owner,
-                finalAfterAttachments, ...(replyStats === undefined ? {} : { replyStats }), ...(groupReplies === undefined ? {} : { groupReplies }), ...(optionalOutputs === undefined ? {} : { optionalOutputs }), ...(replyReporting === undefined ? {} : { replyReporting }), ...speech
-            }, null, 2);
-            await mkdir(this.storagePaths.root, { recursive: true, mode: 0o700 });
-            await chmod(this.storagePaths.root, 0o700);
-            if (!current()) throw new Error('Settings request expired');
-            await writeFile(tempPath, serialized, { mode: 0o600, flag: 'wx' });
-            await chmod(tempPath, 0o600);
-            // Last authority check before the atomic commit. Once rename is
-            // submitted, this already-authorized global change cannot be recalled.
-            if (!current()) throw new Error('Settings request expired');
-            try { await rename(tempPath, this.configPath); }
+        const path = this.configPath + '.lock';
+        let file: Awaited<ReturnType<typeof open>>;
+        for (let attempt = 0; ; attempt++) {
+            try { file = await open(path, 'wx', 0o600); break; }
             catch (error) {
-                if (commit === 'atomic') throw error;
-                // Preserve the existing Windows compatibility path for ordinary state saves.
-                await writeFile(this.configPath, serialized, { mode: 0o600 });
-                await chmod(this.configPath, 0o600);
+                if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+                if (attempt >= 100) throw new ConfigWriterBusyError(`Configuration writer lock retained at ${path}; writes are busy. Inspect ownership locally before recovery.`);
+                await new Promise(resolve => setTimeout(resolve, 20));
             }
-        } finally { await this.removeConfigTempFile(tempPath); }
+        }
+        this.configLockDiagnostic = '';
+        let identity: { dev: number; ino: number } | undefined;
+        const cleanupNotice = `Configuration writer lock cleanup unconfirmed at ${path}; inspect ownership locally.`;
+        try {
+            identity = await file.stat();
+            await file.writeFile(JSON.stringify({ version: 1, pid: process.pid }));
+            return await operation();
+        } finally {
+            // Cleanup diagnostics must not disguise an already committed write or its original error.
+            try {
+                const current = await lstat(path);
+                if (identity && current.isFile() && current.dev === identity.dev && current.ino === identity.ino) await rm(path);
+                else this.reportConfigLock(cleanupNotice);
+            } catch { this.reportConfigLock(cleanupNotice); }
+            try { await file.close(); } catch { this.reportConfigLock(cleanupNotice); }
+        }
+    }
+
+    /** Only this new preference is refreshed; this is not a general cross-process settings merge. */
+    private async refreshAutoConnect(): Promise<void> {
+        let value: unknown;
+        try {
+            const { config } = this.parseConfig(await readFile(this.configPath, 'utf8'));
+            if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('Invalid configuration');
+            value = Object.hasOwn(config, 'autoConnect') ? config.autoConnect : undefined;
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+                this.autoConnectReadFailure = true;
+                throw new Error('Configuration is unreadable; originals preserved');
+            }
+        }
+        this.autoConnectReadFailure = false;
+        if (JSON.stringify(value) !== JSON.stringify(this.storedAutoConnect)) {
+            this.storedAutoConnect = value; this.autoConnectRevision++;
+        }
+    }
+
+    private async writeConfig(speech = this.storedSpeechState, owner = this.operatorJid, current: () => boolean = () => true, commit: 'ordinary' | 'atomic' = 'ordinary', finalAfterAttachments = this.finalAfterAttachments, replyStats = this.storedReplyStats, groupReplies = this.storedGroupReplies, optionalOutputs = this.storedOptionalOutputs, replyReporting = this.storedReplyReporting, sttConfig = this.sttConfig, autoConnect?: boolean): Promise<void> {
+        this.assertStorageReady();
+        await mkdir(this.storagePaths.root, { recursive: true, mode: 0o700 });
+        await chmod(this.storagePaths.root, 0o700);
+        await this.withConfigWriter(async () => {
+            const tempPath = `${this.configPath}.${process.pid}.${randomUUID()}.tmp`;
+            try {
+                await this.refreshAutoConnect();
+                const savedAutoConnect = autoConnect === undefined ? this.storedAutoConnect : autoConnect;
+                this.hasAuthState = this.hasAuthState || await this.hasCredentialsFile();
+                const serialized = JSON.stringify({
+                    allowList: this.allowList, allowedGroups: this.allowedGroups, ignoredNumbers: this.ignoredNumbers,
+                    status: this.status, hasAuthState: this.hasAuthState, openaiKey: this.openaiKey,
+                    ...(savedAutoConnect === undefined ? {} : { autoConnect: savedAutoConnect }),
+                    visionModel: this.visionModel, ...sttConfig, operatorJid: owner,
+                    finalAfterAttachments, ...(replyStats === undefined ? {} : { replyStats }), ...(groupReplies === undefined ? {} : { groupReplies }), ...(optionalOutputs === undefined ? {} : { optionalOutputs }), ...(replyReporting === undefined ? {} : { replyReporting }), ...speech
+                }, null, 2);
+                if (!current()) throw new Error('Settings request expired');
+                await writeFile(tempPath, serialized, { mode: 0o600, flag: 'wx' });
+                await chmod(tempPath, 0o600);
+                // Recheck authority while retaining the cooperative writer lock through publication.
+                if (!current()) throw new Error('Settings request expired');
+                try { await rename(tempPath, this.configPath); }
+                catch (error) {
+                    if (commit === 'atomic') throw error;
+                    // Preserve the existing Windows compatibility path for ordinary state saves.
+                    await writeFile(this.configPath, serialized, { mode: 0o600 });
+                    await chmod(this.configPath, 0o600);
+                }
+            } finally { await this.removeConfigTempFile(tempPath); }
+        });
     }
 
     getSpeechSettings(): SpeechSettings {

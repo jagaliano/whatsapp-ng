@@ -4,6 +4,8 @@ import type { FileHandle } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { t } from '../i18n.js';
 
+export const PROFILE_IN_USE = 'WHATSAPP_NG_PROFILE_IN_USE';
+
 /** Admitted auth I/O settles in order; retired callbacks cannot start more work. */
 export class AuthOperationScope {
     private accepting = true;
@@ -52,7 +54,7 @@ export class TransportLease {
         try {
             file = await open(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600);
         } catch (error) {
-            if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new Error(t('profile.inUse'));
+            if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw Object.assign(new Error(t('profile.inUse')), { code: PROFILE_IN_USE });
             throw error;
         }
         let identity: Stats;
@@ -83,7 +85,7 @@ export class TransportLease {
 
     createScope(profile: string): AuthOperationScope {
         if (!this.isHeld) throw new Error(t('profile.authClosed'));
-        if (this.scopes.size) throw new Error(t('profile.inUse'));
+        if (this.scopes.size) throw Object.assign(new Error(t('profile.inUse')), { code: PROFILE_IN_USE });
         const scope = new AuthOperationScope(() => this.assertProfile(profile), () => this.scopes.delete(scope));
         this.scopes.add(scope);
         return scope;

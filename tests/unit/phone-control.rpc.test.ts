@@ -9,13 +9,14 @@ import { resolveTtsConfig } from '../../src/services/tts-config.ts';
 
 /** Real Pi command context/lifecycle; WhatsApp transport and fixture model streams are synthetic. */
 describe('production phone-control Pi RPC gateway', () => {
-    it.each(['direct', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models'])('exercises production phone controls and lifecycle fences (%s)', async mode => {
+    it.each(['direct', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'autoconnect'])('exercises production phone controls and lifecycle fences (%s)', async mode => {
         const root = await mkdtemp(join(tmpdir(), 'wa-phone-rpc-')); const home = join(root, 'home'); const workspace = join(root, 'workspace');
         const data = join(home, '.pi/agent/extensions/whatsapp-ng'); const metricsPath = join(root, 'metrics.json'); const networkPath = join(root, 'network.json');
         await mkdir(join(data, 'auth'), { recursive: true }); await mkdir(workspace);
         const selfChat = mode === 'self-lid' || mode === 'self-auto'; const modelFixture = ['stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models'].includes(mode);
         const owner = selfChat ? '15550000009@s.whatsapp.net' : '15550000001@s.whatsapp.net';
         await writeFile(join(data, 'config.json'), JSON.stringify({ operatorJid: owner, allowList: [{ number: '+' + owner.split('@')[0] }],
+            ...(mode === 'autoconnect' ? { autoConnect: true } : {}),
             ...(mode === 'self-lid' ? { voicePreferences: { enabled: true, mode: 'text', approvedDestinationKey: resolveTtsConfig({}).destinationKey,
                 chats: { [owner]: { mode: 'mirror' }, '90000000009@s.whatsapp.net': { mode: 'text' } } } } : {}),
             ...(['groups', 'images', 'terminal', 'settings', 'reporting'].includes(mode) ? { allowedGroups: [{ number: '120363000001@g.us' }] } : {}), ...(['images', 'settings'].includes(mode) ? { finalAfterAttachments: false } : {}), status: 'disconnected' }), { mode: 0o600 });
@@ -37,7 +38,7 @@ describe('production phone-control Pi RPC gateway', () => {
             '--provider', modelFixture ? 'fixture-phone' : 'openai', '--model', modelFixture ? 'model-01' : 'gpt-4o-mini',
             ...(modelFixture ? ['-e', join(repo, 'whatsapp-ng.ts'), '-e', join(repo, 'tests/fixtures/phone-control-rpc.extension.ts')]
                 : ['-e', join(repo, 'tests/fixtures/phone-control-rpc.extension.ts'), '-e', join(repo, 'whatsapp-ng.ts')]),
-            '--whatsapp-ng-online', ...(mode === 'self-lid' ? ['--whatsapp-ng-native-polls'] : [])],
+            ...(mode === 'autoconnect' ? [] : ['--whatsapp-ng-online']), ...(mode === 'self-lid' ? ['--whatsapp-ng-native-polls'] : [])],
             { cwd: workspace, env, stdio: ['pipe', 'pipe', 'pipe'] });
         const waiters = new Map<string, (record: any) => void>(); const records: any[] = []; let buffer = ''; let stderr = ''; let serial = 0;
         child.stderr.on('data', value => { stderr = (stderr + value).slice(-4000); });
@@ -73,6 +74,34 @@ describe('production phone-control Pi RPC gateway', () => {
         };
         try {
             const initial = await request('get_state');
+            if (mode === 'autoconnect') {
+                expect((await metrics()).socketStarts).toBe(1);
+                await expect.poll(async () => JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).status, { timeout: 10_000 }).toBe('connected');
+                const beforeBack = await readFile(join(data, 'config.json'), 'utf8');
+                const backMenu = prompt('/whatsapp'); await select('Connection'); await select('Auto-connect on startup');
+                expect((await select('Back')).title).toContain('Auto-connect on startup: On');
+                expect((await select('Back')).title).toBe('Connection');
+                expect((await select('Back')).title).toMatch(/^WhatsApp — /); await backMenu;
+                expect(await readFile(join(data, 'config.json'), 'utf8')).toBe(beforeBack); expect((await metrics()).socketStarts).toBe(1);
+                const preference = async (value: 'Enabled' | 'Disabled') => {
+                    const menu = prompt('/whatsapp'); await select('Connection'); await select('Auto-connect on startup'); await select(value); await menu;
+                    expect(JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).autoConnect).toBe(value === 'Enabled');
+                };
+                await preference('Disabled'); expect((await metrics()).socketStarts).toBe(1);
+                await request('new_session'); await request('get_state'); expect((await metrics()).socketStarts).toBe(1);
+                await preference('Enabled'); expect((await metrics()).socketStarts).toBe(1);
+                await prompt('/phone-fixture reload'); await request('get_state'); expect((await metrics()).socketStarts).toBe(2);
+                await prompt('/phone-fixture off');
+                await request('new_session'); await prompt('/phone-fixture reload'); await request('get_state'); expect((await metrics()).socketStarts).toBe(2);
+                expect(JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).autoConnect).toBe(true);
+                const connect = prompt('/whatsapp'); await select('Connection'); await select('Connect WhatsApp'); await connect;
+                expect((await metrics()).socketStarts).toBe(3);
+                await preference('Disabled'); await prompt('/phone-fixture reload'); await request('get_state'); expect((await metrics()).socketStarts).toBe(3);
+                expect((await metrics()).modelStarts).toBe(0); expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
+                expect(records.filter(record => record.type === 'agent_start' || record.type === 'extension_error')).toEqual([]);
+                const config = JSON.parse(await readFile(join(data, 'config.json'), 'utf8')); expect(config.operatorJid).toBe(owner); expect(config.autoConnect).toBe(false);
+                expect(config.allowList).toEqual([{ number: '+' + owner.split('@')[0] }]); return;
+            }
             if (mode === 'models') {
                 expect(initial.model).toMatchObject({ provider: 'fixture-phone', id: 'model-01' });
                 await prompt('/phone-fixture models-search');

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, readFile, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { TransportLease } from '../../src/services/transport-lease.service.ts';
+import { PROFILE_IN_USE, TransportLease } from '../../src/services/transport-lease.service.ts';
 
 let root: string;
 let leases: TransportLease[];
@@ -26,7 +26,7 @@ describe('TransportLease', () => {
     it('excludes another owner before auth access and releases idempotently', async () => {
         const profile = join(root, 'auth');
         const first = await acquire(profile);
-        await expect(TransportLease.acquire(profile)).rejects.toThrow(/profile.*use/i);
+        await expect(TransportLease.acquire(profile)).rejects.toMatchObject({ code: PROFILE_IN_USE });
         const closing = first.release();
         expect(first.release()).toBe(closing);
         await closing;

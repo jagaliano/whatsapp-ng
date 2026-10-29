@@ -4,12 +4,12 @@ These commands run from a **source checkout**, not the installed extension. They
 
 ## 1. Choose the version
 
-The first public candidate is already `1.1.0-rc.1`; **do not bump it merely to publish RC1**.
+The checkout is already versioned `1.1.0-rc.2`; **do not bump it again to prepare RC2**. A public registry check on October 29, 2026 confirmed RC1 was published on October 28, with both `next` and `latest` pointing to RC1; RC2 was absent. This is dated registry evidence, not permission to publish or change tags. See [discovery checks](#package-discovery).
 
-For a later candidate, start from a clean working tree and give the complete intended version:
+For a future bump only, start from a clean working tree and replace `NEW_VERSION` with a complete version greater than the manifest:
 
 ```bash
-npm run release:version -- 1.1.0-rc.2
+npm run release:version -- NEW_VERSION
 ```
 
 This delegates to `npm version` with lifecycle scripts and automatic Git tagging disabled. It synchronizes `package.json` and `package-lock.json`, rejects same/older versions, and selects `next` for prereleases. No dependency upgrade or publication is performed. The resulting edits are deliberately left uncommitted.
@@ -42,7 +42,7 @@ No real `npm publish` occurs. A new prepare attempt invalidates the previous pre
 The following is a **real publication command**, not part of preparation. Run it only after explicit release approval and acceptance of the recorded limits:
 
 ```bash
-npm run release:publish -- --confirm 1.1.0-rc.1 --tag next
+npm run release:publish -- --confirm 1.1.0-rc.2 --tag next
 ```
 
 Use the actual prepared version. For a separately approved stable version, both its version and `--tag latest` must match. The command:
@@ -59,8 +59,8 @@ Use the actual prepared version. For a separately approved stable version, both 
 After a successful authorized publication:
 
 ```bash
-npm view whatsapp-ng@1.1.0-rc.1 version dist.integrity --json --registry=https://registry.npmjs.org
-npm view whatsapp-ng@1.1.0-rc.1 dist-tags --json --registry=https://registry.npmjs.org
+npm view whatsapp-ng@1.1.0-rc.2 version dist.integrity --json --registry=https://registry.npmjs.org
+npm view whatsapp-ng@1.1.0-rc.2 dist-tags --json --registry=https://registry.npmjs.org
 ```
 
 Compare the registry integrity to the prepared receipt, confirm `next` points to the intended candidate, and explicitly inspect `latest` as well. Do not assume the first publication leaves `latest` absent or changes it in a particular way; any tag correction requires an explicit operator decision. Install that exact registry artifact in a fresh isolated consumer/Pi environment without real WhatsApp state. A published prerelease is not proof of all-platform compatibility or client rendering.
@@ -76,11 +76,11 @@ Two workflows are provided:
 
 The workflows pin official actions by commit SHA, Node 26.12.1 and npm 11.20.0. Dependencies/system tools are installed only on the disposable GitHub runner, not the operator's workstation. No version bump, Git commit/tag, main merge or GitHub release is automatic. The CI runner is not a universal platform/live-acceptance matrix, and production auditing still does not clear the known host/development SDK findings.
 
-### Bootstrap RC1 before enabling OIDC
+### Published-package prerequisite and OIDC activation
 
-[npm requires a package to already exist](https://docs.npmjs.com/cli/v11/commands/npm-trust/#prerequisites) before configuring trusted publishing. While `whatsapp-ng` is unpublished, complete the separately approved **manual RC1** process above. Do not add an automation token merely to bypass this bootstrap requirement.
+[npm requires a package to already exist](https://docs.npmjs.com/cli/v11/commands/npm-trust/#prerequisites) before configuring trusted publishing. RC1 now exists, so that package-existence prerequisite is met. This does not prove that npm trust, protected environments or publication approval are configured; verify the external setup below before any later automated release. Do not attempt to republish RC1 or add an automation token to bypass setup.
 
-Keep the repository variable `NPM_PUBLISH_ENABLED` **unset or `false`** during bootstrap. If a release tag is pushed in this state, the workflow can prepare an artifact, but the real publish job is skipped. A disabled publish job does not mean the version was published. No npm/GitHub settings are changed merely by adding these workflow files.
+Keep the repository variable `NPM_PUBLISH_ENABLED` **unset or `false`** until that setup is explicitly verified and authorized. If a release tag is pushed in this state, the workflow can prepare an artifact, but the real publish job is skipped. A disabled publish job does not mean the version was published. No npm/GitHub settings are changed merely by adding these workflow files.
 
 ### Required external setup (operator actions, not performed by these files)
 
@@ -97,7 +97,7 @@ See the official [npm trusted-publishing guide](https://docs.npmjs.com/trusted-p
 ### Later authorized release flow
 
 1. Bump the version explicitly, update the changelog, validate/review, and land the exact source on `main`. Prereleases derive `next`; a separately approved stable version derives `latest`.
-2. Deliberately create/push `v<manifest-version>` at the approved commit. For example, **after** bumping/landing RC2 and authorizing its release:
+2. Deliberately create/push `v<manifest-version>` at the approved commit. For example, **after** landing the already-versioned RC2, qualifying its artifact and separately authorizing its release:
 
    ```bash
    git tag -a v1.1.0-rc.2 -m "whatsapp-ng 1.1.0-rc.2"
@@ -110,3 +110,21 @@ See the official [npm trusted-publishing guide](https://docs.npmjs.com/trusted-p
 6. Verify the exact registry artifact in an isolated consumer/Pi environment. Create the GitHub prerelease/release only as a separate deliberate announcement; this workflow has no `contents: write` permission and does not create it.
 
 **No automatic retry:** all versions share non-cancelling publication concurrency. Workflow reruns (`GITHUB_RUN_ATTEMPT > 1`) cannot publish, and the script independently enforces this. A cancelled/timed-out/failed publish may already have reached npm. Check the registry and retained candidate/attempt evidence before any separately authorized recovery. Do not delete/recreate tags, mint a new token, edit a receipt or rerun jobs to bypass an uncertain outcome. A new runner/clone does not inherit a local attempt marker, so registry inspection remains mandatory. The workflow is not an exactly-once delivery guarantee or an automatic stable-promotion service.
+
+## Package discovery
+
+Read-only checks on **October 29, 2026** found:
+
+- `npm view whatsapp-ng@next` resolves RC1; both `latest` and `next` point to it, and its published keywords include `pi-package`. RC2 is not published yet. No registry tag was changed by these checks.
+- `npm search whatsapp-ng` omits the package from its first 20 results, and even 100/250-result queries omit it. A maintainer-specific registry search returns it with `searchScore: 0`; this is observed search ranking/index behavior, not proof that publication failed.
+- [The direct Pi page](https://pi.dev/packages/whatsapp-ng) renders the published RC1 README, but [the filtered catalog](https://pi.dev/packages?name=whatsapp-ng) reports no match. The `pi-package` eligibility keyword is already present. Similar upstream reports describe [zero-score search results](https://github.com/earendil-works/pi/issues/11130) and [catalog enumeration limits](https://github.com/earendil-works/pi/issues/6873); those reports do not prove every server-side cause for this package.
+- This is not simply a `next`-only or prerelease exclusion: `latest` already resolves to RC1, its direct Pi page works, and the catalog includes other prereleases. Do not promote to stable, retag or repeatedly publish merely to try to fix search.
+
+Use exact registry lookup and an explicit install selector rather than treating search as an existence check:
+
+```bash
+npm view whatsapp-ng@next version dist-tags keywords --json --registry=https://registry.npmjs.org
+pi install npm:whatsapp-ng@next
+```
+
+`grep "ng"` filters arbitrary output lines, including descriptions such as “messaging”; it does not restrict npm results to an exact package name. Search/crawl caches and ranking are separate from registry availability. Recheck indexing after publication, but do not promise that publishing another RC will fix it.

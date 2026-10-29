@@ -2,7 +2,17 @@
 
 ## Unreleased
 
-- Prepare `1.1.0-rc.2`: add case-insensitive fuzzy `/model` search across authenticated provider/model identifiers. Require explicit selection for search results, retain filters through pagination, and preserve exact selection, owner/group authorization, idle guards and private-identifier redaction. No dependency changes or publication.
+RC2 (`1.1.0-rc.2`) is prepared in source, not yet published. RC1 was published October 28, 2026; the dated October 29 registry check found both `next` and `latest` pointing to it.
+
+- Add a default-off **Connection → Auto-connect on startup** preference for TUI/RPC, persisted as a strict `autoConnect` boolean. Serialize config writes/cleanup and preserve newer cross-process selections; keep print/JSON opt-in and skip occupied-profile retry noise. Reuse saved credentials and the explicit online flag; changes are future-only, and Off survives reload/session replacement in its process. Back from this setting returns to Connection without changing the preference. No new tool, dependency or automatic pairing.
+
+- Add case-insensitive fuzzy `/model` search across authenticated provider/model identifiers. Require explicit selection for search results, retain filters through pagination, and preserve exact selection, owner/group authorization, idle guards and private-identifier redaction. No dependency changes or publication.
+
+- Refresh maintainer guidance, startup/Back acceptance, version availability and package discovery explanations; preserve dated source/live/artifact limits and the inherited development-audit findings. No npm publication, tag changes or automation activation.
+
+### Earlier development notes shipped in RC1
+
+The published RC1 artifact retained these notes under “Unreleased”. They are preserved as historical development context, not new RC2 work or current publication/bootstrap status. See the release guide for current preparation and separate publishing gates.
 
 - Prepare PR/main validation and default-off tag-triggered GitHub/npm OIDC publishing. Require exact version-tag/main ancestry, protected-environment approval and the same checksummed candidate; reject rerun publication and token fallback, retain attempt evidence, and verify registry integrity/tags. First publication still needs a separately approved manual bootstrap; no tokens, environment settings, tags or releases are created automatically.
 

@@ -50,9 +50,23 @@ export class MenuHandler {
         const backLabel = t('menu.root.back');
         const replyDeliveryLabel = t('menu.replyDelivery.title');
         const historyScopeLabel = t('archive.menu.scope');
-        const choice = await chooseWhatsAppSetting(ctx, () => ({ status: this.whatsappService.getEffectiveStatus(), enabled: this.settings?.enabled?.() ?? true, registered,
-            archive: Boolean(this.recentsService.getArchiveState?.()?.enabled), optional: Boolean(this.settings?.optional), owner: Boolean(this.settings) }), checkCurrent);
-        if (!choice || !checkCurrent()) return;
+        let choice: string | undefined;
+        let resumeCategory: 'Connection' | undefined;
+        for (;;) {
+            choice = await chooseWhatsAppSetting(ctx, () => ({ status: this.whatsappService.getEffectiveStatus(), enabled: this.settings?.enabled?.() ?? true, registered,
+                archive: Boolean(this.recentsService.getArchiveState?.()?.enabled), optional: Boolean(this.settings?.optional), owner: Boolean(this.settings) }), checkCurrent, resumeCategory);
+            if (!choice || !checkCurrent()) return;
+            if (choice !== 'Auto-connect on startup') break;
+            const revision = this.sessionManager.getAutoConnectRevision();
+            const selected = await ctx.ui.select(`Auto-connect on startup: ${this.sessionManager.getAutoConnect() ? 'On' : 'Off'}`,
+                ['Enabled', 'Disabled', backLabel]);
+            if (!checkCurrent()) return;
+            if (selected === backLabel) { resumeCategory = 'Connection'; continue; }
+            if (selected !== 'Enabled' && selected !== 'Disabled') return;
+            await this.sessionManager.setAutoConnect(selected === 'Enabled', revision, settingsCurrent);
+            ctx.ui.notify("Auto-connect preference saved for future TUI/RPC startups/session loads; current connection unchanged. Shared by this profile's Pi processes; Off persists only in the current process. --whatsapp-ng-online remains an explicit request.", 'info');
+            return;
+        }
 
         switch (choice) {
             case 'Privacy and logs':

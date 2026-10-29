@@ -1,6 +1,6 @@
 # Prerelease acceptance walkthrough
 
-Use this guide with an operator, one independent test contact and, later, an explicitly approved test group. It covers the extension's supported features, not all of WhatsApp's APIs. Calls, communities/admin operations, polls, stickers, GIFs and albums are not promised by this candidate.
+Use this guide with an operator, one independent test contact and, later, an explicitly approved test group. It is a scoped checklist, not exhaustive coverage of every supported feature, client or platform. Phone controls, speech consent/output, group trigger modes and optional projections need their own explicitly budgeted cases; see the current roadmap and operating reference. Calls, communities/admin operations, polls, stickers, GIFs and albums are not promised by this candidate.
 
 **This checklist is not permission to send messages, upload files, change configuration or reset authentication. Approve each live batch first.** No live case below is marked passed merely because it appears here.
 
@@ -24,20 +24,22 @@ Previous source validation: 585 tests/58 files passed with lint/typecheck, inclu
 2. Choose a separate recipient account, not self-chat. A second independent contact is needed for cross-chat routing tests. Use only observed/known transport JIDs; do not manufacture them from displayed phone numbers. A dedicated group must contain only consenting, mutually trusted testers.
 3. Agree on each batch's maximum extension-originated messages, reactions, attachment uploads and network history requests. Incoming test prompts can cause automatic replies; those replies count toward the budget. Groq/remote-STT uploads need separate approval because audio leaves the machine and can incur charges.
 4. Note existing non-secret settings: allowed-contact/group counts, aliases, send-number overrides, selected history scope, and STT endpoint/model/environment-variable **name**. Keep unrelated entries intact. Never record the API-key value.
-5. Load changed dependencies/code in a fresh owning Pi process. Save work, use `/whatsapp > Disconnect WhatsApp`, and close the old process gracefully before starting another same-profile owner. Do not choose **Logoff (Delete Session)**, unlink the device, remove locks or delete data. This walkthrough does not authorize forced termination.
+5. Load changed dependencies/code in a fresh owning Pi process. Save work, use `/whatsapp > Connection > Turn WhatsApp off` only after approving its shared-work cancellation, and close the old process gracefully before starting another same-profile owner. Do not choose **Logoff (Delete Session)**, unlink the device, remove locks or delete data. This walkthrough does not authorize forced termination.
 6. For checkout testing, after the prior owner exits, start from the repository:
 
    ```bash
    pi --no-extensions -e ./whatsapp-ng.ts
    ```
 
-   This is a source run, not an installed-tarball run. Do not enable automatic connection yet. Do not launch this as a competing second instance.
+   This is a source run, not an installed-tarball run. Before launching it against a real profile, explicitly check **Connection > Auto-connect on startup** in the prior owning process and obtain approval to set it Disabled for a manual-connect batch; record and later restore the original value. Omitting the online flag alone does not prevent saved-preference startup. Alternatively use an isolated profile without touching the real saved preference. Do not launch a competing second instance.
 7. Check `ffmpeg -version`, `whisper-cli --version`, `tesseract --version` and `tesseract --list-langs`. Installed commands alone do not prove conversion/transcription/OCR works. Keep models and provider credentials in the launching process's existing environment; do not download another model for a smoke test.
 8. Run automated checks in an isolated HOME before live work. The following is for macOS/Linux shells and keeps test-generated state separate:
 
    ```bash
    TEST_HOME="$(mktemp -d)"
-   HOME="$TEST_HOME" PI_CODING_AGENT_DIR="$TEST_HOME/agent" PI_OFFLINE=1 \
+   env -i PATH="$PATH" HOME="$TEST_HOME" USERPROFILE="$TEST_HOME" \
+     APPDATA="$TEST_HOME/AppData/Roaming" LOCALAPPDATA="$TEST_HOME/AppData/Local" \
+     PI_CODING_AGENT_DIR="$TEST_HOME/agent" PI_OFFLINE=1 WHATSAPP_NG_LOCALE=en \
      npm test -- --maxWorkers=2
    npm run lint
    npm run typecheck
@@ -47,7 +49,21 @@ Previous source validation: 585 tests/58 files passed with lint/typecheck, inclu
    ```
 
    Inspect failures and skips. Full-tree SDK/host advisories remain separately tracked; do not use `npm audit fix --force` or change dependencies during acceptance. A dry run is not an installed-artifact test. Do not run a dependency reinstall while the owning Pi process is using that dependency directory.
-9. Connect once through `/whatsapp > Connect / Reconnect WhatsApp`. Confirm actual connected/ready status and retained settings. If a saved profile unexpectedly requests pairing, stop and investigate rather than reset/re-pair it.
+9. Connect once through `/whatsapp > Connection > Connect WhatsApp`. Confirm actual connected/ready status and retained settings. If a saved profile unexpectedly requests pairing, stop and investigate rather than reset/re-pair it.
+
+## Startup preference and navigation (RC2/source)
+
+Approve these setting/lifecycle changes separately, close other same-profile owners and do not send messages merely to test startup. Record each result; API/socket fixtures are not physical-menu acceptance.
+
+| Case | Operator action | Expected result |
+| --- | --- | --- |
+| Back navigation | Open Connection → Auto-connect on startup → Back, then Back again. | First returns to Connection, second to the main menu; no preference/transport change. |
+| Enabled startup | Enable the preference, confirm the current connection is unchanged, close the owner gracefully, then start a fresh TUI without the online flag. | Existing credentials connect automatically; no manual Connect/QR or credential reset. |
+| Disabled startup | Disable while connected, then start a fresh owner without the flag. | Saving does not immediately disconnect; fresh startup stays disconnected. |
+| Process-local Off | With saved Enabled, explicitly turn Off and reload/replace the session in the same process. | Stays Off. Saving Enabled does not clear deliberate Off; explicit terminal Connect can restore it. |
+| Flag distinction | In a separately approved fresh run, use the online flag with saved Disabled. | The explicit flag still requests connection. Restore the desired preference/launcher afterward. |
+
+These source paths have automated production-entry RPC coverage. The operator reported saved startup works, but that does not mark every row or all packaged/platform variants passed.
 
 ## First live batch: text only
 
@@ -136,7 +152,7 @@ The Node addon is not available on every platform. On supported native platforms
 | --- | --- | --- |
 | Local readers | Use `list_wa_conversations`, `get_wa_conversation_history` and `check_wa_new_messages` for the approved test chat. Exercise limits/filters. | Correct direction, visible text, emoji/newlines, IDs and observed status. `onlyIncoming`/new-message results depend on the latest direction, not whether a chat ever had an incoming message. |
 | Pagination | Use an existing fixture-rich test history, then follow `nextCursor` when present. | Stable pages without omissions/duplicates. Do not create dozens of live messages solely to force pagination; seed isolated fixtures if needed. |
-| Offline reader | Disconnect WhatsApp safely and repeat local reads. | Retained history remains readable without reconnecting, fetching WhatsApp history or triggering agent work. |
+| Offline reader | Use confirmed Turn WhatsApp off safely and repeat local reads. | Retained history remains readable without reconnecting, fetching WhatsApp history or triggering agent work. |
 | History scope | In seeded/disposable multi-account history, select a known scope and try a cursor from another scope. | Correct partition; mismatched cursor rejected; offline scope selection does not change live account identity. Do not expose unrelated real histories. |
 | Explicit backfill | Only with separate approval, call `request_wa_history` once for the approved JID with `count: 3`; inspect retained status locally using its request ID. | Truthful pending/partial/complete/unknown status. Imported records do not trigger agent prompts, downloads, PDF parsing or transcription. No automatic request retry. Missing anchor/history is recorded, not bypassed. |
 | Edit/revoke | The consenting sender edits and deletes newly generated test messages using their phone. | Local record shows observed edited/deleted state; no stale quote to deleted content and no new ordinary agent prompt for the lifecycle update. |

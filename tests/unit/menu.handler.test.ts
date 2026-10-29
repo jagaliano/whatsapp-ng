@@ -64,6 +64,7 @@ const createServices = () => {
     const sessionManager = {
         getStatus: vi.fn().mockReturnValue('connected'),
         getFinalAfterAttachments: vi.fn().mockReturnValue(true),
+        getAutoConnect: vi.fn().mockReturnValue(false), getAutoConnectRevision: vi.fn().mockReturnValue(7), setAutoConnect: vi.fn().mockResolvedValue(undefined),
         getReplyStats: vi.fn().mockReturnValue(false), getReplyStatsRevision: vi.fn().mockReturnValue(0), setReplyStats: vi.fn().mockResolvedValue(undefined),
         getReplyReporting: vi.fn().mockReturnValue({ changedFiles: false, interimText: false, liveActivity: false }), getReplyReportingRevision: vi.fn().mockReturnValue(0), setReplyReporting: vi.fn().mockResolvedValue(undefined),
         setFinalAfterAttachments: vi.fn().mockResolvedValue(undefined),
@@ -100,6 +101,67 @@ const createServices = () => {
 };
 
 describe('MenuHandler', () => {
+    it.each([['Enabled', true], ['Disabled', false]] as const)('saves auto-connect %s without connecting, stopping or changing Off', async (choice, enabled) => {
+        const h = createServices(); const ctx = createContext({ selects: ['Connection', 'Auto-connect on startup', (title, options) => {
+            expect(title).toContain('Auto-connect on startup: Off'); expect(options).toEqual(['Enabled', 'Disabled', 'Back']); return choice;
+        }] }); const connect = vi.fn(); const off = vi.fn();
+        await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any,
+            { voice: vi.fn(), owner: vi.fn(), connect, off, enabled: () => false }).handleCommand(ctx as any);
+        expect(h.sessionManager.setAutoConnect).toHaveBeenCalledExactlyOnceWith(enabled, 7, expect.any(Function));
+        expect(h.whatsappService.start).not.toHaveBeenCalled(); expect(h.whatsappService.stop).not.toHaveBeenCalled(); expect(connect).not.toHaveBeenCalled(); expect(off).not.toHaveBeenCalled();
+        expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining('current connection unchanged'), 'info');
+    });
+    it('returns from auto-connect Back to Connection with fresh options, then Back to the root', async () => {
+        const h = createServices(); h.sessionManager.getAutoConnect.mockReturnValue(true);
+        const ctx = createContext({ selects: ['Connection', 'Auto-connect on startup', (title) => {
+            expect(title).toContain(': On'); h.whatsappService.getEffectiveStatus.mockReturnValue('disconnected'); return 'Back';
+        }, (title, options) => { expect(title).toBe('Connection'); expect(options).toContain('Connect WhatsApp'); return 'Back'; }, (title) => {
+            expect(title).toBe('WhatsApp — Enabled (transport: disconnected)'); return 'Back';
+        }] });
+        await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any).handleCommand(ctx as any);
+        expect(ctx.ui.select).toHaveBeenCalledTimes(5); expect(h.sessionManager.setAutoConnect).not.toHaveBeenCalled();
+        expect(h.whatsappService.start).not.toHaveBeenCalled(); expect(h.whatsappService.stop).not.toHaveBeenCalled(); expect(ctx.ui.notify).not.toHaveBeenCalled();
+    });
+    it('keeps the original menu authority across repeated auto-connect Back navigation', async () => {
+        const h = createServices(); const captureCurrent = vi.fn(() => () => true);
+        const ctx = createContext({ selects: ['Connection', 'Auto-connect on startup', 'Back', 'Auto-connect on startup', 'Back', 'Back', 'Back'] });
+        await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any,
+            { voice: vi.fn(), owner: vi.fn(), captureCurrent }).handleCommand(ctx as any);
+        expect(ctx.ui.select).toHaveBeenCalledTimes(7); expect(captureCurrent).toHaveBeenCalledOnce(); expect(h.sessionManager.setAutoConnect).not.toHaveBeenCalled();
+    });
+    it('does not reopen Connection when auto-connect Back loses its original authority', async () => {
+        const h = createServices(); let current = true; const captureCurrent = vi.fn(() => () => current);
+        const ctx = createContext({ selects: ['Connection', 'Auto-connect on startup', () => { current = false; return 'Back'; }] });
+        await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any,
+            { voice: vi.fn(), owner: vi.fn(), captureCurrent }).handleCommand(ctx as any);
+        expect(ctx.ui.select).toHaveBeenCalledTimes(3); expect(captureCurrent).toHaveBeenCalledOnce();
+        expect(ctx.ui.notify).toHaveBeenCalledWith('Settings changed while this menu was open. Reopen /whatsapp.', 'info'); expect(h.sessionManager.setAutoConnect).not.toHaveBeenCalled();
+    });
+    it('still closes the menu when the auto-connect dialog is cancelled', async () => {
+        const h = createServices(); const ctx = createContext();
+        ctx.ui.select.mockResolvedValueOnce('Connection').mockResolvedValueOnce('Auto-connect on startup').mockResolvedValueOnce(undefined as any);
+        await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any).handleCommand(ctx as any);
+        expect(ctx.ui.select).toHaveBeenCalledTimes(3); expect(h.sessionManager.setAutoConnect).not.toHaveBeenCalled(); expect(ctx.ui.notify).not.toHaveBeenCalled();
+    });
+    it('does not apply an auto-connect choice after menu authority expires', async () => {
+        const h = createServices(); let current = true;
+        const ctx = createContext({ selects: ['Connection', 'Auto-connect on startup', () => { current = false; return 'Enabled'; }] });
+        await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any,
+            { voice: vi.fn(), owner: vi.fn(), captureCurrent: () => () => current }).handleCommand(ctx as any);
+        expect(h.sessionManager.setAutoConnect).not.toHaveBeenCalled(); expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining('Settings changed'), 'info');
+    });
+    it('passes the original preference revision and live authority through an auto-connect write', async () => {
+        const h = createServices(); let current = true; const ctx = createContext({ selects: ['Connection', 'Auto-connect on startup', 'Enabled'] });
+        await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any,
+            { voice: vi.fn(), owner: vi.fn(), captureCurrent: () => () => current }).handleCommand(ctx as any);
+        const guard = h.sessionManager.setAutoConnect.mock.calls[0][2] as () => boolean; expect(guard()).toBe(true); current = false; expect(guard()).toBe(false);
+    });
+    it('does not acknowledge auto-connect after a failed save', async () => {
+        const h = createServices(); h.sessionManager.setAutoConnect.mockRejectedValueOnce(new Error('Synthetic save failed'));
+        const ctx = createContext({ selects: ['Connection', 'Auto-connect on startup', 'Enabled'] });
+        await expect(new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any).handleCommand(ctx as any)).rejects.toThrow('save failed');
+        expect(ctx.ui.notify).not.toHaveBeenCalled(); expect(h.whatsappService.start).not.toHaveBeenCalled();
+    });
     it.each([true, false])('requires explicit terminal consent for intermediate metadata/text (%s)', async consent => {
         const h = createServices(); const ctx = createContext({ selects: ['Reply delivery', 'Enable interim assistant text'], confirms: [consent] });
         await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any).handleCommand(ctx as any);

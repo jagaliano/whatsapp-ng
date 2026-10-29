@@ -27,11 +27,13 @@ Use WhatsApp to talk to your [Pi](https://pi.dev) agent: send tasks, share files
 
 ## Install and connect
 
-With Pi already installed:
+With Pi already installed, install the published prerelease channel:
 
 ```bash
-pi install npm:whatsapp-ng@1.1.0-rc.1
+pi install npm:whatsapp-ng@next
 ```
+
+**Version availability:** this checkout prepares `1.1.0-rc.2`. At the October 29, 2026 registry check, `next` and `latest` both resolve to published `1.1.0-rc.1`; RC2 is not published yet. Saved startup preferences and fuzzy `/model` search below require RC2 or this source checkout. RC1 supports the explicit online flag and exact model selection/browsing. Check the actual installed channel version with `npm view whatsapp-ng@next version`; a prerelease on `latest` is not a stable-support guarantee.
 
 Restart Pi, then:
 
@@ -39,7 +41,13 @@ Restart Pi, then:
 2. Add contacts under **Chats / Owner → Allowed Contacts**, or groups under **Groups → Allowed Groups**.
 3. Send a message from an allowed chat. Pi answers in that conversation.
 
-The login is saved. To reconnect automatically on startup:
+The login is saved. To reconnect automatically without a launch flag, open **Connection → Auto-connect on startup → Enabled**. This saves `autoConnect: true` in the extension's `config.json`; the default is disabled. Only the literal boolean `true` enables it.
+
+The saved preference applies to **TUI and RPC sessions using the same profile**, across workspaces, including `/reload` and `/new`. Any RPC process that loads the extension, including an extension-enabled subagent, follows that preference; print/JSON runs need an explicit online flag. Only one Pi process can own the profile: preference-based startup skips an occupied/unverified profile lock with one notice rather than repeated retries.
+
+Changing the preference does not immediately connect or disconnect WhatsApp. Existing saved credentials are required; first-time pairing still uses **Connect WhatsApp**. Explicit **Off** survives reload/session changes in the current process even with auto-connect enabled; it does not disable other Pi processes. A fresh TUI/RPC process follows the shared saved preference. Cooperative config writes preserve newer auto-connect selections made by another updated Pi process.
+
+The launch flag remains an explicit auto-connect request, even if the saved preference is disabled:
 
 ```bash
 pi --whatsapp-ng-online
@@ -156,7 +164,7 @@ Allowed people can use `/help` and `/status`. State-changing commands require th
 | `/off` | Confirm WhatsApp shutdown without logging out. Re-enable from the terminal Connection menu. |
 | `/quit` | Confirm graceful Pi shutdown. |
 
-Use `/model` to browse, `/model anthropic` to filter by provider, or `/model anthropic/opus` (also `opus anthropic`) for case-insensitive fuzzy matching across provider/model identifiers. `/model DeepSeek`, `/model Deepseek` and `/model deepseek` show matching models across all authenticated providers, with provider/model labels kept distinct. Search results require a numbered selection even when only one matches; an exact `provider/model` still selects directly. Previous/next pages retain the search. Only currently authenticated models are offered; no match leaves the current model unchanged. Private filesystem identifiers stay redacted and are reachable through browsing, not fuzzy search.
+In RC2/source, use `/model` to browse, `/model anthropic` to filter by provider, or `/model anthropic/opus` (also `opus anthropic`) for case-insensitive fuzzy matching across provider/model identifiers. `/model DeepSeek`, `/model Deepseek` and `/model deepseek` show matching models across all authenticated providers, with provider/model labels kept distinct. Search results require a numbered selection even when only one matches; an exact `provider/model` still selects directly. Previous/next pages retain the search. Only currently authenticated models are offered; no match leaves the current model unchanged. Private filesystem identifiers stay redacted and are reachable through browsing, not fuzzy search.
 
 Menus use numbered replies. Group selections must quote the menu. Native polls are experimental and require `--whatsapp-ng-native-polls`. Configuration changes require idle Pi; stop active work explicitly rather than interrupting it through a settings change.
 
@@ -208,7 +216,9 @@ pi --no-extensions -e ./whatsapp-ng.ts
 
 Maintainers can use the [release guide](docs/releases.md) for explicit local version bumps, validated tarball preparation and separately confirmed publication. PR/main CI and a default-off, environment-gated tag-triggered OIDC workflow are provided; npm requires a first manual package publication before trusted publishing can be configured. RC1 is published; the working version is `1.1.0-rc.2`. Preparing a candidate does not bump or publish it.
 
-System tools must be installed separately. Add `--verbose` for extension diagnostics, not message bodies or protocol-key traces. See [dependencies and platform checks](DEPENDENCIES.md), the [manual acceptance guide](tests/manual/prerelease-acceptance.md), and [design records](specs/README.md).
+Use a disposable HOME/Pi agent directory and credential-free environment for validation; the isolated setup in `scripts/release.mjs` is the reference. A deliberate source launch with your normal HOME shares saved settings/auth and may auto-connect. Do not run a second same-profile owner.
+
+System tools must be installed separately. Add `--verbose` for extension diagnostics, not message bodies or protocol-key traces. See [dependencies and platform checks](DEPENDENCIES.md), the source-only [manual acceptance guide](https://github.com/jagaliano/whatsapp-ng/blob/main/tests/manual/prerelease-acceptance.md), and [design records](https://github.com/jagaliano/whatsapp-ng/tree/main/specs). Package search is not exact availability: see [discovery checks](docs/releases.md#package-discovery).
 
 ## Support and license
 
@@ -217,5 +227,8 @@ Report bugs through [GitHub issues](https://github.com/jagaliano/whatsapp-ng/iss
 <a id="fork-and-legacy-names"></a>
 
 Based on [Rapha Castelloes' original project](https://github.com/RaphaCastelloes/whatsapp-pi), maintained by José Antonio Galiano Sandoval. Older names and paths are listed in the [migration reference](docs/reference.md#historical-identifiers).
+
+<a id="upstream-license-evidence"></a>
+Original license evidence refers to the [upstream npm package at 1.0.70](https://www.npmjs.com/package/whatsapp-pi/v/1.0.70) and the advisory [upstream notice inquiry](https://github.com/RaphaCastelloes/whatsapp-pi/issues/17); no new upstream response is claimed.
 
 The local speech overview is adapted from [CrispStrobe/CrispASR](https://github.com/CrispStrobe/CrispASR) and its contributors' documentation; see the [guide's credits and upstream references](docs/crispasr.md#credits-and-upstream-references).

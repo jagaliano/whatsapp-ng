@@ -21,6 +21,7 @@ import { TtsService, type TtsSynthesisOptions, type PreparedSpeech } from './src
 import { TtsError, resolveTtsConfig, updateTtsConfig, type TtsConfig, type TtsUpdates } from './src/services/tts-config.js';
 import { finalSpeechPolicy, chatReplyPolicy, settingsJid, describeSpeechDestination } from './src/services/speech-settings.js';
 import { OwnerAuthorization, OwnerAuthorizationError } from './src/services/owner-authorization.service.js';
+import { PROFILE_IN_USE } from './src/services/transport-lease.service.js';
 import { showVoiceSettings, showOwnerSettings, VOICE_PREVIEW_PHRASE, type VoiceChat, type VoiceSettingsActions } from './src/ui/voice-settings.view.js';
 import { StateMigrationService } from './src/services/state-migration.service.js';
 import { getDefaultStorageRoot } from './src/services/storage-path.js';
@@ -616,7 +617,8 @@ export default function (pi: ExtensionAPI) {
         const savedStateEntry = [...ctx.sessionManager.getEntries()]
             .reverse()
             .find(entry => entry.type === "custom" && entry.customType === "whatsapp-ng-state");
-        const isWhatsappNgOn = pi.getFlag("whatsapp-ng-online") === true;
+        const onlineFlag = pi.getFlag("whatsapp-ng-online") === true;
+        const isWhatsappNgOn = onlineFlag || ((ctx.mode === 'tui' || ctx.mode === 'rpc') && sessionManager.getAutoConnect());
         const registered = await sessionManager.isRegistered();
 
         if (savedStateEntry) {
@@ -663,8 +665,13 @@ export default function (pi: ExtensionAPI) {
                 attempts++;
                 try {
                     await whatsappService.start({ allowPairingOnAuthFailure: false });
-                } catch {
+                } catch (error) {
                     if (deliberatelyOff || attemptEpoch !== startupAttemptEpoch) return;
+                    if (!onlineFlag && error && typeof error === 'object' && 'code' in error && error.code === PROFILE_IN_USE) {
+                        ctx.ui.setStatus('whatsapp', '| WhatsApp: Disconnected');
+                        ctx.ui.notify('WhatsApp profile is already in use or has an unverified stale lock. Saved auto-connect skipped; no retries. Use the owning session or inspect the lock locally.', 'info');
+                        return;
+                    }
                     if (attempts < maxAttempts) {
                         ctx.ui.notify(`WhatsApp: Connection attempt ${attempts} failed. Retrying...`, 'warning');
                         autoConnectRetry = setTimeout(() => { autoConnectRetry = undefined; void tryConnect(); }, 3000);

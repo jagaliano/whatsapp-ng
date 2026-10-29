@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
         getAllowedGroups: vi.fn().mockReturnValue([{ number: '120363000000001@g.us' }]),
         setGroupJidForAuth: vi.fn(),
         getFinalAfterAttachments: vi.fn().mockReturnValue(true),
+        getAutoConnect: vi.fn().mockReturnValue(false),
         getReplyStats: vi.fn().mockReturnValue(false), getReplyStatsRevision: vi.fn().mockReturnValue(0),
         getReplyReporting: vi.fn().mockReturnValue({ changedFiles: false, interimText: false, liveActivity: false }), getReplyReportingRevision: vi.fn().mockReturnValue(0),
         getGroupReplies: vi.fn().mockReturnValue({ mode: 'all', context: false }), getGroupRepliesRevision: vi.fn().mockReturnValue(0),

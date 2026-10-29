@@ -2,7 +2,7 @@
 
 ## Maintainer reproduction
 
-Use the committed npm lockfile with Node 26.x and Pi 1.4.0, matching the development SDK/AI/TUI versions for `1.1.0-rc.1`:
+Use the committed npm lockfile with Node 26.x and Pi 1.4.0, matching the development SDK/AI/TUI cohort retained for `1.1.0-rc.2`:
 
 ```sh
 npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
@@ -17,9 +17,9 @@ npm audit --omit=dev
 
 The lock fixes the maintainer dependency graph and records integrity for npm artifacts. It does **not** freeze system executables, model files, future consumer transitive resolution or every native platform. Root package-lock.json is not shipped in the npm tarball. Consumers need their own lock/policy; exact Baileys/LiteParse pins are not a universal transitive freeze.
 
-## Current validation snapshot
+## Dated source checkpoint: October 27, 2026
 
-Source/control validation refreshed **October 27, 2026**; earlier live checks retain their separately recorded dates:
+The following is the earlier source/control checkpoint, not the current RC2 artifact qualification. Later source checks, fresh audits and remaining acceptance scope are recorded in the [RC2 preparation record](https://github.com/jagaliano/whatsapp-ng/blob/main/specs/040-rc2-publication-readiness/validation.md). Earlier live checks retain their separately recorded dates:
 
 - macOS/Node 26.12.1 source validation: **1101 tests/78 files**, zero failures or skips, lint/typecheck clean. The previously recorded production-only `npm audit` reported **zero findings**; dependencies are unchanged by phone control, final stats, group/self-chat policy, optional output projection and settings/log privacy changes. That audit does not cover host-supplied peers or certify embedded native binaries.
 - Exact Codex high phone-control review initially blocked retirement-fence eviction/expiry and identified relative-path disclosure. Both were corrected; focused re-review returned **OK**. Real isolated Pi fixtures verify session cancellation/replacement, Off persistence across replacement/reload, write-tool withdrawal and an already-aborted signal for withdrawn follow-ups. Encrypted direct/group votes are synthetic fixtures, not live-client qualification.
@@ -27,7 +27,7 @@ Source/control validation refreshed **October 27, 2026**; earlier live checks re
 - Group/self-chat policy adds default verified mention/reply triggers, optional confirmed bounded text context and cached image references without changing login/history layouts. Five production-entry RPC scenarios cover controls, polls, stats, stale queued group admission and self-LID echo protection with synthetic transport/model streams and zero network attempts. The owner subsequently confirmed the native mention/reply flow in one live test group from another participant; other live paths/clients remain unverified. See [C2 validation](specs/039-extension-improvements/c2-validation.md).
 - Default-off optional outputs reuse existing image snapshots/sender guards and require individual tool consent or owner/account-bound private terminal-forwarding consent. Two additional production-entry RPC cases verify image deduplication/terminal isolation and late-opt-in/private-owner/group/disable routing with zero network attempts or extra model calls. The owner subsequently confirmed bounded private terminal forwarding and its local-only disable path. Automatic-image live checks remain open; the subsequent Sonnet 5.5 C2/C3 review and parent fixes are recorded in [the disposition](specs/039-extension-improvements/c2-c3-review.md). No agent-side real settings change is claimed. See [C3 validation](specs/039-extension-improvements/c3-validation.md).
 - Grouped settings and shared terminal/phone Off add an eighth production-entry RPC scenario: active/queued WhatsApp work is withdrawn, Off survives new-session/reload, only previously active outbound tools return on terminal Connect, and fresh work succeeds. Private metadata logs exclude request/answer bodies and preserve historical logs. Synthetic transport/model streams made zero network attempts; no real settings change, independent C4 review or live-client verification is claimed. See [C4 scope](specs/039-extension-improvements/c4-validation.md).
-- **Tesseract/OCR is verified, not pending.** The October 24 checks used Tesseract **5.5.3**, Leptonica **1.87.0** and LiteParse **2.17.0**. Direct English raster recognition and scanned-PDF OCR passed; the same real-tool contract tests passed without skips in the latest suite. `eng` and `spa` data were installed, but a separate Spanish-recognition accuracy benchmark was not run.
+- **Tesseract/OCR is verified, not pending.** The October 24 checks used Tesseract **5.5.3**, Leptonica **1.87.0** and LiteParse **2.17.0**. Direct English raster recognition and scanned-PDF OCR passed; the same real-tool contract tests passed without skips in that source suite. `eng` and `spa` data were installed, but a separate Spanish-recognition accuracy benchmark was not run.
 - A real **Groq STT → Fish `s2.1-pro-free` TTS** self-chat round trip produced an accepted Ogg/Opus voice note, with user-confirmed playback. Self-chat does not establish independent-recipient receipt behavior.
 - **Edge `msedge-tts@2.1.1`** completed fixed English/Spanish Andrew Multilingual synthesis and produced valid private Opus artifacts. The local synthesis compatibility gate is closed; Edge WhatsApp playback and universal service availability are not claimed.
 - The **51-file phone-control package** was byte-checked and source/packaged startup-tested at the 976-test checkpoint. The later native-poll correction and final stats have isolated source/RPC checks; the current settings/log-privacy dry run contains 56 files, not a newly qualified tarball or clean consumer install. The native v2 Edge worker remains included.
