@@ -2,7 +2,7 @@
 
 ## Maintainer reproduction
 
-Use the committed npm lockfile with Node 26.x and Pi 1.4.0, matching the development SDK/AI/TUI cohort retained for `1.1.0-rc.2`:
+Use the committed npm lockfile with Node 26.x and Pi 1.4.0, matching the development SDK/AI/TUI cohort retained unchanged for `1.1.0`:
 
 ```sh
 npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund

@@ -8,9 +8,9 @@ Do not put credentials, QR codes, auth directories, API keys, phone numbers, pri
 
 Ordinary non-sensitive bugs belong in [issues](https://github.com/jagaliano/whatsapp-ng/issues). Maintenance and responses are best effort, with no SLA.
 
-## Current candidate and limitations
+## Release scope and limitations
 
-This checkout prepares experimental `whatsapp-ng@1.1.0-rc.2` for `next`, not a supported stable release. RC1 is published; RC2 still requires qualified artifact preparation and separate publication approval. Existing registry tags are not evidence of stable support.
+The maintainer approved stable `whatsapp-ng@1.1.0` under `latest` on October 29, 2026, promoting the prepared RC2 source without additional runtime/dependency changes. Stable labeling does not add an SLA, erase the findings below or certify untested clients/platforms. The prior RC2 [source/evidence record](https://github.com/jagaliano/whatsapp-ng/blob/main/specs/040-rc2-publication-readiness/validation.md) remains dated; the [stable promotion plan](https://github.com/jagaliano/whatsapp-ng/blob/main/specs/041-stable-1.1.0/plan.md) records the new authorization and unchanged acceptance boundaries.
 
 Development targets Node 26.x and Pi 1.4.0. The dated October 27, 2026 macOS source checkpoint passed **1101 tests/78 files**, with two workers and no skips, plus lint/typecheck; it is not the current RC2 artifact qualification. See the [RC2 source/evidence record](https://github.com/jagaliano/whatsapp-ng/blob/main/specs/040-rc2-publication-readiness/validation.md) for later checks and explicit remaining scope. Tesseract 5.5.3 and LiteParse 2.17.0 local raster/scanned-PDF OCR were already validated on **October 24, 2026**, and those real-tool checks passed again at that source checkpoint. English/Spanish data availability is not a general recognition-accuracy guarantee. Earlier Linux package tests used Pi 1.3.0 and do not establish support for the updated package. Live evidence includes a user-confirmed Groq-to-Fish self-chat voice note and separate complete English/Spanish Edge synthesis; Edge WhatsApp playback, Windows, service installers and broader group/history/receipt behavior remain unverified.
 

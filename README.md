@@ -27,13 +27,13 @@ Use WhatsApp to talk to your [Pi](https://pi.dev) agent: send tasks, share files
 
 ## Install and connect
 
-With Pi already installed, install the published prerelease channel:
+With Pi already installed, install the stable channel:
 
 ```bash
-pi install npm:whatsapp-ng@next
+pi install npm:whatsapp-ng@latest
 ```
 
-**Version availability:** this checkout prepares `1.1.0-rc.2`. At the October 29, 2026 registry check, `next` and `latest` both resolve to published `1.1.0-rc.1`; RC2 is not published yet. Saved startup preferences and fuzzy `/model` search below require RC2 or this source checkout. RC1 supports the explicit online flag and exact model selection/browsing. Check the actual installed channel version with `npm view whatsapp-ng@next version`; a prerelease on `latest` is not a stable-support guarantee.
+The `1.1.0` release line includes saved startup preferences and fuzzy `/model` search. Check the actual channel version with `npm view whatsapp-ng@latest version`; `next` is independent and may still point to an older prerelease. Stable versioning does not imply an SLA, all-platform qualification or guaranteed npm/Pi catalog indexing. See the [security and qualification limits](SECURITY.md).
 
 Restart Pi, then:
 
@@ -164,7 +164,7 @@ Allowed people can use `/help` and `/status`. State-changing commands require th
 | `/off` | Confirm WhatsApp shutdown without logging out. Re-enable from the terminal Connection menu. |
 | `/quit` | Confirm graceful Pi shutdown. |
 
-In RC2/source, use `/model` to browse, `/model anthropic` to filter by provider, or `/model anthropic/opus` (also `opus anthropic`) for case-insensitive fuzzy matching across provider/model identifiers. `/model DeepSeek`, `/model Deepseek` and `/model deepseek` show matching models across all authenticated providers, with provider/model labels kept distinct. Search results require a numbered selection even when only one matches; an exact `provider/model` still selects directly. Previous/next pages retain the search. Only currently authenticated models are offered; no match leaves the current model unchanged. Private filesystem identifiers stay redacted and are reachable through browsing, not fuzzy search.
+Use `/model` to browse, `/model anthropic` to filter by provider, or `/model anthropic/opus` (also `opus anthropic`) for case-insensitive fuzzy matching across provider/model identifiers. `/model DeepSeek`, `/model Deepseek` and `/model deepseek` show matching models across all authenticated providers, with provider/model labels kept distinct. Search results require a numbered selection even when only one matches; an exact `provider/model` still selects directly. Previous/next pages retain the search. Only currently authenticated models are offered; no match leaves the current model unchanged. Private filesystem identifiers stay redacted and are reachable through browsing, not fuzzy search.
 
 Menus use numbered replies. Group selections must quote the menu. Native polls are experimental and require `--whatsapp-ng-native-polls`. Configuration changes require idle Pi; stop active work explicitly rather than interrupting it through a settings change.
 

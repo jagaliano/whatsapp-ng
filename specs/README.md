@@ -12,7 +12,8 @@ This directory is a design/history archive, not a list of features still waiting
 | [037 maintained-fork readiness](037-maintained-fork-readiness/plan.md) | Maintenance/release governance; [validation](037-maintained-fork-readiness/validation.md). Earlier milestone evidence is dated and artifact-scoped. Publication/stable promotion remain separately gated. |
 | [038 namespace migration](038-whatsapp-ng-namespace/plan.md) | Independent namespace and guarded whole-state migration; [validation and review dispositions](038-whatsapp-ng-namespace/validation.md). Real migration is verified offline; post-rename live connectivity is not certified. |
 | [039 extension improvements](039-extension-improvements/) | Dated phone-control, speech, group, output and settings validation/review records. Its local plan is not tracked; do not present private receipts as public reproducible artifacts. |
-| [040 RC2 publication readiness](040-rc2-publication-readiness/plan.md) | Current scoped preparation, auto-connect/navigation evidence and documentation/discovery corrections. Publication and tag/automation changes remain separately authorized. |
+| [040 RC2 publication readiness](040-rc2-publication-readiness/plan.md) | Dated RC2 preparation, auto-connect/navigation evidence and documentation/discovery corrections, before stable promotion. |
+| [041 stable 1.1.0](041-stable-1.1.0/plan.md) | Explicit maintainer-approved stable/latest promotion of the prepared source, with fresh artifact/publication checks and unchanged risk/acceptance limits. No Git release tag or automation activation. |
 
 ## Cleanup policy
 
