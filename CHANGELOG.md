@@ -2,9 +2,13 @@
 
 ## Unreleased
 
+## 1.1.1 — 2026-10-30
+
 - Add explicit `ttsUseServerVoice` for compatible OpenAI-style servers such as Chatterbox: omit the HTTP voice field to use the server's built-in voice without requiring a separate voice pack. Preserve strict named-voice defaults, Fish/Edge validation, atomic settings and separate speech consent; reselect the default after endpoint/provider/model changes.
 
 - Add optional connection-time CrispASR server management through trusted shell-free JSON descriptors: independent STT/TTS startup, owned listener/model checks, request fencing, exclusive endpoint leases and parent-IPC watchdog cleanup. Preserve unmanaged providers, consent and request budgets. Correct `/stop`, terminal HUP, transient probes and teardown fencing after Opus review. Local macOS Whisper/Kokoro STT, TTS and combined pipelines produced expected results, with maintainer-accepted native auxiliary resources; Windows management and broader platform/WhatsApp qualification remain open.
+
+- Clarify operator-owned speech setup, shorten current guides/plans and refresh dated SDK risk disclosures without changing dependencies or broadening platform/live-support claims.
 
 ## 1.1.0 — 2026-10-29
 
