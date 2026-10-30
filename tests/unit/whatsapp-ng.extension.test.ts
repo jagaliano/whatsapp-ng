@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => {
         getSpeechSettings: vi.fn().mockReturnValue({ config: {}, enabled: false, mode: 'text', chats: {} }),
         getSpeechRevision: vi.fn().mockReturnValue(0), getReplyAdmissionKey: vi.fn().mockReturnValue('fixture-admission-0'),
         getOperatorRevision: vi.fn().mockReturnValue(0), getOperatorJid: vi.fn().mockReturnValue('5511999998888@s.whatsapp.net'),
-        setSpeechSettings: vi.fn().mockResolvedValue(undefined),
+        setSpeechSettings: vi.fn().mockResolvedValue(undefined), setSpeechConfigCallback: vi.fn(),
         getSttConfig: vi.fn().mockReturnValue({ sttEndpoint: 'https://speech.invalid/v1', sttModel: 'original', sttEnv: 'FIXTURE_STT_KEY' }),
         setSttConfig: vi.fn().mockResolvedValue(undefined)
     });
@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => {
         setGroupBinding: vi.fn(),
         setRecentsService: vi.fn(),
         getBoundGroupJid: vi.fn().mockReturnValue(null),
+        getEffectiveStatus: vi.fn().mockReturnValue('connected'),
         getStatus: vi.fn().mockReturnValue('connected'),
         isVerbose: vi.fn().mockReturnValue(false),
         isRegistered: vi.fn(),
@@ -277,6 +278,16 @@ describe('whatsapp-ng extension', () => {
         expect(result.isError).toBe(false); expect(h.settings()).toMatchObject({ config: speechConfig, enabled: false, mode: 'text' });
         expect(h.settings().approvedDestinationKey).toBeUndefined(); expect(JSON.stringify(result)).not.toContain('synthetic-secret-not-for-config-or-result');
         expect(mocks.whatsappService.sendContent).not.toHaveBeenCalled(); expect(mocks.whatsappService.sendMessage).not.toHaveBeenCalled(); expect(mocks.sessionManager.setSttConfig).not.toHaveBeenCalled();
+    });
+    it('registers and saves explicit server-default voice without consent, synthesis or a named voice', async () => {
+        const h = await speechFixture();
+        expect(h.tool.parameters.properties.ttsUseServerVoice).toBeDefined();
+        const config = { ttsEndpoint: 'http://127.0.0.1:8098/v1/audio/speech', ttsProtocol: 'openai-compatible',
+            ttsModel: 'chatterbox', ttsEnv: 'FIXTURE_TTS_KEY', ttsUseServerVoice: true };
+        const result = await h.tool.execute('server-default', config);
+        expect(result.isError).toBe(false); expect(h.settings()).toMatchObject({ config, enabled: false, mode: 'text' });
+        expect(h.settings().config.ttsVoice).toBeUndefined(); expect(h.settings().approvedDestinationKey).toBeUndefined();
+        expect(mocks.whatsappService.sendContent).not.toHaveBeenCalled(); expect(mocks.whatsappService.sendMessage).not.toHaveBeenCalled();
     });
     it.each([false, true])('allows only the verified owner in direct/group context (group=%s)', async group => {
         const h = await speechFixture('whatsapp', '5511999998888@s.whatsapp.net', group);

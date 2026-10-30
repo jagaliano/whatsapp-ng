@@ -25,7 +25,8 @@ export class AudioService {
     constructor(
         logger: AudioLogger = new WhatsAppNgLogger(false),
         whisperCppTranscriber?: AudioTranscriber | null,
-        private readonly getSttConfig: () => SttConfig = () => ({})
+        private readonly getSttConfig: () => SttConfig = () => ({}),
+        private readonly beforeRemote?: (config: SttConfig, options?: AudioTranscriptionOptions) => Promise<AudioTranscriptionOptions>
     ) {
         this.logger = logger;
         // Select only after settings load. Remote mode never initializes local Whisper.
@@ -41,7 +42,8 @@ export class AudioService {
         };
         try {
             checkCurrent();
-            const remote = createRemoteAudioTranscriber(this.getSttConfig());
+            const remoteConfig = this.getSttConfig();
+            const remote = createRemoteAudioTranscriber(remoteConfig);
             if (!remote && this.whisperCppTranscriber === undefined) {
                 this.whisperCppTranscriber = tryCreateWhisperCppAudioTranscriber(this.logger);
             }
@@ -76,7 +78,9 @@ export class AudioService {
             });
             checkCurrent();
             return await this.measurePhase(remote ? 'remote' : 'whisper', async () => {
-                const transcription = options ? await transcriber.transcribe(wavPath, options) : await transcriber.transcribe(wavPath);
+                const admission = remote && this.beforeRemote ? await this.beforeRemote(remoteConfig, options) : options;
+                checkCurrent();
+                const transcription = admission ? await transcriber.transcribe(wavPath, admission) : await transcriber.transcribe(wavPath);
                 checkCurrent();
                 const text = String(transcription ?? '').trim();
                 return text || t('audio.emptyTranscription');

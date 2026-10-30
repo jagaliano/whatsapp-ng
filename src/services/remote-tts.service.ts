@@ -12,6 +12,7 @@ export class RemoteTtsService {
             const key = config.env ? process.env[config.env]?.trim() : undefined;
             if (!key || /[\r\n\0]/.test(key)) throw new TtsError('Speech API key unavailable; check the configured environment variable');
             const fish = config.provider === 'fish';
+            // An explicitly selected server-default resolves voice to undefined; JSON omits it.
             const body = fish
                 ? { text, format: config.format, reference_id: config.voice, prosody: { speed: config.speed } }
                 : { model: config.model, input: text, voice: config.voice, response_format: config.format, speed: config.speed };

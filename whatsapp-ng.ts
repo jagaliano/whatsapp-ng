@@ -30,6 +30,7 @@ import { formatWhatsAppText } from './src/services/whatsapp-text.js';
 import { GroupMessagePolicy } from './src/services/group-message.policy.js';
 import { OptionalOutputService } from './src/services/optional-output.service.js';
 import { showOptionalOutputSettings } from './src/ui/optional-output-settings.view.js';
+import { ManagedSpeechService } from './src/services/managed-speech.service.js';
 
 const shutdownState = globalThis as typeof globalThis & {
     __whatsappNgRetiredInputs?: Set<string>;
@@ -96,13 +97,19 @@ export default function (pi: ExtensionAPI) {
     const recentsService = new RecentsService(sessionManager);
     whatsappService.setRecentsService(recentsService);
     const logger = new WhatsAppNgLogger(false, false);
-    const audioService = new AudioService(logger, undefined, () => sessionManager.getSttConfig());
+    let managedClosing = true; let managedLifecycle = 0;
+    const managedSpeech = new ManagedSpeechService({ root: getDefaultStorageRoot(), notify: text => _ctx?.ui.notify(text, 'warning') });
+    sessionManager.setSpeechConfigCallback(() => syncManagedSpeech());
+    const audioService = new AudioService(logger, undefined, () => sessionManager.getSttConfig(), async (config, options) => {
+        syncManagedSpeech();
+        return managedSpeech.gate('stt', config, options);
+    });
     const incomingMediaService = new IncomingMediaService(audioService, logger);
     const groupPolicy = new GroupMessagePolicy();
     const menuHandler = new MenuHandler(whatsappService, sessionManager, recentsService, {
         voice: ctx => showVoiceSettings(ctx, sessionManager, voiceActions(ctx)),
         owner: ctx => showOwnerSettings(ctx, sessionManager, voiceActions(ctx)),
-        connect: () => { cancelStartupRetry(); setOutboundEnabled(true); },
+        connect: () => { cancelStartupRetry(); setOutboundEnabled(true); managedSpeech.retry(); syncManagedSpeech(); },
         off: ctx => turnWhatsAppOff(ctx),
         enabled: () => !deliberatelyOff,
         groupChanged: () => groupPolicy.reset(),
@@ -287,7 +294,7 @@ export default function (pi: ExtensionAPI) {
         phoneControls.reset(); reports.reset(); router.reset();
         const speech = stopSpeech();
         ctx.abort();
-        await Promise.all([whatsappService.stop(), speech]);
+        await Promise.all([whatsappService.stop(), speech, managedSpeech.disconnect()]);
     }
     function assertOutboundReady(): void {
         assertStartupReady();
@@ -337,7 +344,10 @@ export default function (pi: ExtensionAPI) {
         if (!workspaceRoot) throw new TtsError('Speech workspace unavailable');
         if (options.signal?.aborted || !options.isCurrent?.()) throw new TtsError('Speech synthesis cancelled');
         speechService ??= new TtsService({ workspaceRoot });
-        return speechService.prepare(text, config, options);
+        const service = speechService;
+        syncManagedSpeech();
+        const admission = await managedSpeech.gate('tts', config, options);
+        return service.prepare(text, config, { ...options, ...admission });
     }
     const finalOutput = new FinalOutputCoordinator({
         router, context: () => whatsappService.getSessionContext(),
@@ -388,6 +398,12 @@ export default function (pi: ExtensionAPI) {
                 direction: 'outgoing', timestamp: Date.now() });
         }
     });
+    function syncManagedSpeech(): void {
+        let tts: TtsConfig | undefined;
+        try { tts = sessionManager.getSpeechSettings().config; } catch { /* Invalid settings cannot authorize startup. */ }
+        managedSpeech.update({ connected: !!_ctx && !managedClosing && !deliberatelyOff && whatsappService.getEffectiveStatus() === 'connected',
+            scope: JSON.stringify([sessionManager.getAuthStateDir(), routingScope()]), stt: sessionManager.getSttConfig(), tts });
+    }
     function stopSpeech(): Promise<void> {
         optionalOutputs.reset();
         groupPolicy.reset();
@@ -543,11 +559,14 @@ export default function (pi: ExtensionAPI) {
 
     // Initial status setup
     pi.on("session_start", async (_event, ctx) => {
+        const startupLifecycle = ++managedLifecycle;
+        managedClosing = true;
         cancelStartupRetry();
         phoneControls.reset();
         reports.reset();
         router.reset();
-        await stopSpeech();
+        await Promise.all([stopSpeech(), managedSpeech.disconnect()]);
+        if (startupLifecycle !== managedLifecycle) return;
         try {
             const destination = getDefaultStorageRoot();
             const source = pi.getFlag("whatsapp-ng-migrate-from");
@@ -556,6 +575,7 @@ export default function (pi: ExtensionAPI) {
             startupError = error instanceof Error ? error : new Error('WhatsApp-NG storage migration failed');
             throw startupError;
         }
+        if (startupLifecycle !== managedLifecycle) return;
         _ctx = ctx;
         // Check verbose mode
         const isVerboseFlagSet = process.argv.includes("--verbose");
@@ -572,8 +592,8 @@ export default function (pi: ExtensionAPI) {
         whatsappService.setStatusCallback((status) => {
             if ((whatsappService.getEffectiveStatus?.() ?? whatsappService.getStatus()) !== 'connected') {
                 phoneControls.reset(); reports.reset();
-                void stopSpeech().catch(() => ctx.ui.notify(t('media.finalizeFailed'), 'error'));
-            }
+                void Promise.all([stopSpeech(), managedSpeech.disconnect()]).catch(() => ctx.ui.notify(t('media.finalizeFailed'), 'error'));
+            } else syncManagedSpeech();
             ctx.ui.setStatus('whatsapp', deliberatelyOff ? '| WhatsApp: Off' : formatFooterStatus(status));
         });
 
@@ -594,9 +614,11 @@ export default function (pi: ExtensionAPI) {
         shutdownState.__whatsappNgShutdown = {
             installed: shutdownState.__whatsappNgShutdown?.installed ?? false,
             stop: async () => {
+                managedLifecycle++;
+                managedClosing = true;
                 cancelStartupRetry(); reports.reset(); router.reset();
-                await stopSpeech();
-                await whatsappService.stop();
+                try { await Promise.all([stopSpeech(), managedSpeech.disconnect()]); }
+                finally { await whatsappService.stop(); }
             }
         };
         whatsappService.setIncomingMessageRecorder(async (message) => {
@@ -649,6 +671,8 @@ export default function (pi: ExtensionAPI) {
             }
         }
 
+        if (startupLifecycle !== managedLifecycle) return;
+        managedClosing = false;
         if (deliberatelyOff) {
             ctx.ui.setStatus('whatsapp', '| WhatsApp: Off');
             ctx.ui.notify('WhatsApp is off. Re-enable it with terminal Connect / Reconnect WhatsApp.', 'info');
@@ -689,6 +713,7 @@ export default function (pi: ExtensionAPI) {
             ctx.ui.notify('WhatsApp: Use Connect / Reconnect WhatsApp. QR code will appear only if pairing is needed.', 'info');
         }
 
+        syncManagedSpeech();
         ctx.ui.notify('WhatsApp: Session reset via /new is now fully supported.', 'info');
     });
 
@@ -1195,13 +1220,14 @@ export default function (pi: ExtensionAPI) {
 
     pi.registerTool({
         name: 'configure_wa_tts', label: 'Configure WhatsApp speech',
-        description: 'Owner/local-only speech backend settings. Preserve omitted fields; null or blank clears a field. Pass {} to select Edge while preserving Edge preferences and reply modes. Does not enable speech, approve a destination, read a key or synthesize. Use terminal /whatsapp > Voice for consent/modes and Owner for phone authorization.',
+        description: 'Owner/local-only speech backend settings. Preserve omitted fields; null or blank clears a field. Pass {} to select Edge while preserving Edge preferences and reply modes. With explicit openai-compatible protocol, ttsUseServerVoice: true omits voice for servers supporting a built-in voice; never use a placeholder voice. Does not enable speech, approve a destination, read a key or synthesize. Use terminal /whatsapp > Voice for consent/modes and Owner for phone authorization.',
         promptSnippet: 'configure_wa_tts updates backend configuration only, for a verified owner or verified local request. Never pass an API-key value. New destinations need separate terminal Voice consent; do not send a spoken copy through another tool.',
         parameters: Type.Object({
             ttsEndpoint: Type.Optional(Type.Union([Type.String(), Type.Null()])),
             ttsModel: Type.Optional(Type.Union([Type.String(), Type.Null()])),
             ttsEnv: Type.Optional(Type.Union([Type.String({ description: 'Environment-variable NAME only, never the key value' }), Type.Null()])),
             ttsVoice: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+            ttsUseServerVoice: Type.Optional(Type.Union([Type.Boolean({ description: 'Explicit opt-in to omit voice for a compatible server; cannot be combined with a named voice' }), Type.Null()])),
             ttsFormat: Type.Optional(Type.Union([Type.Literal('mp3'), Type.Literal('wav'), Type.Literal('opus'), Type.Null()])),
             ttsProtocol: Type.Optional(Type.Union([Type.Literal('fish'), Type.Literal('openai-compatible'), Type.Null()])),
             ttsSpeed: Type.Optional(Type.Union([Type.Number({ minimum: 0.5, maximum: 2 }), Type.Null()])),
@@ -1309,10 +1335,12 @@ export default function (pi: ExtensionAPI) {
     });
 
     pi.on("session_shutdown", async () => {
+        managedLifecycle++;
+        managedClosing = true;
         cancelStartupRetry(); phoneControls.reset(); reports.reset();
         router.reset();
         logger.log("[WhatsApp-NG] Session shutdown detected. Stopping WhatsApp service...");
-        await stopSpeech();
-        await whatsappService.stop();
+        try { await Promise.all([stopSpeech(), managedSpeech.disconnect()]); }
+        finally { await whatsappService.stop(); }
     });
 }

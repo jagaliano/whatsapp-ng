@@ -41,6 +41,41 @@ describe('speech backend configuration (no I/O)', () => {
         expect(() => resolveTtsConfig({ ...fish, ttsEnv: 'not-an-env-name' })).toThrow();
         expect(() => resolveTtsConfig({ ...fish, ttsEndpoint: 'https://api.openai.com/v1/audio/speech', ttsModel: 'gpt-4o-mini-tts', ttsVoice: '' })).toThrow('provider voice');
     });
+    const serverVoice = { ttsEndpoint: 'http://127.0.0.1:8098/v1/audio/speech', ttsProtocol: 'openai-compatible' as const,
+        ttsModel: 'chatterbox', ttsEnv: 'TEST_TTS_KEY', ttsUseServerVoice: true };
+    it('allows an explicitly selected server voice without inventing a voice ID', () => {
+        const resolved = resolveTtsConfig(serverVoice);
+        expect(resolved.provider).toBe('openai-compatible'); expect(resolved.voice).toBeUndefined();
+        expect(resolved.destinationKey).toBe(resolveTtsConfig({ ...fish, ...serverVoice, ttsUseServerVoice: false }).destinationKey);
+        expect(updateTtsConfig({}, serverVoice)).toEqual(serverVoice);
+    });
+    it.each([false, null, undefined])('still requires a named voice without a true server-default choice (%s)', flag => {
+        expect(() => updateTtsConfig({}, { ...serverVoice, ttsUseServerVoice: flag })).toThrow('provider voice');
+    });
+    it.each(['true', 1, {}, []])('rejects malformed server-default voice opt-in %s', value => {
+        expect(() => resolveTtsConfig({ ...serverVoice, ttsUseServerVoice: value, ttsVoice: 'fixture-voice' } as any)).toThrow();
+        expect(() => updateTtsConfig({}, { ttsUseServerVoice: value } as any)).toThrow();
+    });
+    it('rejects server-default voice for Fish, Edge, implicit protocols or a simultaneous named voice', () => {
+        for (const config of [{ ...fish, ttsUseServerVoice: true }, { ttsUseServerVoice: true },
+            { ...serverVoice, ttsProtocol: undefined }, { ...serverVoice, ttsVoice: 'fixture-voice' }]) {
+            expect(() => resolveTtsConfig(config)).toThrow();
+            expect(() => updateTtsConfig({}, config)).toThrow();
+        }
+    });
+    it('switches explicit voice choices atomically and preserves ordinary partial updates', () => {
+        const selected = updateTtsConfig({ ...fish, ...serverVoice, ttsUseServerVoice: false }, { ttsUseServerVoice: true });
+        expect(selected.ttsVoice).toBeUndefined(); expect(selected.ttsUseServerVoice).toBe(true);
+        expect(updateTtsConfig(selected, { ttsSpeed: 1.2 })).toMatchObject({ ttsUseServerVoice: true, ttsSpeed: 1.2 });
+        const named = updateTtsConfig(selected, { ttsVoice: 'fixture-voice' });
+        expect(named.ttsUseServerVoice).toBeUndefined(); expect(named.ttsVoice).toBe('fixture-voice');
+        expect(() => updateTtsConfig(selected, { ttsUseServerVoice: true, ttsVoice: 'fixture-voice' })).toThrow();
+        expect(selected).toEqual(serverVoice); expect(updateTtsConfig(selected, {})).toEqual({});
+    });
+    it.each([{ ttsEndpoint: 'http://127.0.0.1:8099/v1/audio/speech' }, { ttsModel: 'different-model' }, { ttsProtocol: 'fish' as const }])('does not carry server-default selection into changed destination/model: %s', patch => {
+        expect(() => updateTtsConfig(serverVoice, patch)).toThrow();
+        if (!patch.ttsProtocol) expect(updateTtsConfig(serverVoice, { ...patch, ttsUseServerVoice: true }).ttsUseServerVoice).toBe(true);
+    });
     it('uses an explicit protocol for custom Fish proxies without appending URL paths', () => {
         const endpoint = 'https://proxy.example.test/custom-speech';
         expect(resolveTtsConfig({ ...fish, ttsEndpoint: endpoint }).provider).toBe('openai-compatible');

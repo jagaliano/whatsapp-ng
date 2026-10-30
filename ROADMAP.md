@@ -9,10 +9,10 @@ The existing [extension improvement records](specs/039-extension-improvements/) 
 | Item | Goal | Status |
 | --- | --- | --- |
 | R1 | Fuzzy search in the WhatsApp `/model` command | Implemented in `1.1.0-rc.2`; publication pending |
-| R2 | Optional managed CrispASR HTTP servers through `CRISPASR_STT_CMD` and `CRISPASR_TTS_CMD` | Planned; lifecycle/configuration contract needed first |
+| R2 | Optional managed CrispASR HTTP servers through `CRISPASR_STT_CMD` and `CRISPASR_TTS_CMD` | Implemented; local macOS STT/TTS/both cases accepted; broader qualification open |
 | R3 | General code review, followed by focused corrections | Planned; review in bounded areas |
 | R4 | Improve and maintain the documentation | Ongoing; extend the current guides |
-| R5 | Answer `@juicesharp/rpiv-ask-user-question` prompts from WhatsApp | Planned; public integration contract needs verification |
+| R5 | Answer `pi-ask-user` prompts from WhatsApp | Planned, deferred pending upstream responder support |
 | R6 | Additional suggestions: speech diagnostics/recovery, compatibility and acceptance coverage | Proposed; select independently |
 
 Ship small, independently useful changes. This is not a requirement to finish the entire roadmap before the next release.
@@ -43,62 +43,24 @@ Ship small, independently useful changes. This is not a requirement to finish th
 
 Implemented in the existing [command router](src/services/whatsapp-command.router.ts) and [menu service](src/services/command-menu.service.ts), with [router regressions](tests/unit/whatsapp-command.router.test.ts) and [production-entry RPC coverage](tests/unit/phone-control.rpc.test.ts); no second phone-control stack or dependency was added.
 
-## R2. Optional CrispASR HTTP-server lifecycle
+## R2. Optional CrispASR HTTP-server lifecycle — implemented
 
-### Why
+The owner-approved trigger is now **verified WhatsApp connection**, including manual Connect and saved auto-connect, rather than the original first-use proposal. Existing hosted providers, manually operated endpoints and direct CLI transcription remain available.
 
-CrispASR currently requires the operator to start and stop HTTP servers separately. Optional managed startup would simplify local STT/TTS while retaining the broader model and hardware choices described in the [CrispASR guide](docs/crispasr.md).
+### Delivered contract
 
-### Proposed variables
+- Optional trusted `CRISPASR_STT_CMD` / `CRISPASR_TTS_CMD` JSON descriptors bind an absolute executable/argv/cwd to a numeric-loopback endpoint, backend, selected API model and expected loaded-model ID. No shell parsing, persisted command writer or command-execution tool was added.
+- Launch only the matching selected service. STT/TTS have independent lifetimes and distinct ports; startup does not enable speech, grant destination/group consent or perform inference. Unset variables preserve unmanaged behavior.
+- Use exclusive endpoint leases separate from transport/auth/config/archive locks. Refuse unknown locks/foreign listeners; prove child listener ownership and matching bounded health/backend/model metadata before readiness and each managed request.
+- Keep startup separate from HTTP/synthesis budgets. Cancel stale callers, retain failures without per-message/chat-toggle restart loops and preserve no-provider-fallback boundaries.
+- Retire affected owned processes/work on Off, disconnect, reload/session replacement/shutdown and relevant speech-setting changes/clears. Ordinary `/stop` cancels work without stopping the connected server.
+- A core-Node watchdog handles Pi IPC loss with bounded TERM/KILL of its own non-daemonized server process group. It does not adopt listeners, kill by name/port, accept licences or recover unknown crash leftovers. Minimal environment inheritance and metadata-only diagnostics avoid forwarding native output/credentials.
 
-| Variable | Intended purpose |
-| --- | --- |
-| `CRISPASR_STT_CMD` | Operator-supplied foreground launch command for the local STT HTTP server. |
-| `CRISPASR_TTS_CMD` | Operator-supplied foreground launch command for the local TTS HTTP server. |
+### Validation and remaining scope
 
-**These variables are proposals, not implemented settings.** They are distinct from the existing `CRISPASR_CLI_PATH`, which selects the direct transcription executable. A launch command is not an endpoint URL, a stop command or permission to change the selected speech provider.
+See [implementation/validation records](specs/043-managed-crispasr/validation.md), [setup and descriptor examples](docs/crispasr.md#optional-managed-startup) and the [operating contract](docs/reference.md#optional-managed-speech-servers). The source includes macOS `lsof` and Linux procfs ownership paths; synthetic macOS tests are not Linux/native-model qualification. Windows management is explicitly unsupported; manual Windows endpoints remain unchanged.
 
-Each command must have an explicit **operator-declared endpoint binding in Pi's trusted launch configuration**, alongside the command: canonical loopback endpoint, protocol and expected service/backend. Keep this binding outside chat-editable speech settings; WhatsApp/model tools cannot create, retarget or renew it. Do not derive authority from command parsing or whichever saved endpoint happens to exist at first use. Settle the binding's exact encoding with the command format before implementation.
-
-### Activation and compatibility
-
-- If a variable is unset or blank, preserve today's behavior: no automatic process management for that service, and manually managed servers remain usable.
-- Defining a variable opts into management of the corresponding bound local server. Proposed startup is on first use of an enabled STT/TTS path, only after the existing request admission, currentness and applicable destination/group-consent checks pass—not merely when a model is listed or the extension is discovered.
-- Require the selected speech endpoint/protocol/backend to match the trusted launch binding. A mismatch fails managed startup and explains the need for local reconfiguration; it must not launch the command for a newly selected endpoint.
-- Do not start a local server for an unrelated hosted endpoint, silently replace working Groq/Fish/Edge settings, or infer new endpoints from arbitrary command text. Start with loopback endpoints.
-- STT and TTS are independent. One defined variable must work without the other; separate model processes normally need separate ports. Shared endpoints/processes need an explicit ownership design, not two competing launches.
-- Keep existing destination approval, group opt-in, owner authorization and request bounds. Starting a server never grants speech consent or triggers a preview/inference request.
-- Managed startup does not add arbitrary-backend support to the CPU-only direct CLI path, nor resolve provider-specific language, reference-voice or cloning-consent requirements.
-
-### Command and process safety
-
-- Set launch commands only in the trusted environment that starts Pi. Do not accept them from WhatsApp messages, model tool parameters or persisted chat settings.
-- Decide the exact command encoding before implementation. Prefer executable/argument data or an explicit operator-owned launch script; do not casually pass strings to a shell or concatenate chat/model text into commands.
-- Keep commands in the foreground so the extension can retain a real child handle. Do not assume a daemonizing wrapper's first PID owns the server.
-- Define the minimal launch environment instead of copying or logging every inherited secret. Never put API-key values into documented command arguments, diagnostics or process-status replies.
-- Track only processes started by this extension. Never kill a process by name/port, adopt an unrelated listener or terminate a separately managed server. An occupied port is not ownership proof.
-- If the bound endpoint is already occupied without the current owned-process proof, do not launch or use it in managed mode: report an external-server/port conflict and fail closed. This includes possible orphaned children after a Pi crash. Leave the listener untouched; using it as a manually managed service requires the operator to unset the corresponding command, or deliberately stop their own process and retry.
-- Prevent duplicate starts for concurrent requests and conflicting Pi instances. Failed or superseded startup must not publish readiness or stop a newer process.
-
-### Readiness, failure and shutdown
-
-- Wait for bounded, non-inference health/readiness checks for the expected service/model before admitting requests. Owned readiness requires a still-live child, exact launch/session-generation authority and evidence correlating that child with the probed listener. A matching health response from another process is insufficient; a child that fails to bind or exits cannot become ready through a foreign endpoint. If ownership cannot be established, fail closed and stop only the child actually owned.
-- Separate startup/model-loading deadlines from the existing request deadlines; do not silently extend the current sixty-second HTTP speech budgets. Report starting, ready, failed and stopped truthfully.
-- Make model downloads and licence requirements explicit: an operator's launch command containing `-m auto` can download files. Defining a command must not silently accept licences or install binaries.
-- Handle missing executables, invalid commands, port conflicts, slow loading, early exits, partial STT/TTS startup and cancellation without hanging Pi or switching to another speech provider.
-- Bind ownership to the active extension/session generation. On Off, reload, session replacement or shutdown, cancel/drain affected requests and stop only the owned server resources. Endpoint/protocol/backend changes, clearing the corresponding settings with `{}`, switching to remote/CLI/Edge, and Voice Reset also retire affected work and drain/stop the affected owned server. A new endpoint needs a matching trusted local binding before another managed launch; do not stop an unrelated STT/TTS service.
-- Default to stopping on session replacement. Any later warm-server reuse must explicitly transfer only proven process ownership to fresh session authority, never stale Pi callbacks.
-- Use graceful termination, a bounded wait and an explicitly scoped forced-termination fallback where supported. Verify process-tree handling on Windows/macOS/Linux; do not claim that stopping a wrapper necessarily stops descendants.
-- After failed startup, retain a failed state until explicit local operator retry/restart or a relevant trusted launch-configuration change. New incoming requests must not trigger repeated model loads/downloads. Bound subprocess output and retain metadata-only diagnostics, not raw stdout/stderr, transcripts, spoken text or credentials; no unlimited restart loop.
-
-### Done when
-
-- [ ] The command format, trusted endpoint-binding encoding, activation rules, startup/shutdown deadlines and ownership proof are documented before implementation.
-- [ ] Fake-server tests cover unset variables, independent STT/TTS startup, concurrent requests, foreign/orphan listeners, bind races, readiness timeout, early child exit with a healthy foreign endpoint, crashes, cancellation and partial startup cleanup.
-- [ ] Tests prove that denied requests cannot start servers, failed startup is not retried per request, and chat/model setting changes cannot retarget a trusted launch binding.
-- [ ] Production-entry Pi tests prove that Off/reload/replacement and relevant speech-setting clear/change/reset fence late work and close affected owned children without killing external servers.
-- [ ] Supported platforms have actual process-lifecycle evidence; unsupported combinations remain clearly marked.
-- [ ] A separately approved short local STT/TTS check confirms the chosen server/model configuration, without a competing WhatsApp connection.
+Three local macOS native cases were accepted with English Whisper tiny.en and Kokoro Q8_0/af_heart, including maintainer-accepted native auxiliary resources; the [review/acceptance record](specs/043-managed-crispasr/review.md) preserves the original download-scope history. Broader platform/model and real WhatsApp acceptance remain open. Simultaneous watchdog/OS failure, daemonizing wrappers and damaged retained locks need operator inspection. Richer speech status/recovery UI remains R6 work. R5 stays deferred.
 
 ## R3. General code review
 
@@ -134,7 +96,7 @@ Users need a short route from installation to a working configuration, with the 
 - Extend the current [README](README.md), [operating reference](docs/reference.md) and [CrispASR guide](docs/crispasr.md), rather than duplicating complete instructions across files.
 - Separate quick starts from advanced backend, transport, privacy, recovery and model-selection details. Keep examples visibly optional and adapt them for POSIX shells and PowerShell.
 - Explain `/model` search and which controls affect the shared Pi session versus a single chat.
-- Document managed versus external speech servers, required variables, readiness/shutdown behavior and non-destructive recovery once R2 exists. Clearly mark proposed variables until then.
+- Maintain managed versus external speech-server guidance, descriptor examples, readiness/shutdown behavior and non-destructive recovery. Distinguish R2's implemented variables from still-proposed settings.
 - Keep the distinction between upstream capabilities and extension-tested behavior: OS/GPU/model/language support is not an all-combinations guarantee.
 - Check commands against current upstream flags; distinguish English-only/base defaults, explicit model downloads and user-selected models. Preserve upstream/model credits and licence cautions.
 - Keep a concise troubleshooting path for invalid endpoints, missing models, voice-mode fallbacks, server timeouts and Off/reconnect behavior.
@@ -147,13 +109,15 @@ Users need a short route from installation to a working configuration, with the 
 
 ## R5. Answer LLM questions from WhatsApp
 
+**Status: planned, deferred.** The target extension is [`edlsh/pi-ask-user`](https://github.com/edlsh/pi-ask-user). Implementation waits until its maintainer accepts [PR #21: external responder bridge](https://github.com/edlsh/pi-ask-user/pull/21), or provides another supported public API for pending questions, external answers/cancellation and safe settlement. Recheck the actual API and compatible available versions before proceeding; no fork, private UI interception or terminal-input workaround is planned.
+
 ### Why
 
-Add support for [`@juicesharp/rpiv-ask-user-question`](https://www.npmjs.com/package/@juicesharp/rpiv-ask-user-question) so a user can answer questions asked by the LLM directly from the WhatsApp chat. A phone-originated task should not require returning to Pi's terminal just to complete an interactive question.
+Add support for `pi-ask-user` so a user can answer questions asked by the LLM directly from the WhatsApp chat. A phone-originated task should not require returning to Pi's terminal just to complete an interactive question.
 
 ### Proposed behavior
 
-- First verify the package's supported public request/response hooks and compatible versions. Use a producer-supported adapter; do not scrape private UI state, inject terminal input or assume every extension dialog can be remotely resolved.
+- After the upstream dependency above is unblocked, verify the package's supported public request/response hooks and compatible versions. Use a producer-supported adapter; do not scrape private UI state, inject terminal input or assume every extension dialog can be remotely resolved.
 - Project a pending question into the exact originating WhatsApp chat, with its choices and instructions. Preserve single-choice, multiple-choice, free-text and cancellation semantics where the package supports them; bound question size, choice count and pending requests.
 - Reuse numbered-choice rendering where suitable, but keep pending-question state and authority outside the existing single control-menu slot. `/status`, `/model`, another control menu or ordinary chat text must not silently cancel the package request or remove its ability to accept an answer.
 - Bind each question and answer to its request ID, Pi run/session/account generation, source chat, exact projected message ID and verified requester. Require a quoted reply to that question for **all phone answers, including numbered choices and free text, in direct chats and groups**. Group answers must come from the authorized participant, not just any member of an allowed group.
@@ -203,8 +167,8 @@ Use the [manual acceptance guide](tests/manual/prerelease-acceptance.md) to sele
 ## Suggested delivery sequence
 
 1. R1 implementation, review, regressions and user-confirmed live checks are complete; publication of RC2 remains a separately authorized release step.
-2. Settle R2's command/ownership contract, then implement with fake servers before enabling real server startup.
-3. Implement R5 through the package's supported question lifecycle; it can ship independently of managed speech servers.
+2. Correct independent-review findings in R2, then qualify bounded native STT/TTS cases and platform behavior without treating synthetic checks as live evidence.
+3. Keep R5 deferred until upstream accepts PR #21 or provides a suitable supported API. Once unblocked and revalidated, it can ship independently of managed speech servers.
 4. Use R3 review and R4 documentation continuously around each coherent change, not only at the end.
 5. Select R6 suggestions independently. Prioritize diagnostics and scoped acceptance evidence that support the features being shipped; do not turn the full list into a new release-blocking program.
 

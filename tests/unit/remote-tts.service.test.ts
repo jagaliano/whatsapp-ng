@@ -43,6 +43,14 @@ describe('native HTTP speech adapters', () => {
         expect((await stat(output)).mode & 0o777).toBe(0o600);
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
+    it('omits the voice field entirely only after explicit server-default selection', async () => {
+        fetchMock.mockResolvedValueOnce(response());
+        const config = resolveTtsConfig({ ttsEndpoint: 'http://127.0.0.1:8098/v1/audio/speech', ttsProtocol: 'openai-compatible',
+            ttsModel: 'chatterbox', ttsEnv: fixture.ttsEnv, ttsUseServerVoice: true, ttsFormat: 'wav' });
+        await new RemoteTtsService().write('Fixed public phrase', config, output, new AbortController().signal);
+        expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ model: 'chatterbox', input: 'Fixed public phrase', response_format: 'wav', speed: 1 });
+        expect(fetchMock).toHaveBeenCalledTimes(1); expect(await readFile(output)).toEqual(audio);
+    });
     it.each([401, 429, 500])('reports only HTTP status %s, never response diagnostics, and never retries', async status => {
         fetchMock.mockResolvedValueOnce(new Response('fixture-sensitive-provider-diagnostic', { status }));
         await expect(write()).rejects.toThrow(`Speech provider HTTP ${status}`);

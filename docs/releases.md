@@ -1,22 +1,18 @@
 # Releases: local commands and GitHub automation
 
-These commands run from a **source checkout**, not the installed extension. They use Node/npm/Git without another npm dependency. They never create commits or Git tags, push branches, create GitHub releases or promote distribution tags automatically. Preparing a release does not authorize publication.
+Run from a source checkout. Versioning, preparation, publication, Git delivery and automation activation require separate authorization. These scripts do not create commits/tags, push branches or create GitHub releases. Use `package.json` for the checkout version; query npm for published versions/tags.
 
 ## 1. Choose the version
 
-The checkout is already versioned `1.1.0`; **do not bump it again for this stable release**. The maintainer explicitly approved promotion of the prepared, unpublished RC2 source to `1.1.0` under `latest` on October 29, 2026. Its new artifact must be prepared from the exact stable commit; the RC2 receipt cannot authorize stable publication. `next` remains independent. See the [stable plan](https://github.com/jagaliano/whatsapp-ng/blob/main/specs/041-stable-1.1.0/plan.md) and dated [discovery checks](#package-discovery).
-
-For a future bump only, start from a clean working tree and replace `NEW_VERSION` with a complete version greater than the manifest:
+For an approved future bump, start clean and replace `NEW_VERSION` with a complete SemVer greater than the manifest:
 
 ```bash
 npm run release:version -- NEW_VERSION
 ```
 
-This delegates to `npm version` with lifecycle scripts and automatic Git tagging disabled. It synchronizes `package.json` and `package-lock.json`, rejects same/older versions, and selects `next` for prereleases. No dependency upgrade or publication is performed. The resulting edits are deliberately left uncommitted.
+The command synchronizes package/lock versions with lifecycle scripts and Git tagging disabled. Prereleases select `next`; an explicitly approved stable version selects `latest`. Same/older versions and build metadata are rejected. No dependency upgrade or publication occurs; edits remain uncommitted.
 
-A stable target must be explicit, for example `npm run release:version -- 1.1.0`; that changes `publishConfig.tag` to `latest`. Do not select a stable version until its acceptance/promotion decision is made. Build metadata is not supported by these local commands. Packaging tests validate SemVer, lockfile agreement and the version's channel rather than hardcoding RC1.
-
-Update `CHANGELOG.md` with the release's user-visible changes and review the version/lockfile diff. Run the normal checks, then commit and push through the normal reviewed Git workflow. Commit the desired changes on the intended release branch before preparing an artifact. No default/main branch or merge is selected by these commands.
+Update the changelog, review/validate the diff, then commit/push only through the separately authorized Git workflow. Preparation requires the intended release source already committed. The [1.1.0 promotion plan](../specs/041-stable-1.1.0/plan.md) is historical, not permission to republish that version or repair indexing with another release.
 
 ## 2. Prepare without publishing
 
@@ -24,107 +20,91 @@ Update `CHANGELOG.md` with the release's user-visible changes and review the ver
 npm run release:prepare
 ```
 
-Preparation requires a clean Git worktree and index, including non-ignored untracked files. The repository-root check uses Git's relative path rather than comparing Windows/POSIX path spellings. It:
+Requires a clean worktree/index, including non-ignored untracked files. Preparation:
+1. Checks repository root, package/lock identity, version and channel.
+2. Runs `npm run test -- --maxWorkers=2`, lint and typecheck in a disposable HOME/agent directory without inherited credentials. `PI_OFFLINE=1` is not a network sandbox; fixtures/guards still own isolation.
+3. Runs `npm audit --omit=dev --json` against public npm; findings or audit/network failure stop preparation.
+4. Packs with lifecycle scripts disabled into private `.pi/cache/releases/<version>-<unique-id>/`, checking required runtime/workers, licences/guides and unexpected files.
+5. Hashes the tarball, runs `npm publish --dry-run` under the intended tag, checks integrity and rechecks unchanged clean source/HEAD.
+6. Writes `.pi/cache/releases/prepared.json`: version, commit, tag, registry, artifact path and SHA-512 integrity.
 
-1. Checks package/lock identity, versions and distribution channel.
-2. Runs `npm run test -- --maxWorkers=2`, `npm run lint` and `npm run typecheck` with a temporary HOME/Pi agent directory, `PI_OFFLINE=1` and no inherited credential variables. `PI_OFFLINE` is not a general network sandbox; fixtures and any separately required network guards remain responsible for their own isolation.
-3. Runs `npm audit --omit=dev --json` against the public npm registry. Findings or audit/network failures stop preparation.
-4. Packs with lifecycle scripts disabled into a fresh private `.pi/cache/releases/<version>-<unique-id>/` directory. It rejects untracked/unexpected files and requires the runtime entry, Edge worker, license and operating/release guides.
-5. Hashes the tarball, performs an explicit `npm publish --dry-run` under the intended tag, compares integrity and rechecks clean source/unchanged HEAD.
-6. Writes `.pi/cache/releases/prepared.json` with package version, Git commit, tag, registry, artifact path and SHA-512 integrity.
+No real publication occurs. A new attempt invalidates the prior prepared receipt before checks; completed tarballs are retained. Any source commit/edit—including documentation—requires preparation again.
 
-No real `npm publish` occurs. A new prepare attempt invalidates the previous prepared receipt before running checks; a failed preparation cannot leave that receipt ready to publish. Completed tarballs are preserved, not overwritten.
-
-**Separate acceptance gates:** this is a repeatable baseline, not a replacement for source/artifact secret scans, full-tree/installed-host dependency assessment, isolated consumer/Pi startup, supported-platform qualification or approved live-client checks. In particular, a clean production audit excludes host-supplied peers and does not clear the documented SDK/Undici findings. Refresh and review the checks relevant to the actual release; record any deferred scope explicitly. No build command runs because this project loads TypeScript source directly and declares no build script.
+Preparation does not replace secret scans, host/full-tree dependency assessment, isolated consumer/Pi startup, platform checks or approved live-client acceptance. A production audit excludes host peers and cannot clear SDK findings. Record deferred scope explicitly. There is no build step: the package loads TypeScript source.
 
 ## 3. Publish only after approval
 
-The following is a **real publication command**, not part of preparation. Run it only after explicit release approval and acceptance of the recorded limits:
+**Real publication:** replace both placeholders with the exact approved prepared version/channel:
 
 ```bash
-npm run release:publish -- --confirm 1.1.0 --tag latest
+npm run release:publish -- --confirm PREPARED_VERSION --tag PREPARED_TAG
 ```
 
-Use the actual prepared version. For a separately approved stable version, both its version and `--tag latest` must match. The command:
+The command requires matching clean source/commit, package/lock/channel and checksummed tarball. It targets `https://registry.npmjs.org`, checks authentication and requires structured npm `E404` to establish version absence. Conflicting/auth/network/malformed results stop it; raw errors are neither absence proof nor echoed. Absence does not reserve a name or prove publication rights.
 
-- Requires the exact prepared Git commit, a clean tree, matching package/lock/version/channel and an unchanged checksummed tarball. Any intervening commit—including documentation—requires preparation again.
-- Targets `https://registry.npmjs.org` explicitly. Verifies that the exact immutable version is absent and that npm authentication works. Only npm's structured `E404` from stdout or stderr permits proceeding; conflicting structured codes, authorization, network or malformed responses stop it. Raw diagnostic text is never interpreted as absence proof or echoed. Absence does not prove first-publish rights or reserve a name.
-- Records `.pi/cache/releases/publish-<version>.attempt.json` with an initially unknown outcome **before** invoking `npm publish` once. Publishes the prepared tarball—not the mutable checkout—with lifecycle scripts disabled and the explicit public/tag settings.
-- Allows npm's normal terminal authentication/2FA flow. It does not read, store, rotate or change credentials, and never accepts an API-key value as a release argument.
+Before one `npm publish`, it records `.pi/cache/releases/publish-<version>.attempt.json` with an unknown outcome. It publishes the prepared bytes with lifecycle scripts disabled and explicit public/tag settings, using normal terminal authentication/2FA. It does not accept key values or change credentials.
 
-**Never automatically retry a failed or interrupted publication.** It may already have reached npm. The attempt marker blocks another invocation in this checkout, even after preparing again. It is not a cross-clone or registry-wide lock; npm's immutable version identity remains the registry backstop. Check the registry version, integrity and tag first. Retain the marker as evidence; only after establishing a definite pre-publication failure may an operator explicitly preserve it aside and authorize a new attempt. A successful npm command is recorded, but registry verification is still required.
+**Never automatically retry an interrupted/failed publication.** It may have reached npm. The local attempt marker blocks another invocation, even after preparation; npm's immutable version identity is the registry backstop, not an exactly-once guarantee across clones. Inspect version, integrity, tags and retained evidence. Only a proven pre-publication failure plus new operator approval permits preserving the marker aside and trying again. Do not edit receipts to bypass uncertainty.
 
 ## 4. Verify and announce
 
-After a successful authorized publication:
+Replace `PUBLISHED_VERSION` with the approved version:
 
 ```bash
-npm view whatsapp-ng@1.1.0 version dist.integrity --json --registry=https://registry.npmjs.org
-npm view whatsapp-ng@1.1.0 dist-tags --json --registry=https://registry.npmjs.org
+npm view whatsapp-ng@PUBLISHED_VERSION version dist.integrity --json --registry=https://registry.npmjs.org
+npm view whatsapp-ng@PUBLISHED_VERSION dist-tags --json --registry=https://registry.npmjs.org
 ```
 
-Compare the registry integrity to the prepared receipt, confirm the selected tag (`latest` for `1.1.0`) points to the intended version, and explicitly inspect the other tag as well. Do not assume the first publication leaves `latest` absent or changes it in a particular way; any tag correction requires an explicit operator decision. Install that exact registry artifact in a fresh isolated consumer/Pi environment without real WhatsApp state. A published version or stable tag is not proof of all-platform compatibility or client rendering.
+Compare integrity to the receipt, verify the intended tag and inspect both `latest`/`next`. Tag corrections need approval; do not infer first-publish tag behavior. Install that exact artifact in a disposable consumer/Pi environment without real WhatsApp state. Registry success does not establish platform/client compatibility.
 
-For the manual publication path above, only then create/push an annotated `v<version>` Git tag at the receipt's exact commit and create a GitHub prerelease through separately authorized Git/GitHub actions. The later automated path below deliberately uses a tag to request publication **before** npm publication; a Git tag alone is never evidence that publication succeeded. The local commands do not create tags/releases, silently merge branches, repeat unknown sends or change WhatsApp authentication/history. Keep stable promotion separate; verify existing registry tags rather than assuming the first publish's default-tag behavior.
+For manual releases, create/push an annotated tag at the receipt's exact commit and announce a GitHub release/prerelease only when separately authorized. The automated path below uses a tag **before** npm publication; a Git tag alone proves no publication. Local release commands do not create announcements, merge branches or change WhatsApp state.
 
 ## 5. GitHub automation (prepared, default off)
 
-Two workflows are provided:
+- [CI](../.github/workflows/ci.yml): PRs/pushes to `main` and manual runs; lifecycle-disabled locked install, runner-only FFmpeg/Tesseract and preparation checks. Read-only repository permission; no publish/OIDC permission.
+- [Publish](../.github/workflows/publish.yml): pushed `v*` tags in `jagaliano/whatsapp-ng`; exact tag/version/event-commit and `origin/main` ancestry checks, then one candidate/receipt. Foreign or mismatched events fail closed.
 
-- `.github/workflows/ci.yml` validates pull requests into `main`, pushes to `main`, and manual CI runs. It installs the locked dependencies with lifecycle scripts disabled, installs FFmpeg/Tesseract on an ephemeral Ubuntu runner, and runs the same preparation/validation path. It has read-only repository permission and no npm publication or OIDC permission.
-- `.github/workflows/publish.yml` runs only on pushed `v*` tags in `jagaliano/whatsapp-ng`. Its unprivileged job checks the exact tag/version, resolves the event/tag to the checkout commit, requires ancestry on `origin/main`, then validates and uploads one tarball/receipt. Tags that do not exactly match the manifest are refused.
-
-The workflows pin official actions by commit SHA, Node 26.12.1 and npm 11.20.0. Dependencies/system tools are installed only on the disposable GitHub runner, not the operator's workstation. No version bump, Git commit/tag, main merge or GitHub release is automatic. The CI runner is not a universal platform/live-acceptance matrix, and production auditing still does not clear the known host/development SDK findings.
+Actions and Node/npm versions are pinned in those files. Dependencies/system tools are installed on disposable runners, not the workstation. No automatic version bump, commit, tag, merge or GitHub release; runner checks are not universal platform/live acceptance.
 
 ### Published-package prerequisite and OIDC activation
 
-[npm requires a package to already exist](https://docs.npmjs.com/cli/v11/commands/npm-trust/#prerequisites) before configuring trusted publishing. RC1 now exists, so that package-existence prerequisite is met. This does not prove that npm trust, protected environments or publication approval are configured; verify the external setup below before any later automated release. Do not attempt to republish RC1 or add an automation token to bypass setup.
+[npm requires an existing package](https://docs.npmjs.com/cli/v11/commands/npm-trust/#prerequisites) before trusted publishing. Check exact registry availability, then verify trust, protected environment and publication approval. Package existence alone proves none of them.
 
-Keep the repository variable `NPM_PUBLISH_ENABLED` **unset or `false`** until that setup is explicitly verified and authorized. If a release tag is pushed in this state, the workflow can prepare an artifact, but the real publish job is skipped. A disabled publish job does not mean the version was published. No npm/GitHub settings are changed merely by adding these workflow files.
+Keep `NPM_PUBLISH_ENABLED` unset or `false` until setup is verified and explicitly authorized. Disabled workflows may prepare an artifact but skip publication. Do not add an automation token to bypass trust setup.
 
 ### Required external setup (operator actions, not performed by these files)
 
-After the first package publication, and before a subsequent automated release:
+1. Protect `main` and release-tag creation/update/deletion with appropriate review/CI rules.
+2. Create protected GitHub environment **`npm-publish`** with required reviewers and intended `v*` tag restrictions. Ensure an available approver; self-review prevention can block a sole maintainer.
+3. Configure npm trust: owner `jagaliano`, repository `whatsapp-ng`, workflow `publish.yml`, environment `npm-publish`. Permit direct `npm publish`, not stage-only, using a GitHub-hosted runner. No dist-tag mutation permission is needed.
+4. Do not add `NPM_TOKEN` or `NODE_AUTH_TOKEN`. The publisher uses native OIDC/provenance with `id-token: write`; scripts reject token fallback and do not use `npm whoami` as an OIDC check.
+5. Only then authorize `NPM_PUBLISH_ENABLED=true`. New npm trust currently expires if unused for two days; configure it near the approved release. Dry-run cannot prove external trust/approval protection.
 
-1. Protect `main` and release-tag creation/updates/deletion through the repository's rulesets. Require review and successful validation appropriate to the release; do not assume that a version-shaped tag grants release authority by itself.
-2. Create the GitHub environment **`npm-publish`**, configure **required reviewers** and allow only the intended `v*` release tags to deploy. Merely naming an environment in YAML does not configure approval protection. A sole maintainer must either permit their own explicit review or appoint another available reviewer; enabling self-review prevention without another approver will block releases.
-3. In npm's package settings, add a GitHub trusted publisher with **owner `jagaliano`**, **repository `whatsapp-ng`**, **workflow filename `publish.yml`** (filename only), and **environment `npm-publish`**. Explicitly permit **direct `npm publish`**; current npm configurations can otherwise be stage-only. No dist-tag mutation permission is needed by this workflow. Use a GitHub-hosted runner, not a self-hosted one.
-4. Do **not** add `NPM_TOKEN` or `NODE_AUTH_TOKEN` to this workflow/environment. The publisher job has `id-token: write` and uses npm's native OIDC authentication with provenance. It deliberately does not use `npm whoami` as an OIDC permission check. Token-fallback environment variables are rejected by the script.
-5. Only after checking those protections and the npm binding, set the repository Actions variable **`NPM_PUBLISH_ENABLED=true`**. This is the explicit activation gate, not a secret. Set up npm trust near the next authorized release: current npm documentation says a new configuration expires if its first successful publish does not occur within two days. A dry-run cannot prove that trust or approval protection is configured correctly.
-
-See the official [npm trusted-publishing guide](https://docs.npmjs.com/trusted-publishers/) and [GitHub environment setup](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments). These settings, a first publish and any release-tag push require separate operator authorization.
+See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/) and [GitHub environments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments). Setup changes and release-tag pushes are separate operator actions.
 
 ### Later authorized release flow
 
-1. Bump the version explicitly, update the changelog, validate/review, and land the exact source on `main`. Prereleases derive `next`; a separately approved stable version derives `latest`.
-2. Deliberately create/push `v<manifest-version>` at the approved commit. For example, **after** landing the stable source, qualifying its artifact and separately authorizing a tag-driven release:
+1. Explicitly bump, update the changelog, validate/review and land approved source on `main`. Prereleases use `next`; approved stable releases use `latest`.
+2. Separately authorize creating/pushing `v<manifest-version>` at that commit. Do not push tags merely to test the workflow.
+3. Review the prepare artifact/receipt, then approve the protected deployment only after acceptance/risk decisions.
+4. The publisher downloads only that prepare job's artifact ID, verifies event/checkout/commit/version/tag/integrity and publishes without repacking or project dependency installation. Internal `release:check-tag`/`release:publish-ci` reject invalid workflows/events, non-main ancestry, disabled publication and token fallback.
+5. Requires npm ≥11.5.1, an existing `next` or `latest` version and absent target version. Records one attempt, publishes with provenance and verifies version/integrity/selected tag. Both tags are reported, not independently mutated. Attempt metadata uploads on ordinary failure; hard runner termination may prevent upload.
+6. Verify the exact registry artifact in an isolated consumer/Pi environment. GitHub announcement is separate; the workflow has no `contents: write` permission.
 
-   ```bash
-   git tag -a v1.1.0 -m "whatsapp-ng 1.1.0"
-   git push origin v1.1.0
-   ```
-
-3. The read-only prepare job produces the candidate and receipt. Review the run and approve the protected `npm-publish` deployment only when the candidate and separate acceptance/risk decisions are acceptable.
-4. The publisher downloads **only that prepare job's artifact ID**, checks its commit/version/tag/integrity against the tag event and checkout, and publishes those bytes without repacking or installing project dependencies in the OIDC job. The internal `release:check-tag` and `release:publish-ci` commands refuse foreign workflows, non-tag events, detached non-main ancestry, disabled publication and token fallback.
-5. The script requires npm 11.5.1 or newer, an existing published `next` or `latest` version and an absent target version, records an attempt before one publish, requests provenance, and verifies the resulting version/integrity and selected npm tag. Explicit selectors support prerelease-only packages without assuming that `latest` exists. It reports both `next` and `latest` without mutating extra tags. Attempt metadata is uploaded even on ordinary job failure; a hard runner shutdown may prevent that upload.
-6. Verify the exact registry artifact in an isolated consumer/Pi environment. Create the GitHub prerelease/release only as a separate deliberate announcement; this workflow has no `contents: write` permission and does not create it.
-
-**No automatic retry:** all versions share non-cancelling publication concurrency. Workflow reruns (`GITHUB_RUN_ATTEMPT > 1`) cannot publish, and the script independently enforces this. A cancelled/timed-out/failed publish may already have reached npm. Check the registry and retained candidate/attempt evidence before any separately authorized recovery. Do not delete/recreate tags, mint a new token, edit a receipt or rerun jobs to bypass an uncertain outcome. A new runner/clone does not inherit a local attempt marker, so registry inspection remains mandatory. The workflow is not an exactly-once delivery guarantee or an automatic stable-promotion service.
+**No automatic retry:** publication concurrency does not cancel earlier runs; reruns (`GITHUB_RUN_ATTEMPT > 1`) cannot publish. A fresh runner lacks another runner's marker. Inspect registry/candidate/attempt evidence before approved recovery; never delete/recreate tags, mint tokens, edit receipts or rerun jobs to bypass unknown outcomes.
 
 ## Package discovery
 
-Before stable promotion, read-only checks on **October 29, 2026** found the following. This is a historical snapshot; use exact registry lookups for current tag state. Stable promotion is not an indexing remedy.
+Historical checks on **October 29, 2026**, before stable promotion:
+- Both `latest`/`next` resolved RC1 with `pi-package` metadata; RC2 was unpublished.
+- Broad npm search omitted the package; a maintainer-specific search found it with score zero.
+- The [direct Pi page](https://pi.dev/packages/whatsapp-ng) worked while the [filtered catalog](https://pi.dev/packages?name=whatsapp-ng) showed no match.
 
-- `npm view whatsapp-ng@next` resolves RC1; both `latest` and `next` point to it, and its published keywords include `pi-package`. RC2 is not published yet. No registry tag was changed by these checks.
-- `npm search whatsapp-ng` omits the package from its first 20 results, and even 100/250-result queries omit it. A maintainer-specific registry search returns it with `searchScore: 0`; this is observed search ranking/index behavior, not proof that publication failed.
-- [The direct Pi page](https://pi.dev/packages/whatsapp-ng) renders the published RC1 README, but [the filtered catalog](https://pi.dev/packages?name=whatsapp-ng) reports no match. The `pi-package` eligibility keyword is already present. Similar upstream reports describe [zero-score search results](https://github.com/earendil-works/pi/issues/11130) and [catalog enumeration limits](https://github.com/earendil-works/pi/issues/6873); those reports do not prove every server-side cause for this package.
-- This is not simply a `next`-only or prerelease exclusion: `latest` already resolves to RC1, its direct Pi page works, and the catalog includes other prereleases. Do not promote to stable, retag or repeatedly publish merely to try to fix search.
-
-Use exact registry lookup and an explicit install selector rather than treating search as an existence check:
+Those observations concern search/indexing, not current publication state or a proven server-side cause. Use exact lookups/install selectors:
 
 ```bash
 npm view whatsapp-ng@latest version dist-tags keywords --json --registry=https://registry.npmjs.org
 pi install npm:whatsapp-ng@latest
 ```
 
-`grep "ng"` filters arbitrary output lines, including descriptions such as “messaging”; it does not restrict npm results to an exact package name. Search/crawl caches and ranking are separate from registry availability. Recheck indexing after publication, but do not promise that publishing another RC will fix it.
+Search output filtered with `grep` is not an exact-name existence check. Publishing, promoting or retagging is not an indexing remedy.

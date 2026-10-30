@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => {
         getSpeechSettings: vi.fn().mockReturnValue({ config: {}, enabled: false, mode: 'text', chats: {} }),
         getSpeechRevision: vi.fn().mockReturnValue(0), getReplyAdmissionKey: vi.fn().mockReturnValue('fixture-admission-0'),
         getOperatorRevision: vi.fn().mockReturnValue(0), getOperatorJid: vi.fn().mockReturnValue('5511999998888@s.whatsapp.net'),
-        setSpeechSettings: vi.fn().mockResolvedValue(undefined)
+        setSpeechSettings: vi.fn().mockResolvedValue(undefined), setSpeechConfigCallback: vi.fn(), getSttConfig: vi.fn().mockReturnValue({})
     });
 
     const createWhatsAppService = () => ({
@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => {
         setGroupBinding: vi.fn(),
         setRecentsService: vi.fn(),
         getBoundGroupJid: vi.fn().mockReturnValue(null),
+        getEffectiveStatus: vi.fn().mockReturnValue('connected'),
         getStatus: vi.fn().mockReturnValue('connected'),
         isVerbose: vi.fn().mockReturnValue(false),
         start: vi.fn().mockResolvedValue(undefined),
@@ -452,6 +453,30 @@ describe('whatsapp-ng owned turn delivery', () => {
         expect(ctx.ui.notify).toHaveBeenCalledWith('WhatsApp reply delivery is uncertain. Do not resend automatically.', 'warning');
         expect(mocks.whatsappService.sendMessage).not.toHaveBeenCalled(); expect(artifact.dispose).not.toHaveBeenCalled();
         await request.onSettled?.({ success: true, messageId: 'LATE', attempts: 1 }); expect(artifact.dispose).toHaveBeenCalledOnce();
+    });
+    it('still stops WhatsApp when managed speech retirement fails during shutdown', async () => {
+        const { pi, ctx } = await setup(); const { ManagedSpeechService } = await import('../../src/services/managed-speech.service.ts');
+        const disconnect = vi.spyOn(ManagedSpeechService.prototype, 'disconnect').mockRejectedValueOnce(new Error('Synthetic retirement failure'));
+        try { await expect(pi.handlers.get('session_shutdown')!({}, ctx)).rejects.toThrow('Synthetic retirement failure'); expect(mocks.whatsappService.stop).toHaveBeenCalledOnce(); }
+        finally { disconnect.mockRestore(); }
+    });
+    it('does not reopen managed startup when a pending session_start resumes after shutdown', async () => {
+        const { pi, ctx } = await setup(); const { ManagedSpeechService } = await import('../../src/services/managed-speech.service.ts');
+        const begun = Promise.withResolvers<void>(); const resume = Promise.withResolvers<void>();
+        mocks.sessionManager.ensureInitialized.mockImplementationOnce(async () => { begun.resolve(); await resume.promise; });
+        const update = vi.spyOn(ManagedSpeechService.prototype, 'update'); const pending = pi.handlers.get('session_start')!({}, ctx);
+        try {
+            await begun.promise; await pi.handlers.get('session_shutdown')!({}, ctx); resume.resolve(); await pending;
+            mocks.sessionManager.setSpeechConfigCallback.mock.calls[0][0](); expect(update.mock.calls.at(-1)?.[0].connected).toBe(false);
+        } finally { resume.resolve(); await pending; update.mockRestore(); }
+    });
+    it('does not admit a new managed server from a settings commit in a closing runtime', async () => {
+        const { pi, ctx } = await setup(); const { ManagedSpeechService } = await import('../../src/services/managed-speech.service.ts'); const gate = Promise.withResolvers<void>();
+        const disconnect = vi.spyOn(ManagedSpeechService.prototype, 'disconnect').mockReturnValueOnce(gate.promise);
+        const update = vi.spyOn(ManagedSpeechService.prototype, 'update'); const pending = pi.handlers.get('session_shutdown')!({}, ctx);
+        try {
+            mocks.sessionManager.setSpeechConfigCallback.mock.calls[0][0](); expect(update.mock.calls.at(-1)?.[0].connected).toBe(false);
+        } finally { gate.resolve(); await pending; disconnect.mockRestore(); update.mockRestore(); }
     });
     it.each(['session_before_switch', 'session_shutdown'])('cancels speech and suppresses stale fallback on %s', async eventName => {
         const { pi, ctx } = await setup(); selectSpeech('voice'); let began!: () => void;

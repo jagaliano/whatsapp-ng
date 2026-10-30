@@ -135,9 +135,11 @@ The SDK, AI and TUI development dependencies and their Pi dependencies use versi
 
 ### Latest audit refresh
 
+The 2026-10-30 release 1.1.1 source refresh reports **0 production findings** and **2 affected development-tree packages (one high, one moderate)**. Package counts are unchanged, but the Undici 8.10.2 record now includes **eight advisories**, not three. In addition to the dated findings below, it reports [cross-origin redirect cache poisoning/disclosure](https://github.com/advisories/GHSA-4w7w-5xrc-9h26), [dropped Agent TLS options](https://github.com/advisories/GHSA-2m5v-pch6-74hx), [TLS renegotiation denial of service](https://github.com/advisories/GHSA-qrxm-fqhp-jwvm), [automatic WebSocket PONG buffering](https://github.com/advisories/GHSA-9fm3-97px-rjf6) and [decompress-interceptor exceptions](https://github.com/advisories/GHSA-55wc-3pg8-jfw6). No dependency override/change was applied. This is a fresh source dependency audit, **not** a new installed-host/bundled-code or native-binary reassessment; the existing upstream-remediation policy and unresolved host limits remain.
+
 The 2026-10-24 publication-review refresh with Pi 1.4.0 still reports **0 production findings**, but **2 affected packages in the full tree: one high and one moderate**. The development SDK cohort is **1.4.0**; the recorded host assessment also used Pi **1.4.0**, pinning `undici@8.10.2`. That alignment did not remove the Undici findings. The later Edge-update production-only audit remains clean, but is not a fresh full-tree or installed-host reassessment.
 
-The current Undici record includes three advisories, all patched at **8.12.2**:
+That dated Undici record included three advisories, all patched at **8.12.2**:
 
 - Moderate: [EventSource parser memory exhaustion](https://github.com/advisories/GHSA-4qv8-2p9j-2685).
 - Moderate: [SRI algorithm-token validation](https://github.com/advisories/GHSA-f72v-6w45-q472).

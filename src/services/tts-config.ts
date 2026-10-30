@@ -14,6 +14,8 @@ export interface TtsConfig {
     /** Environment-variable name only. Never an API key. */
     ttsEnv?: string;
     ttsVoice?: string;
+    /** Explicitly omit voice for a compatible server's built-in/default voice. */
+    ttsUseServerVoice?: boolean;
     ttsFormat?: TtsFormat;
     ttsProtocol?: 'fish' | 'openai-compatible';
     ttsSpeed?: number;
@@ -27,14 +29,14 @@ export interface ResolvedTtsConfig {
     readonly endpoint?: string;
     readonly model?: string;
     readonly env?: string;
-    readonly voice: string;
+    readonly voice?: string;
     readonly locale?: string;
     readonly speed: number;
     readonly format: TtsFormat;
     /** Non-secret identity of the precise destination/protocol and credential-variable name. */
     readonly destinationKey: string;
 }
-const remoteFields = ['ttsEndpoint', 'ttsModel', 'ttsEnv', 'ttsVoice', 'ttsFormat', 'ttsProtocol', 'ttsSpeed'] as const;
+const remoteFields = ['ttsEndpoint', 'ttsModel', 'ttsEnv', 'ttsVoice', 'ttsUseServerVoice', 'ttsFormat', 'ttsProtocol', 'ttsSpeed'] as const;
 const fields = new Set<string>([...remoteFields, 'edgeVoice', 'edgeLocale', 'edgeSpeed']);
 const fishModels = new Set(['s1', 's2-pro', 's2.1-pro', 's2.1-pro-free', 'drama-3']);
 
@@ -67,7 +69,10 @@ export function resolveTtsConfig(config: TtsConfig): Readonly<ResolvedTtsConfig>
     const endpointText = text(config.ttsEndpoint, 2048);
     const model = text(config.ttsModel, 256);
     const env = text(config.ttsEnv, 128);
+    if (config.ttsUseServerVoice !== undefined && typeof config.ttsUseServerVoice !== 'boolean') throw new TtsError('Invalid server-default voice choice');
+    const useServerVoice = config.ttsUseServerVoice === true;
     if (!endpointText && !model && !env) {
+        if (useServerVoice) throw new TtsError('Server-default voice requires an explicit OpenAI-compatible endpoint');
         const voice = text(config.edgeVoice, 128) ?? 'en-US-AndrewMultilingualNeural';
         const locale = text(config.edgeLocale, 32) ?? voice.split('-').slice(0, 2).join('-');
         if (!/^[a-z]{2,3}-[A-Z]{2}-[A-Za-z0-9]+Neural$/.test(voice) || !/^[a-z]{2,3}-[A-Z]{2}$/.test(locale)) throw new TtsError('Invalid Edge voice or locale');
@@ -83,7 +88,9 @@ export function resolveTtsConfig(config: TtsConfig): Readonly<ResolvedTtsConfig>
     const provider = remoteProvider(endpoint, protocol);
     if (provider === 'fish' && !fishModels.has(model)) throw new TtsError('Unsupported Fish model; no provider-default model is permitted');
     const voice = text(config.ttsVoice, 256);
-    if (!voice) throw new TtsError(provider === 'fish' ? 'Fish requires an existing voice reference ID' : 'Remote speech requires a provider voice');
+    if (useServerVoice && (provider !== 'openai-compatible' || protocol !== 'openai-compatible')) throw new TtsError('Server-default voice requires explicit OpenAI-compatible protocol');
+    if (useServerVoice && voice) throw new TtsError('Choose either a provider voice or the server-default voice');
+    if (!voice && !useServerVoice) throw new TtsError(provider === 'fish' ? 'Fish requires an existing voice reference ID' : 'Remote speech requires a provider voice');
     const format = text(config.ttsFormat, 16) ?? 'mp3';
     if (format !== 'mp3' && format !== 'wav' && format !== 'opus') throw new TtsError('Unsupported speech format');
     return Object.freeze({ provider, endpoint: endpoint.href, model, env, voice, format, speed: speed(config.ttsSpeed),
@@ -94,6 +101,7 @@ export function resolveTtsConfig(config: TtsConfig): Readonly<ResolvedTtsConfig>
 export function updateTtsConfig(current: TtsConfig, updates: TtsUpdates): TtsConfig {
     if (!updates || typeof updates !== 'object' || Array.isArray(updates)) throw new TtsError('Invalid speech update');
     if (Object.keys(updates).some(key => !fields.has(key))) throw new TtsError('Unknown speech configuration field');
+    if (updates.ttsUseServerVoice != null && typeof updates.ttsUseServerVoice !== 'boolean') throw new TtsError('Invalid server-default voice choice');
     const next: Record<string, unknown> = { ...current };
     const entries = Object.entries(updates).filter(([, value]) => value !== undefined);
     if (!entries.length) {
@@ -104,11 +112,16 @@ export function updateTtsConfig(current: TtsConfig, updates: TtsUpdates): TtsCon
             else next[key] = typeof value === 'string' ? value.trim() : value;
         }
         if (!next.ttsEndpoint && !next.ttsModel && !next.ttsEnv) {
+            if (updates.ttsUseServerVoice === true) throw new TtsError('Server-default voice requires an explicit OpenAI-compatible endpoint');
             for (const key of remoteFields) delete next[key];
-        } else if (updates.ttsVoice === undefined && (voiceScope(next) === undefined || voiceScope(next) !== voiceScope(current as Record<string, unknown>))) {
-            // A voice ID only survives when the effective provider and endpoint are unchanged
-            // (e.g. making the auto-detected Fish protocol explicit), never across providers.
-            delete next.ttsVoice;
+        } else {
+            const scopeChanged = voiceScope(next) === undefined || voiceScope(next) !== voiceScope(current as Record<string, unknown>);
+            // A named voice is scoped to its effective provider and endpoint.
+            if (updates.ttsVoice === undefined && scopeChanged) delete next.ttsVoice;
+            // Default voice is an explicit capability choice, not portable to another model/server.
+            if (updates.ttsUseServerVoice === undefined && (scopeChanged || next.ttsModel !== current.ttsModel)) delete next.ttsUseServerVoice;
+            if (updates.ttsUseServerVoice === true && updates.ttsVoice === undefined) delete next.ttsVoice;
+            if (text(updates.ttsVoice, 256) && updates.ttsUseServerVoice === undefined) delete next.ttsUseServerVoice;
         }
     }
     resolveTtsConfig(next as TtsConfig);

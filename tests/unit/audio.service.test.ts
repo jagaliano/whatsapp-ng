@@ -92,6 +92,18 @@ describe('AudioService', () => {
         ({ AudioService } = await import('../../src/services/audio.service.ts'));
     });
 
+    it('gates a managed remote request before upload and preserves caller cancellation without local fallback', async () => {
+        const config = { sttEndpoint: 'http://127.0.0.1:8096/v1', sttModel: 'fixture', sttEnv: 'FIXTURE_KEY' };
+        const remote = { hostname: '127.0.0.1', origin: 'http://127.0.0.1:8096', transcribe: vi.fn().mockResolvedValue('managed text') };
+        mocks.createRemote.mockReturnValue(remote); const controller = new AbortController();
+        const gate = vi.fn(async () => ({ signal: controller.signal, isCurrent: () => !controller.signal.aborted }));
+        const service = new AudioService(logger, undefined, () => config, gate);
+        await expect(service.transcribe({})).resolves.toBe('managed text'); expect(gate).toHaveBeenCalledWith(config, undefined);
+        expect(remote.transcribe.mock.calls[0][1].signal).toBe(controller.signal);
+        mocks.downloadContentFromMessage.mockResolvedValue(createStream(Buffer.from('next'))); gate.mockRejectedValueOnce(new Error('Managed STT unavailable'));
+        await expect(service.transcribe({})).resolves.toContain('Managed STT unavailable'); expect(remote.transcribe).toHaveBeenCalledTimes(1); expect(mocks.createLocal).not.toHaveBeenCalled();
+    });
+
     it('defers media-directory creation until transcription, after startup migration', async () => {
         const service = setupService();
         expect(mocks.mkdir).not.toHaveBeenCalled();

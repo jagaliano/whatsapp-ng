@@ -14,8 +14,8 @@ const attemptPath = '.pi/cache/releases/publish-1.1.0-rc.1.attempt.json';
 const integrity = (data: Buffer) => 'sha512-' + createHash('sha512').update(data).digest('base64');
 
 function fixture() {
-    const state = { dirty: false, rootPrefix: '', head: 'fixture-head', mainAncestor: true, failedScript: '', existing: false, packageExists: true, published: false, npmVersion: '11.20.0', badRegistryIntegrity: false, badRegistryTag: false, viewError: 'E404', publishError: false, unexpected: false, missingWorker: false, wrongIntegrity: false };
-    const files = ['package.json', 'package-lock.json', 'README.md', 'LICENSE', 'whatsapp-ng.ts', 'src/services/edge-tts.worker.mjs', 'docs/reference.md', 'docs/crispasr.md', 'docs/releases.md'];
+    const state = { dirty: false, rootPrefix: '', head: 'fixture-head', mainAncestor: true, failedScript: '', existing: false, packageExists: true, published: false, npmVersion: '11.20.0', badRegistryIntegrity: false, badRegistryTag: false, viewError: 'E404', publishError: false, unexpected: false, missingWorker: false, missingManagedWorker: false, wrongIntegrity: false };
+    const files = ['package.json', 'package-lock.json', 'README.md', 'LICENSE', 'whatsapp-ng.ts', 'src/services/edge-tts.worker.mjs', 'src/services/managed-speech.worker.mjs', 'docs/reference.md', 'docs/crispasr.md', 'docs/releases.md'];
     write('package.json', { name: 'whatsapp-ng', version: '1.1.0-rc.1', private: false, main: 'whatsapp-ng.ts', publishConfig: { tag: 'next', access: 'public' } });
     write('package-lock.json', { name: 'whatsapp-ng', version: '1.1.0-rc.1', packages: { '': { name: 'whatsapp-ng', version: '1.1.0-rc.1' }, dependency: { version: '2.0.0' } } });
     for (const file of files.slice(2)) { const path = resolve(root, file); mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, 'synthetic public source'); }
@@ -43,7 +43,7 @@ function fixture() {
             const directory = args[args.indexOf('--pack-destination') + 1]; const manifest = read('package.json');
             const filename = `whatsapp-ng-${manifest.version}.tgz`; const bytes = Buffer.from('synthetic archive bytes');
             writeFileSync(resolve(directory, filename), bytes);
-            const publicFiles = files.filter(file => file !== 'package-lock.json' && !(state.missingWorker && file.endsWith('worker.mjs')));
+            const publicFiles = files.filter(file => file !== 'package-lock.json' && !(state.missingWorker && file.endsWith('worker.mjs')) && !(state.missingManagedWorker && file.endsWith('managed-speech.worker.mjs')));
             return JSON.stringify([{ name: manifest.name, version: manifest.version, filename, integrity: integrity(bytes), files: [...publicFiles, ...(state.unexpected ? ['.env'] : [])].map(path => ({ path })) }]);
         }
         if (args[0] === 'publish') {
@@ -246,7 +246,7 @@ describe('explicit local release commands', () => {
         const h = fixture(); h.invoke('prepare'); h.state.failedScript = 'lint';
         expect(() => h.invoke('prepare')).toThrow(/validation failure/); expect(existsSync(resolve(root, receiptPath))).toBe(false);
     });
-    it.each(['unexpected', 'missingWorker', 'wrongIntegrity'] as const)('refuses %s packaging failures', key => {
+    it.each(['unexpected', 'missingWorker', 'missingManagedWorker', 'wrongIntegrity'] as const)('refuses %s packaging failures', key => {
         const h = fixture(); h.state[key] = true; expect(() => h.invoke('prepare')).toThrow();
         expect(existsSync(resolve(root, receiptPath))).toBe(false); expect(h.actualPublishes()).toHaveLength(0);
     });

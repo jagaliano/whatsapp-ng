@@ -1,6 +1,6 @@
 # Stable promotion plan
 
-Implements [requirements](spec.md); [tasks](tasks.md) track this source checkpoint. The existing release guide supplied the version/publication procedure before the metadata bump; this per-release record is written during promotion, not represented as a new pre-implementation runtime design.
+Historical promotion record, written during release integration using the existing release procedure. See [requirements](spec.md) and [tasks](tasks.md). These steps do not authorize another publication.
 
 1. Verify clean source, public version absence and an authenticated listed maintainer. Initial npm E401 stopped work before any publication; the operator explicitly approved interactive npm login and completed browser authentication locally. No credentials/OTPs were read or copied by the agent.
 2. Run `npm run release:version -- 1.1.0` on clean source, selecting `latest` without Git tagging or dependency upgrades. Update current docs and changelog; retain dated RC2/discovery evidence and known risks.
@@ -11,12 +11,12 @@ Implements [requirements](spec.md); [tasks](tasks.md) track this source checkpoi
 
 ## Evidence and boundaries
 
-The prior [RC2 evidence](../040-rc2-publication-readiness/validation.md) remains dated. Stable results bind the new commit and artifact in `.pi/cache/releases/prepared.json`; publication attempt metadata and local stable qualification records hold actual post-commit outcomes. These are local receipts, not shipped public test scripts or proof of all-platform/live acceptance. Do not amend tracked documentation after preparation without preparing again.
+Keep [RC2 evidence](../040-rc2-publication-readiness/validation.md) dated. Stable commit/artifact identity belongs to `.pi/cache/releases/prepared.json`; local attempt/qualification receipts hold post-commit outcomes. They are not shipped scripts or all-platform/live proof. Tracked edits require preparation again.
 
 ## Pre-commit checks
 
-The promotion diff changes only version/channel metadata and documentation; runtime/tests/scripts and the dependency graph match the qualified RC2 source. On October 29, 2026, isolated release/workflow/manifest tests passed **90/90**; lint/typecheck and whitespace passed. Production audit returned zero findings; full-tree audit retained the known one high/one moderate SDK/Undici findings. Changed Markdown validation covered 9 files/59 relative links with no failures; the 11-file candidate secret scan passed. These results do not substitute for the clean-commit full suite and artifact/registry qualification below.
+October 29, 2026 checkpoint: metadata/docs-only diff; runtime/tests/scripts/dependencies matched RC2. Isolated release/workflow/manifest tests **90/90**, lint/typecheck/whitespace passed; production audit zero, full-tree audit one high/one moderate SDK/Undici findings. Markdown: 9 files/59 links passed; 11-file candidate secret scan passed. This did not replace clean-commit full-suite/artifact/registry qualification.
 
 ## Complexity Tracking
 
-No new runtime abstractions, dependency versions, provider integrations or storage/authentication behavior. This is explicit maintainer promotion with normal browser authentication, not an indexing fix or waiver of integrity/production-audit gates. Broader Windows/Linux artifact/live acceptance is not claimed; the prior risk disclosures remain applicable.
+No new runtime abstraction, dependency/provider or storage/auth change. Promotion was explicitly approved, not an indexing remedy or integrity/audit waiver. Prior risks and broader platform/live limits remain.

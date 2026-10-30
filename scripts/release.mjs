@@ -147,7 +147,7 @@ export function release(args, { root = resolve(dirname(fileURLToPath(import.meta
         const [packed] = npmJson(['pack', '--ignore-scripts', '--json', '--pack-destination', directory]);
         if (packed.name !== manifest.name || packed.version !== manifest.version || packed.filename !== `${manifest.name}-${manifest.version}.tgz`) throw new Error('Packed identity differs from source');
         const allowed = new Set(git('ls-files', '-z').split('\0'));
-        const required = new Set(['package.json', 'README.md', 'LICENSE', manifest.main, 'src/services/edge-tts.worker.mjs', 'docs/reference.md', 'docs/crispasr.md', 'docs/releases.md']);
+        const required = new Set(['package.json', 'README.md', 'LICENSE', manifest.main, 'src/services/edge-tts.worker.mjs', 'src/services/managed-speech.worker.mjs', 'docs/reference.md', 'docs/crispasr.md', 'docs/releases.md']);
         for (const file of packed.files) {
             const name = file.path;
             const publicFile = ['package.json', 'README.md', 'LICENSE', 'SECURITY.md', 'LICENSING.md', 'CHANGELOG.md', 'DEPENDENCIES.md', manifest.main, 'docs/reference.md', 'docs/crispasr.md', 'docs/releases.md'].includes(name)

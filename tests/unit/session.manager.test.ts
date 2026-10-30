@@ -19,6 +19,15 @@ describe('SessionManager', () => {
         await rm(dataDir, { recursive: true, force: true });
     });
 
+    it('notifies the speech lifecycle only after successful committed configuration changes', async () => {
+        await sessionManager.ensureInitialized(); const changes: unknown[] = [];
+        sessionManager.setSpeechConfigCallback(() => changes.push(sessionManager.getSttConfig()));
+        await sessionManager.setSttConfig({ sttEndpoint: 'http://127.0.0.1:8096/v1', sttModel: 'fixture', sttEnv: 'FIXTURE_KEY' });
+        expect(changes).toHaveLength(1); expect(changes[0]).toMatchObject({ sttModel: 'fixture' });
+        await expect(sessionManager.setSttConfig({}, () => false)).rejects.toThrow('expired'); expect(changes).toHaveLength(1);
+        await sessionManager.setSpeechSettings(sessionManager.getSpeechSettings(), sessionManager.getSpeechRevision()); expect(changes).toHaveLength(2);
+    });
+
     it('defaults auto-connect off and round-trips it without changing other preferences', async () => {
         expect(sessionManager.getAutoConnect()).toBe(false); expect(sessionManager.getAutoConnectRevision()).toBe(0);
         await sessionManager.setFinalAfterAttachments(false); const path = join(dataDir, 'config.json'); const original = JSON.parse(await readFile(path, 'utf8'));
@@ -361,6 +370,24 @@ describe('SessionManager', () => {
         expect(reopened.getSttConfig()).toEqual(stt);
     });
 
+    it('round-trips explicit server-default voice without granting consent or persisting credentials', async () => {
+        await sessionManager.ensureInitialized();
+        const config = { ttsEndpoint: 'http://127.0.0.1:8098/v1/audio/speech', ttsProtocol: 'openai-compatible' as const,
+            ttsModel: 'chatterbox', ttsEnv: 'FIXTURE_TTS_KEY', ttsUseServerVoice: true };
+        const settings = sessionManager.getSpeechSettings(); settings.config = config;
+        await sessionManager.setSpeechSettings(settings, sessionManager.getSpeechRevision());
+        const saved = JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8'));
+        expect(saved.ttsUseServerVoice).toBe(true); expect(saved.ttsVoice).toBeUndefined();
+        const reopened = new SessionManager(dataDir); await reopened.ensureInitialized();
+        expect(reopened.getSpeechSettings()).toMatchObject({ config, enabled: false, mode: 'text' });
+        expect(reopened.getSpeechSettings().approvedDestinationKey).toBeUndefined();
+    });
+    it('does not silently turn a saved server-default voice without an endpoint into Edge', async () => {
+        const path = join(dataDir, 'config.json'); const stored = JSON.stringify({ ttsUseServerVoice: true });
+        await writeFile(path, stored); await sessionManager.ensureInitialized();
+        expect(() => sessionManager.getSpeechSettings()).toThrow('Invalid saved voice settings');
+        expect(await readFile(path, 'utf8')).toBe(stored);
+    });
     it('rejects saved LAN HTTP speech without opt-in while preserving stored preferences for repair', async () => {
         vi.stubEnv('WHATSAPP_NG_ALLOW_PLAIN_HTTP', '1'); await sessionManager.ensureInitialized();
         const settings = sessionManager.getSpeechSettings(); settings.config = { ttsEndpoint: 'http://192.168.1.20/speech', ttsModel: 'fixture', ttsEnv: 'FIXTURE_KEY', ttsVoice: 'fixture' };

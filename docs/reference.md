@@ -27,17 +27,27 @@ See [CrispASR setup](crispasr.md) for CLI/server configuration, language behavio
 
 ### Remote speech endpoints
 
-Remote STT requires `sttEndpoint`, `sttModel` and `sttEnv`. `configure_wa_stt` accepts only a current verified local terminal/RPC request or the configured, transport-verified WhatsApp owner; an allowed contact/group alone is not authorized. Omitted fields are preserved; `{}` returns to local transcription and requires the same authorization. Owner/account/session changes, allow-list revocation and cancellation invalidate pending changes before atomic commit. Failed or revoked writes preserve both the active settings and the prior file. `sttEnv` names the API-key environment variable, never its value. No vision or Pi model credential is substituted automatically.
+`configure_wa_stt` requires a current verified local terminal/RPC request or the configured transport-verified owner, not merely an allowed chat. Set `sttEndpoint`, `sttModel` and credential-variable **name** `sttEnv`; omitted fields are preserved and authorized `{}` selects local transcription. Owner/account/session changes, allow-list revocation or cancellation invalidate pending commits; failed writes preserve active settings and the prior file. Vision/Pi credentials are never substituted.
 
 The client appends `/audio/transcriptions` to the base URL and posts multipart `file`, `model` and `response_format=json`, expecting a JSON `text` string. Optional `sttLanguage` sends a language code; unset/`auto` omits it for server detection. `null` or an empty string clears it without changing local language settings. Confirm that your chosen endpoint and model implement this API, not only OpenAI-compatible chat.
 
-Remote STT never initializes a local Whisper backend or downloads a model. Invalid configuration, missing credentials and provider errors fail without a backend fallback or automatic upload retry. Limits are 25 MiB input/upload, 1 MiB response, 60 seconds for conversion and 60 seconds for the remote request. Providers may impose stricter limits.
+The remote STT client never initializes a local Whisper backend or downloads a model. An explicitly managed native server is a separate process and may automatically fetch auxiliary models/lexicons even with an existing primary-model path; see the [native download warning](crispasr.md#optional-managed-startup). Invalid configuration, missing credentials and provider errors fail without a backend fallback or automatic upload retry. Limits are 25 MiB input/upload, 1 MiB response, 60 seconds for conversion and 60 seconds for the remote request. Providers may impose stricter limits.
 
 Both STT and TTS require HTTPS, except loopback HTTP (`127.0.0.0/8`, `[::1]`, `localhost`). Deliberately setting `WHATSAPP_NG_ALLOW_PLAIN_HTTP=1` in Pi's launch environment also permits non-loopback HTTP. **This sends audio/text and any Bearer key unencrypted and applies to both speech clients process-wide.** URL credentials, query strings, fragments and redirects remain forbidden.
 
 Removing that opt-in makes saved LAN HTTP settings invalid without deleting them. Invalid saved TTS settings pause automatic replies, including text-only chats. Restore the intended environment and restart Pi to recover without erasing preferences. Voice Reset instead clears the backend, consent and chat overrides; it is not an endpoint-only repair.
 
 Account/session changes prevent stale uploads before sending and best-effort abort in-flight requests. Already-uploaded content cannot be recalled. Private audio scratch files are cleaned on normal success/error, not abrupt process death; existing saved media is not deleted.
+
+### Optional managed speech servers
+
+`CRISPASR_STT_CMD` and `CRISPASR_TTS_CMD` optionally declare shell-free JSON launch descriptors in Pi's trusted process environment, not chat-editable settings. See the [descriptor format and examples](crispasr.md#optional-managed-startup). Unset/blank variables leave that service unmanaged.
+
+- **Selection:** connected WhatsApp starts only the matching numeric-loopback endpoint/API model/protocol. Roles have separate ports/lifetimes; chat settings cannot retarget trusted commands. Startup defaults to 180 seconds, maximum 300; request budgets are unchanged. Preparing TTS while disabled grants no consent or inference request. Native warmup follows launch flags (`--no-warmup` in the guide).
+- **Proof:** each role holds an exclusive lease under `managed-speech/`. Every admission requires a live owned child, OS listener-PID proof and matching health/backend/loaded-model metadata. Foreign listeners, unknown locks and mismatches fail closed without adoption, killing or provider fallback.
+- **Failure:** transient startup probes wait within budget; transient request admission refuses only that request, without upload/retry/restart. Confirmed ownership/model/backend loss retires the role. Startup failures remain failed across messages/settings toggles; fix the cause, then Off/Connect or use a fresh runtime. Malformed descriptors refuse numeric-loopback selections for that role; see the guide's recovery rules. Environment changes require restarting Pi, not `/reload`.
+- **Lifecycle:** Off, disconnect, committed session replacement, reload/shutdown and relevant backend changes retire owned processes and requests. `/stop` or a canceled switch retains the connected server. Replacement/shutdown fences new startup before draining. Parent IPC loss/SIGHUP triggers a watchdog: three seconds TERM, two KILL, owned non-daemonized process group only.
+- **Platforms:** macOS uses `lsof`, Linux procfs; Windows management is refused without changing manually operated endpoints. Daemonizing wrappers, simultaneous watchdog/OS failure and damaged locks need operator inspection. This is cooperative ownership, not a hostile-same-user sandbox or all-platform/model qualification.
 
 ### Speech replies
 
@@ -50,20 +60,23 @@ Use terminal `/whatsapp` → **Voice** to choose the destination, voice, speed, 
 | `ttsEndpoint` | Complete speech endpoint URL, subject to the transport policy above. |
 | `ttsModel` | Exact provider model. |
 | `ttsEnv` | API-key environment-variable name. |
-| `ttsVoice` | Provider voice identifier/reference. |
+| `ttsVoice` | Provider voice identifier/reference, required unless server-default voice is explicitly selected. |
+| `ttsUseServerVoice` | `true` omits `voice` for a server supporting a built-in/default voice; requires explicit `openai-compatible` protocol and no named voice. |
 | `ttsProtocol` | `fish` or `openai-compatible`. |
 | `ttsFormat` | `mp3`, `wav` or `opus`. |
 | `ttsSpeed` | Speaking speed from 0.5 to 2. |
 
 Fish requires an existing voice reference and a supported model header; no paid default voice is assumed. OpenAI-compatible/OpenRouter endpoints must support the requested speech API/model. Edge uses separate `edgeVoice`, `edgeLocale` and `edgeSpeed` preferences; its default is `en-US-AndrewMultilingualNeural` / `en-US`. It is an unofficial online service with no availability guarantee; failures do not silently switch providers.
 
+Server-default voice is an explicit configuration choice, not a fallback for an invalid/missing voice. Selecting it clears an inherited named voice; selecting a named voice clears the inherited default choice. Changing endpoint/effective provider or model requires selecting server default again. `{}` resets it with the other remote fields. The server chooses the actual voice and language; no cloning-consent field is added, and destination/group speech approval remains separate. See the [Chatterbox built-in voice example](crispasr.md#built-in-server-voice).
+
 Preparation permits one active job, five pending, 2,000 spoken Unicode characters, 8 MiB audio and a 60-second synthesis budget including queue wait. Output uses the bounded FFmpeg/Ogg-Opus voice-note path.
 
-Automatic replies make a separate plain-text speech copy without changing the displayed answer or saved text. Balanced Markdown/WhatsApp emphasis, headings, bullets and quote escapes are removed as formatting; ordinary quotation marks and unmatched approximation tildes such as “~5 minutes” are allowed. Heading candidates longer than 1,024 characters are left literal to bound parsing.
-
-Voice and audio Mirror fall back to the complete original text when an HTTP(S) Markdown link would lose its destination in speech. Voice + text may speak the readable label only after the full original text send is accepted; a failed or uncertain text send never authorizes omitting the only copy of its address, and the text is not retried. Opaque URL-shaped labels retain their literal addresses.
-
-Short inline labels (up to 80 characters), such as `config.json`, `/whatsapp`, `--verbose` or `Voice settings`, are eligible instead of blocking the whole reply. Command-like multiword snippets, including lowercase program names or option-shaped arguments, conservatively retain text rather than relying on a complete executable-name list. Code fences, tables, ambiguous/unclosed code and overlong answers also retain the complete original text. The original input is bounded before parsing and the cleaned copy must fit the existing 2,000-character speech limit. No answer is summarized, truncated, fetched or sent to an extra model for cleanup.
+Speech uses a plain-text copy; displayed/saved answers stay unchanged:
+- Remove balanced emphasis, headings, bullets and quote escapes. Ordinary quotes/approximation tildes remain; heading candidates above 1,024 characters stay literal.
+- Voice/audio Mirror retains complete text if a Markdown link would lose its HTTP(S) destination. Voice + text may speak labels only after the full text is accepted; failed/unknown text is not retried or omitted. URL-shaped labels keep their addresses.
+- Inline labels up to 80 characters (`config.json`, `/whatsapp`, `--verbose`, `Voice settings`) are eligible. Command-like multiword snippets, fences, tables, ambiguous/unclosed code and overlong answers retain complete text.
+- Bound input before parsing and cleaned speech to 2,000 characters. No summarization, truncation, fetching or extra model call.
 
 A definite pre-transmission voice failure can fall back to the full text once. Voice + text does not resend its text. Unknown delivery never triggers another voice send or speculative text fallback. Already-issued uploads cannot be recalled; their snapshots remain owned until settlement.
 
@@ -155,7 +168,12 @@ The preference applies to every **TUI/RPC session using that profile**, across w
 
 Saving a preference does not immediately connect/disconnect or change an already-started connection attempt; disabling it is not Turn WhatsApp off. Explicit Off takes precedence through reload/session replacement in the **current process only**, not other Pi processes. A fresh TUI/RPC process follows the shared preference; disable it and omit the online flag to start disconnected. The setting is terminal/RPC-only and is not a new phone/model configuration tool. It does not enable speech, polls or unknown chats.
 
-Cooperating updated config writers and startup temp cleanup serialize through private `config.json.lock`; each lock acquisition waits about two seconds before refusing an occupied lock. The latest on-disk `autoConnect` is refreshed during initialization and inside that lock before serialization. An older instance's status/unrelated preference save preserves it, and a stale explicit auto-connect choice is rejected. Atomic preference writes update their own selected value only after success. This protects auto-connect, not a general cross-process merge of every existing setting; manual edits/older writers that ignore the lock are outside that contract. Locks are never automatically stolen or deleted on timeout. A retained lock blocks writes and temp cleanup, not loading the saved allow list, owner or other readable settings; startup reports the retained lock distinctly and still reconciles auth metadata. Preference re-read failures disable auto-connect without discarding previously loaded reply settings; invalid disk data is not overwritten, and a successful later re-read restores the preference. Lock-release errors are diagnosed without misreporting a completed commit or hiding an operation's original error. After a crash, inspect ownership locally before explicitly recovering a retained lock; do not remove another process's lock or active temp files.
+Cooperating writers and startup temp cleanup use private `config.json.lock`, waiting about two seconds before refusing an occupied lock:
+- Refresh on-disk `autoConnect` during initialization and under the write lock. Unrelated/stale-instance saves preserve newer choices; stale explicit selections are rejected. Update memory only after atomic write success.
+- This protects auto-connect, not every setting or noncooperating/manual writer. Never steal/delete a lock on timeout.
+- Retained locks block writes/temp cleanup, not readable allow-list/owner/settings loading or auth metadata reconciliation; startup reports the lock distinctly.
+- Failed preference re-reads disable auto-connect without dropping loaded reply settings or overwriting invalid data. A successful later read restores the preference. Release errors neither hide the original failure nor misreport a completed commit.
+- After a crash, inspect ownership before explicit recovery; never remove another process's lock or active temp files.
 
 ## Off and diagnostics
 

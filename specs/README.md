@@ -14,6 +14,11 @@ This directory is a design/history archive, not a list of features still waiting
 | [039 extension improvements](039-extension-improvements/) | Dated phone-control, speech, group, output and settings validation/review records. Its local plan is not tracked; do not present private receipts as public reproducible artifacts. |
 | [040 RC2 publication readiness](040-rc2-publication-readiness/plan.md) | Dated RC2 preparation, auto-connect/navigation evidence and documentation/discovery corrections, before stable promotion. |
 | [041 stable 1.1.0](041-stable-1.1.0/plan.md) | Explicit maintainer-approved stable/latest promotion of the prepared source, with fresh artifact/publication checks and unchanged risk/acceptance limits. No Git release tag or automation activation. |
+| [042 speech-provider introduction](042-speech-provider-introduction/plan.md) | Documentation-only overview of independent transcription/speech providers and protocol compatibility; no runtime or provider validation. |
+| [043 managed CrispASR](043-managed-crispasr/plan.md) | Opt-in connection-time server ownership/watchdog and request gates; [validation and remaining platform/live limits](043-managed-crispasr/validation.md). No installation, real-server or publication authorization. |
+| [044 server-default voice](044-server-default-voice/plan.md) | Explicit OpenAI-compatible built-in/startup voice selection; [validation and native-inference exclusions](044-server-default-voice/validation.md). No saved-setting mutation or download authorization. |
+| [045 documentation cleanup](045-documentation-cleanup/plan.md) | Concise current guides and plans 038 onward; examples checked without native effects, historical evidence preserved. |
+| [046 release 1.1.1](046-release-1.1.1/plan.md) | Authorized main/version-only-lock/isolated-consumer release; exact artifact and one-shot publication gates. Local receipts hold post-commit outcomes. |
 
 ## Cleanup policy
 

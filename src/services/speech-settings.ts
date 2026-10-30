@@ -1,7 +1,7 @@
 import type { ReplyOutputMode, FinalOutputPolicy } from './final-output.service.js';
 import { resolveTtsConfig, updateTtsConfig, TtsError, EDGE_TTS_ENDPOINT, type TtsConfig } from './tts-config.js';
 
-export const TTS_CONFIG_FIELDS = ['ttsEndpoint', 'ttsModel', 'ttsEnv', 'ttsVoice', 'ttsFormat', 'ttsProtocol', 'ttsSpeed', 'edgeVoice', 'edgeLocale', 'edgeSpeed'] as const;
+export const TTS_CONFIG_FIELDS = ['ttsEndpoint', 'ttsModel', 'ttsEnv', 'ttsVoice', 'ttsUseServerVoice', 'ttsFormat', 'ttsProtocol', 'ttsSpeed', 'edgeVoice', 'edgeLocale', 'edgeSpeed'] as const;
 export interface ChatReplyPreferences { mode?: ReplyOutputMode; automaticReplies?: boolean; groupSpeech?: boolean }
 export interface SpeechSettings {
     config: TtsConfig;

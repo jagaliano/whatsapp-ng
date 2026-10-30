@@ -55,6 +55,7 @@ export class SessionManager {
     private openaiKey: string = '';
     private visionModel: string = 'gpt-4o';
     private sttConfig: SttConfig = {};
+    private speechConfigCallback?: () => void;
     private operatorJid: string = '';
     private finalAfterAttachments = true;
     private storedAutoConnect: unknown;
@@ -447,6 +448,12 @@ export class SessionManager {
         });
     }
 
+    setSpeechConfigCallback(callback: () => void): void { this.speechConfigCallback = callback; }
+    private notifySpeechConfig(): void {
+        try { this.speechConfigCallback?.(); }
+        catch { console.error('Speech lifecycle update failed; inspect local status.'); }
+    }
+
     getSpeechSettings(): SpeechSettings {
         if (this.configReadFailure || this.speechConfigInvalid) throw new Error('Invalid saved voice settings; repair them in terminal /whatsapp > Voice');
         return structuredClone(this.speechSettings);
@@ -472,6 +479,7 @@ export class SessionManager {
             this.storedSpeechState = fields;
             this.speechConfigInvalid = false;
             this.speechRevision++;
+            this.notifySpeechConfig();
         });
     }
 
@@ -817,6 +825,7 @@ export class SessionManager {
             await this.writeConfig(this.storedSpeechState, this.operatorJid, current, 'atomic', this.finalAfterAttachments,
                 this.storedReplyStats, this.storedGroupReplies, this.storedOptionalOutputs, this.storedReplyReporting, next);
             this.sttConfig = next;
+            this.notifySpeechConfig();
         });
     }
 

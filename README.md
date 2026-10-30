@@ -18,10 +18,12 @@ Use WhatsApp to talk to your [Pi](https://pi.dev) agent: send tasks, share files
 - **Group-only mode:** bind Pi to one WhatsApp group with `--whatsapp-group <jid>`.
 - **Media support:**
   - **Images:** forward incoming WhatsApp images to Pi for analysis with a vision-capable model.
-  - **Audio transcription:** use Whisper.cpp/CrispASR locally, a compatible native Whisper addon, or a configured transcription API. FFmpeg first converts voice notes to 16 kHz mono WAV.
+  - **Audio transcription:** local Whisper.cpp/CrispASR/native Whisper, or an OpenAI-compatible STT API such as OpenAI, Groq, Mistral or a self-hosted server. Configure the model, endpoint and credential-variable name independently of Pi's chat model; FFmpeg prepares the audio.
   - **Documents:** save documents for agent access, with bounded text previews for readable PDFs and optional local OCR for scans.
   - **Outgoing attachments:** explicitly send documents, images, audio, voice notes and video, with optional native quotes.
-- **Spoken replies:** opt into text, voice, voice + text or input-mirroring output, with per-chat preferences and separate group consent.
+- **Spoken replies:** WhatsApp voice notes through Fish Audio, OpenAI-compatible speech APIs, local CrispASR or unofficial Microsoft Edge voices. Choose STT and TTS independently, with text/voice/both/Mirror modes, per-chat preferences and separate group consent.
+
+Providers must implement the matching speech API. OpenRouter or another gateway's chat/audio-input support alone does not establish STT/TTS compatibility. See [transcription](#remote) and [speech configuration](#speech-replies-opt-in).
 
 **All allowed chats share one Pi session and its context. Only allow people and groups you trust with that shared access.**
 
@@ -33,7 +35,7 @@ With Pi already installed, install the stable channel:
 pi install npm:whatsapp-ng@latest
 ```
 
-The `1.1.0` release line includes saved startup preferences and fuzzy `/model` search. Check the actual channel version with `npm view whatsapp-ng@latest version`; `next` is independent and may still point to an older prerelease. Stable versioning does not imply an SLA, all-platform qualification or guaranteed npm/Pi catalog indexing. See the [security and qualification limits](SECURITY.md).
+Check the channel with `npm view whatsapp-ng@latest version`; `next` is independent. See [security and qualification limits](SECURITY.md).
 
 Restart Pi, then:
 
@@ -41,13 +43,11 @@ Restart Pi, then:
 2. Add contacts under **Chats / Owner → Allowed Contacts**, or groups under **Groups → Allowed Groups**.
 3. Send a message from an allowed chat. Pi answers in that conversation.
 
-The login is saved. To reconnect automatically without a launch flag, open **Connection → Auto-connect on startup → Enabled**. This saves `autoConnect: true` in the extension's `config.json`; the default is disabled. Only the literal boolean `true` enables it.
+The login is saved. **Connection → Auto-connect on startup → Enabled** saves a default-off preference for TUI/RPC sessions using that profile, including reload/new sessions and extension-enabled subagents. It requires saved credentials and does not immediately connect/disconnect. Print/JSON runs require the explicit online flag.
 
-The saved preference applies to **TUI and RPC sessions using the same profile**, across workspaces, including `/reload` and `/new`. Any RPC process that loads the extension, including an extension-enabled subagent, follows that preference; print/JSON runs need an explicit online flag. Only one Pi process can own the profile: preference-based startup skips an occupied/unverified profile lock with one notice rather than repeated retries.
+Only one process may own a profile. Explicit **Off** overrides auto-connect across reload/session replacement in that process; a fresh process follows the saved preference. See the [startup contract](docs/reference.md#startup-connection-preference) for locking and concurrent writes.
 
-Changing the preference does not immediately connect or disconnect WhatsApp. Existing saved credentials are required; first-time pairing still uses **Connect WhatsApp**. Explicit **Off** survives reload/session changes in the current process even with auto-connect enabled; it does not disable other Pi processes. A fresh TUI/RPC process follows the shared saved preference. Cooperative config writes preserve newer auto-connect selections made by another updated Pi process.
-
-The launch flag remains an explicit auto-connect request, even if the saved preference is disabled:
+The flag explicitly requests connection even when the saved preference is disabled:
 
 ```bash
 pi --whatsapp-ng-online
@@ -88,13 +88,9 @@ Local transcription runs on CPU. Without a model override, the base model downlo
 
 ### Local CrispASR speech servers (beta)
 
-[CrispASR](https://github.com/CrispStrobe/CrispASR) is a unified C++ speech toolkit, originally based on Whisper.cpp, with many STT and TTS model families and model auto-download/cache options. Treat this optional setup as **beta/experimental**: it is a fast-moving 0.x project, and model/build compatibility needs checking. STT choices include Whisper, Parakeet, Canary and Qwen3-ASR; TTS choices include Kokoro, Piper, Qwen3-TTS and OmniVoice.
+CrispASR offers local STT/TTS model families, cache/download options and build-dependent CPU/CUDA/Metal/Vulkan support. Direct CLI integration remains CPU-only Whisper; other models use compatible HTTP endpoints. Loopback HTTP is allowed; non-loopback HTTP requires an explicit unencrypted-transport opt-in. See the [model choices and compatibility limits](docs/crispasr.md).
 
-We added **`http://` support for STT/TTS endpoints** to open the way for local servers such as CrispASR, without needing TLS just for localhost. Loopback HTTP is allowed; non-loopback HTTP requires an explicit launch-environment opt-in and is unencrypted. See the [setup, model examples and transport safeguards](docs/crispasr.md).
-
-CrispASR provides **Windows, Linux and macOS** builds, with **CPU, NVIDIA CUDA, Apple Metal and Vulkan** execution options depending on the build, hardware and model—not every combination on every OS. Multilingual Whisper covers **99 STT languages**, while upstream OmniVoice advertises **600+ TTS languages**; coverage is model/voice-specific, not a promise that every engine supports all languages. These are upstream capabilities, not a full `whatsapp-ng` validation matrix. Our direct CLI path remains CPU-only and requires a compatible Whisper GGML model; use a separate compatible HTTP server for other model families or GPU acceleration. OmniVoice's reference-audio HTTP flow still has [additional integration limits](docs/crispasr.md#multilingual-and-omnivoice-limits).
-
-The guide explicitly downloads `ggml-large-v3-turbo-q5_0.bin` using CrispASR's **`--hf-repo` / `--hf-file`** selectors rather than accepting a base-model default. **It is an example: choose the model that fits your languages, accuracy, memory and latency needs.**
+Optional managed startup uses trusted `CRISPASR_STT_CMD` / `CRISPASR_TTS_CMD` JSON descriptors. Matching servers start on WhatsApp connection; Off/disconnect/reload/session replacement retire only owned processes. Unset descriptors preserve manually operated servers. Management supports macOS/Linux, not Windows, and does not enable speech or grant consent. Follow the [complete Spanish Whisper Turbo + Chatterbox setup](docs/crispasr.md#complete-example-spanish-whisper-turbo-and-chatterbox) for model preparation, CMDs, client settings and credentials.
 
 ### Remote
 
@@ -127,11 +123,11 @@ Open `/whatsapp` → **Voice** to choose a speech backend, voice, speed and repl
 | Voice + text | Both formats. |
 | Mirror | Voice for verified audio input; text otherwise. |
 
-Backends include Fish, OpenAI-compatible speech APIs and the unofficial Microsoft Edge speech service. A compatible [CrispASR TTS server](docs/crispasr.md#tts-server), such as the Kokoro example, can provide local synthesis through the same endpoint client. Edge requires no configured API key but is an online service, not offline synthesis. The transcription and speech backends are independent.
+Backends include Fish, OpenAI-compatible speech APIs and the unofficial Microsoft Edge speech service. A compatible [CrispASR TTS server](docs/crispasr.md#tts-server), such as the Kokoro example, can provide local synthesis through the same endpoint client. Edge requires no configured API key but is an online service, not offline synthesis. The transcription and speech backends are independent. Compatible servers with a built-in voice, including Chatterbox, can explicitly use [`ttsUseServerVoice: true`](docs/crispasr.md#built-in-server-voice); this omits `voice`, not a substitute voice ID.
 
 Speech is disabled until you approve its destination in the terminal Voice menu. Groups need separate opt-in. Changing the endpoint requires new approval; configuring a backend with `configure_wa_tts` does not enable speech or grant consent.
 
-Voice settings also let you pause automatic replies for individual chats and send a confirmed preview. Speech uses a separate plain-text copy: emphasis markers, headings, bullets and escaped quotes are cleaned up; short labels such as `config.json` can be spoken normally. Ordinary approximate values such as “~5 minutes” remain eligible. Voice and audio Mirror keep an answer as text when speaking its link label would omit the address. Voice + text speaks link labels only if the full text send succeeds. The displayed answer is unchanged. Long answers, code/command-like snippets and tables stay as complete text. See the [speech reference](docs/reference.md#speech-replies) for backend fields and failure behavior.
+Voice settings include per-chat pause controls and a confirmed preview. Speech uses a cleaned plain-text copy without changing the displayed answer. Long/code-heavy replies, tables and links that would lose their address remain complete text. See the [speech reference](docs/reference.md#speech-replies) for formatting, fields and failure behavior.
 
 <a id="settings-off-and-diagnostic-privacy"></a>
 
@@ -164,7 +160,7 @@ Allowed people can use `/help` and `/status`. State-changing commands require th
 | `/off` | Confirm WhatsApp shutdown without logging out. Re-enable from the terminal Connection menu. |
 | `/quit` | Confirm graceful Pi shutdown. |
 
-Use `/model` to browse, `/model anthropic` to filter by provider, or `/model anthropic/opus` (also `opus anthropic`) for case-insensitive fuzzy matching across provider/model identifiers. `/model DeepSeek`, `/model Deepseek` and `/model deepseek` show matching models across all authenticated providers, with provider/model labels kept distinct. Search results require a numbered selection even when only one matches; an exact `provider/model` still selects directly. Previous/next pages retain the search. Only currently authenticated models are offered; no match leaves the current model unchanged. Private filesystem identifiers stay redacted and are reachable through browsing, not fuzzy search.
+`/model` browses authenticated models; `/model anthropic` or `/model anthropic/opus` searches case-insensitively with fuzzy matching. Search results require numbered confirmation, even for one match; exact `provider/model` selects directly. Pagination preserves the search, and no match leaves the current model unchanged. Private filesystem identifiers are available through browsing, not fuzzy search.
 
 Menus use numbered replies. Group selections must quote the menu. Native polls are experimental and require `--whatsapp-ng-native-polls`. Configuration changes require idle Pi; stop active work explicitly rather than interrupting it through a settings change.
 
@@ -208,13 +204,13 @@ The development baseline is Node 26.x and Pi 1.4.0.
 git clone https://github.com/jagaliano/whatsapp-ng.git
 cd whatsapp-ng
 npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
-npm test
+npm test -- --maxWorkers=2
 npm run lint
 npm run typecheck
 pi --no-extensions -e ./whatsapp-ng.ts
 ```
 
-Maintainers can use the [release guide](docs/releases.md) for explicit local version bumps, validated tarball preparation and separately confirmed publication. PR/main CI and a default-off, environment-gated tag-triggered OIDC workflow are provided; npm requires a first manual package publication before trusted publishing can be configured. RC1 is published; the working version is `1.1.0-rc.2`. Preparing a candidate does not bump or publish it.
+Use the [release guide](docs/releases.md) for versioning, artifact checks and separately authorized publication. The checkout version is in `package.json`; registry tags must be queried explicitly. Preparation does not bump/publish a version or activate the default-off OIDC workflow.
 
 Use a disposable HOME/Pi agent directory and credential-free environment for validation; the isolated setup in `scripts/release.mjs` is the reference. A deliberate source launch with your normal HOME shares saved settings/auth and may auto-connect. Do not run a second same-profile owner.
 

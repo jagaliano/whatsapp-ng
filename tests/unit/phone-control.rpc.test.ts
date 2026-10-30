@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,14 +10,22 @@ import { resolveTtsConfig } from '../../src/services/tts-config.ts';
 
 /** Real Pi command context/lifecycle; WhatsApp transport and fixture model streams are synthetic. */
 describe('production phone-control Pi RPC gateway', () => {
-    it.each(['direct', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'autoconnect'])('exercises production phone controls and lifecycle fences (%s)', async mode => {
+    it.each(['direct', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'autoconnect', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async mode => {
         const root = await mkdtemp(join(tmpdir(), 'wa-phone-rpc-')); const home = join(root, 'home'); const workspace = join(root, 'workspace');
         const data = join(home, '.pi/agent/extensions/whatsapp-ng'); const metricsPath = join(root, 'metrics.json'); const networkPath = join(root, 'network.json');
         await mkdir(join(data, 'auth'), { recursive: true }); await mkdir(workspace);
-        const selfChat = mode === 'self-lid' || mode === 'self-auto'; const modelFixture = ['stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models'].includes(mode);
+        const managed = mode.startsWith('managed-'); const automatic = mode === 'autoconnect' || mode === 'managed-auto';
+        const serverMetrics = join(root, 'speech.jsonl'); let endpoint = '';
+        if (managed) {
+            const server = createServer(); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address();
+            if (!address || typeof address === 'string') throw new Error('Missing synthetic speech port');
+            endpoint = `http://127.0.0.1:${address.port}/v1`; await new Promise<void>(resolve => server.close(() => resolve()));
+        }
+        const selfChat = mode === 'self-lid' || mode === 'self-auto'; const modelFixture = ['stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice'].includes(mode) || managed;
         const owner = selfChat ? '15550000009@s.whatsapp.net' : '15550000001@s.whatsapp.net';
         await writeFile(join(data, 'config.json'), JSON.stringify({ operatorJid: owner, allowList: [{ number: '+' + owner.split('@')[0] }],
-            ...(mode === 'autoconnect' ? { autoConnect: true } : {}),
+            ...(automatic ? { autoConnect: true } : {}),
+            ...(managed ? { sttEndpoint: endpoint, sttModel: 'fixture-api-model', sttEnv: 'FIXTURE_KEY' } : {}),
             ...(mode === 'self-lid' ? { voicePreferences: { enabled: true, mode: 'text', approvedDestinationKey: resolveTtsConfig({}).destinationKey,
                 chats: { [owner]: { mode: 'mirror' }, '90000000009@s.whatsapp.net': { mode: 'text' } } } } : {}),
             ...(['groups', 'images', 'terminal', 'settings', 'reporting'].includes(mode) ? { allowedGroups: [{ number: '120363000001@g.us' }] } : {}), ...(['images', 'settings'].includes(mode) ? { finalAfterAttachments: false } : {}), status: 'disconnected' }), { mode: 0o600 });
@@ -32,13 +41,16 @@ describe('production phone-control Pi RPC gateway', () => {
         Object.assign(env, { HOME: home, PI_CODING_AGENT_DIR: join(root, 'agent'), PI_OFFLINE: '1', WHATSAPP_NG_LOCALE: 'en',
             WA_PHONE_RPC_METRICS: metricsPath, WA_PHONE_RPC_CONFIG: join(data, 'config.json'), WA_PHONE_RPC_SELF_LID: selfChat ? '1' : '0', WA_PHONE_RPC_STATS: mode === 'stats' ? '1' : '0',
             WA_PHONE_RPC_GROUPS: ['groups', 'settings'].includes(mode) ? '1' : '0', WA_PHONE_RPC_SELF_AUTO: mode === 'self-auto' ? '1' : '0', WA_PHONE_RPC_MODELS: mode === 'models' ? '1' : '0',
-            WA_PHONE_RPC_OPTIONAL: ['images', 'terminal'].includes(mode) ? mode : '', WA_PHONE_RPC_REPORTING: mode === 'reporting' ? '1' : '0',
+            WA_PHONE_RPC_OPTIONAL: ['images', 'terminal'].includes(mode) ? mode : '', WA_PHONE_RPC_REPORTING: mode === 'reporting' ? '1' : '0', WA_PHONE_RPC_SERVER_VOICE: mode === 'server-voice' ? '1' : '0',
+            ...(managed ? { WA_PHONE_RPC_MANAGED: '1', WA_PHONE_RPC_MANAGED_ENDPOINT: endpoint, FIXTURE_KEY: 'synthetic-key', CRISPASR_STT_CMD: JSON.stringify({ executable: process.execPath,
+                args: [join(repo, 'tests/fixtures/managed-speech-server.mjs'), new URL(endpoint).port, 'whisper', 'fixture-loaded-model', 'normal', serverMetrics], cwd: root,
+                endpoint, backend: 'whisper', model: 'fixture-api-model', loadedModel: 'fixture-loaded-model', startupTimeoutMs: 5000 }) } : {}),
             NODE_OPTIONS: `--import=${guard} --import=${join(repo, 'tests/fixtures/phone-control-preload.mjs')}` });
         const child = spawn(process.execPath, ['--experimental-test-module-mocks', cli, '--mode', 'rpc', '--no-session', '--no-extensions', '--no-skills', '--no-prompt-templates', '--tools', 'read,send_wa_message,send_wa_media,send_reaction,list_wa_conversations,get_wa_conversation_history,check_wa_new_messages,request_wa_history,configure_wa_stt,configure_wa_tts'.split(',').filter(name => mode !== 'settings' || name !== 'send_reaction').join(',') + (mode === 'images' ? ',fixture_image' : mode === 'reporting' ? ',write,edit' : ''),
             '--provider', modelFixture ? 'fixture-phone' : 'openai', '--model', modelFixture ? 'model-01' : 'gpt-4o-mini',
             ...(modelFixture ? ['-e', join(repo, 'whatsapp-ng.ts'), '-e', join(repo, 'tests/fixtures/phone-control-rpc.extension.ts')]
                 : ['-e', join(repo, 'tests/fixtures/phone-control-rpc.extension.ts'), '-e', join(repo, 'whatsapp-ng.ts')]),
-            ...(mode === 'autoconnect' ? [] : ['--whatsapp-ng-online']), ...(mode === 'self-lid' ? ['--whatsapp-ng-native-polls'] : [])],
+            ...(automatic || managed ? [] : ['--whatsapp-ng-online']), ...(mode === 'self-lid' ? ['--whatsapp-ng-native-polls'] : [])],
             { cwd: workspace, env, stdio: ['pipe', 'pipe', 'pipe'] });
         const waiters = new Map<string, (record: any) => void>(); const records: any[] = []; let buffer = ''; let stderr = ''; let serial = 0;
         child.stderr.on('data', value => { stderr = (stderr + value).slice(-4000); });
@@ -74,6 +86,38 @@ describe('production phone-control Pi RPC gateway', () => {
         };
         try {
             const initial = await request('get_state');
+            if (managed) {
+                const events = async () => { try { return (await readFile(serverMetrics, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line) as { event: string; pid: number }); } catch { return []; } };
+                const connect = async () => { const menu = prompt('/whatsapp'); await select('Connection'); await select('Connect WhatsApp'); await menu; };
+                const ready = async (count: number) => {
+                    await expect.poll(async () => (await events()).filter(event => event.event === 'model-probe').length, { timeout: 12_000 }).toBeGreaterThanOrEqual(count);
+                    return (await events()).filter(event => event.event === 'spawn').at(-1)!.pid;
+                };
+                if (!automatic) { expect(await events()).toEqual([]); expect((await metrics()).socketStarts).toBe(0); await connect(); }
+                const original = await ready(1); await prompt('fixture-clear-stt');
+                await expect.poll(async () => JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).sttEndpoint, { timeout: 10_000 }).toBeUndefined();
+                await expect.poll(() => { try { process.kill(original, 0); return true; } catch { return false; } }, { timeout: 9000 }).toBe(false);
+                await expect.poll(async () => (await request('get_state')).isStreaming, { timeout: 10_000 }).toBe(false);
+                await prompt('fixture-restore-stt'); const first = await ready(2);
+                await expect.poll(async () => (await request('get_state')).isStreaming, { timeout: 10_000 }).toBe(false);
+                await prompt('/phone-fixture managed-stop'); expect(() => process.kill(first, 0)).not.toThrow();
+                await prompt('fixture-restore-stt');
+                await expect.poll(async () => (await request('get_state')).isStreaming, { timeout: 10_000 }).toBe(false);
+                expect((await events()).filter(event => event.event === 'spawn')).toHaveLength(2); expect(() => process.kill(first, 0)).not.toThrow();
+                await prompt('/phone-fixture cancel-new'); await expect.poll(async () => (await metrics()).cancelled, { timeout: 10_000 }).toBe(1);
+                await prompt('fixture-restore-stt'); await expect.poll(async () => (await request('get_state')).isStreaming, { timeout: 10_000 }).toBe(false);
+                expect((await events()).filter(event => event.event === 'spawn')).toHaveLength(2); expect(() => process.kill(first, 0)).not.toThrow();
+                await request('new_session'); await request('get_state'); expect(() => process.kill(first, 0)).toThrow();
+                if (!automatic) await connect(); const second = await ready(3); expect(second).not.toBe(first);
+                await prompt('/phone-fixture reload'); await request('get_state'); expect(() => process.kill(second, 0)).toThrow();
+                if (!automatic) await connect(); const third = await ready(4); const connectsBeforeOff = (await metrics()).socketStarts;
+                await prompt('/phone-fixture off');
+                await expect.poll(() => { try { process.kill(third, 0); return true; } catch { return false; } }, { timeout: 9000 }).toBe(false);
+                await request('new_session'); await prompt('/phone-fixture reload'); await request('get_state');
+                expect((await events()).filter(event => event.event === 'spawn')).toHaveLength(4); expect((await metrics()).socketStarts).toBe(connectsBeforeOff);
+                expect((await metrics()).modelStarts).toBe(4); expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
+                expect(records.filter(record => record.type === 'extension_error')).toEqual([]); return;
+            }
             if (mode === 'autoconnect') {
                 expect((await metrics()).socketStarts).toBe(1);
                 await expect.poll(async () => JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).status, { timeout: 10_000 }).toBe('connected');
@@ -101,6 +145,19 @@ describe('production phone-control Pi RPC gateway', () => {
                 expect(records.filter(record => record.type === 'agent_start' || record.type === 'extension_error')).toEqual([]);
                 const config = JSON.parse(await readFile(join(data, 'config.json'), 'utf8')); expect(config.operatorJid).toBe(owner); expect(config.autoConnect).toBe(false);
                 expect(config.allowList).toEqual([{ number: '+' + owner.split('@')[0] }]); return;
+            }
+            if (mode === 'server-voice') {
+                await prompt('/phone-fixture stats-start');
+                await expect.poll(async () => (await metrics()).statsSettled, { timeout: 10_000 }).toBe(1);
+                const config = JSON.parse(await readFile(join(data, 'config.json'), 'utf8'));
+                expect(config).toMatchObject({ ttsUseServerVoice: true, ttsModel: 'chatterbox', ttsProtocol: 'openai-compatible', voicePreferences: { enabled: false, mode: 'text' } });
+                expect(config.ttsVoice).toBeUndefined(); expect(config.voicePreferences.approvedDestinationKey).toBeUndefined();
+                const calls = records.filter(record => record.type === 'tool_execution_end' && record.toolName === 'configure_wa_tts');
+                expect(calls).toHaveLength(1); expect(calls[0].isError).not.toBe(true);
+                await request('new_session'); await request('get_state');
+                expect(JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).ttsUseServerVoice).toBe(true);
+                expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
+                expect(records.filter(record => record.type === 'extension_error')).toEqual([]); return;
             }
             if (mode === 'models') {
                 expect(initial.model).toMatchObject({ provider: 'fixture-phone', id: 'model-01' });
