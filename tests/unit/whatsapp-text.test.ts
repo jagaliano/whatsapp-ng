@@ -33,6 +33,32 @@ describe('plain speech projection', () => {
         const literal = 'Read [https://example.test/setup](https://example.test/setup).';
         expect(cleanSpeechText(literal)).toBe(literal);
     });
+    it.each(['─', '━', '╌', '╍', '┄', '┅', '┈', '┉', '═', '–', '—'])('removes standalone horizontal %s rules only from the spoken copy', glyph => {
+        const input = 'Antes\n\n' + glyph.repeat(80) + '\n\nDespués';
+        expect(cleanSpeechText(input)).toBe('Antes\n\nDespués');
+        expect(formatWhatsAppText(input)).toBe(input);
+    });
+    it.each(['  ━ ━ ━  ', '> ──────────', '─━═–—'])('removes spaced, quoted or mixed decorative rules: %s', rule => {
+        expect(cleanSpeechText('Antes\r\n' + rule + '\r\nDespués')).toBe('Antes\n\nDespués');
+    });
+    it('preserves dates, abbreviations, approximation and meaningful inline/short dashes', () => {
+        const input = 'Desde 2022: ~10 equipos; 25 dic. 2024—ene. 2025. C-Lion1.\nA─B y 1–3 no cambian.\nUn signo — conserva su sentido.\n─\n──';
+        expect(cleanSpeechText(input)).toBe(input);
+        expect(formatWhatsAppText(input)).toBe(input);
+    });
+    it('does not let decorative-rule cleanup bypass code, indentation, table or link guards', () => {
+        const rule = '─'.repeat(80);
+        for (const body of ['```txt\nliteral\n```', '~~~\nliteral\n~~~', '    ' + rule,
+            '| A | B |\n| --- | --- |', 'Run `git status`.', 'Read [the guide](https://example.test/setup).']) {
+            expect(cleanSpeechText('Antes\n' + rule + '\n' + body)).toBeUndefined();
+        }
+    });
+    it('keeps separator-only output silent and applies bounds before decorative cleanup', () => {
+        expect(cleanSpeechText('─'.repeat(80))).toBeUndefined();
+        expect(cleanSpeechText('─'.repeat(65_537))).toBeUndefined();
+        const meaningful = 'Resumen\n' + '─'.repeat(2000) + 'dato';
+        expect(cleanSpeechText(meaningful)).toBe(meaningful);
+    });
     it.each(['It takes ~5 minutes.', 'About ~50 MB.', '(~2 s)', '~5 to ~10 min'])('preserves ordinary approximate prose: %s', input => {
         expect(cleanSpeechText(input)).toBe(input);
     });

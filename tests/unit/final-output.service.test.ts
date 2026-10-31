@@ -138,6 +138,18 @@ describe('four-mode final-output coordinator', () => {
             else expect(h.text).not.toHaveBeenCalled();
         }
     });
+    it.each(['voice', 'both', 'mirror'] as const)('omits decorative rules from %s synthesis without rewriting the original answer', async mode => {
+        const rule = '─'.repeat(80);
+        const answer = ['Resumen de prueba:', rule, 'Desde 2022: ~10 equipos. 25 dic. 2024: sin evidencia.', rule, 'Conclusión: faltan datos.'].join('\n\n');
+        const spoken = ['Resumen de prueba:', 'Desde 2022: ~10 equipos. 25 dic. 2024: sin evidencia.', 'Conclusión: faltan datos.'].join('\n\n');
+        const h = setup(mode, 'audio');
+        expect((await h.output.deliver(h.snapshot, answer)).voice?.success).toBe(true);
+        expect(h.prepare).toHaveBeenCalledOnce();
+        expect(h.prepare.mock.calls[0][0]).toBe(spoken);
+        expect(h.voice).toHaveBeenCalledOnce();
+        if (mode === 'both') expect(h.text.mock.calls[0][1]).toBe(answer);
+        else expect(h.text).not.toHaveBeenCalled();
+    });
     it('keeps real inline code, commands, tables and fenced code as complete text', async () => {
         for (const answer of ['Run `git status`.', 'Use `const n = 42`.', '```ts\nconst n = 42;\n```', '~~~sh\ngit status\n~~~',
             'git status', '| Key | Value |\n| --- | --- |\n| n | 42 |']) {

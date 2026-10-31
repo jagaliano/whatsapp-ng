@@ -82,7 +82,7 @@ export function cleanSpeechText(text: string, options: { allowLinkLabels?: boole
         if (/^\s*(?:`{3,}|~{3,})/.test(raw) || raw.includes('|')
             || (/^(?: {4,}|\t)\S/.test(raw) && !/^\s*[-+*•]\s+/.test(raw))) return;
         let line = raw.replace(/^ {0,3}(?:>[ \t]?)+/, '').trim();
-        if (/^(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(line)) { output.push(''); continue; }
+        if (/^(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,}|(?:[─━╌╍┄┅┈┉═–—][ \t]*){3,})$/.test(line)) { output.push(''); continue; }
         if (line.length <= 1024) line = line.replace(/^#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/, '$1');
         line = line.replace(/^[-+*•][ \t]+/, '');
         if (/^(?:`{3,}|~{3,})/.test(line)) return;

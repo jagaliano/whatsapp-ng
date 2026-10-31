@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Remove standalone Unicode horizontal divider lines from the spoken copy of replies, preserving paragraph breaks, original displayed text and code/link/table safeguards. Dates, names, approximation signs and meaningful dashes are unchanged; no provider or transcription-accuracy claim.
+
 ## 1.1.2 — 2026-10-31
 
 - Raise the shared speech synthesis budget, including queue wait, from 60 to 180 seconds for slower providers. Preserve cancellation, the 2,000-character/8 MiB/queue limits, separate Edge connection/inactivity limits and STT budgets; this does not guarantee that every maximum-length reply completes.
