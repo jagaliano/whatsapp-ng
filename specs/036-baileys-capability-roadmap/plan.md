@@ -1,7 +1,7 @@
 ---
 title: "feat: Harden and extend the Baileys integration"
 type: feat
-status: active
+status: complete
 date: 2026-10-21
 origin: specs/036-baileys-capability-roadmap/spec.md
 deepened: 2026-10-21
@@ -11,6 +11,8 @@ deepened: 2026-10-21
 
 > Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
 
+
+**Record status:** Historical implementation record; Phases 1–3 complete within their recorded scope. Historical live backfill/receipt limits remain in the evidence below; Phase 4 remains deferred. See [completed tasks](tasks.md).
 
 **Feature**: `036-baileys-capability-roadmap` | **Spec**: [spec.md](spec.md) | **Tasks**: [tasks.md](tasks.md)
 **Implementation status**: Phases 1–2 (U1–U7) implemented and validated. Phase 2 is on `feat/baileys-everyday-usefulness`, based on `948f539`; the fork owner subsequently authorized committing, pushing to the fork and opening an upstream PR dependent on Phase 1 PR #14. This is publication approval, not upstream maintainer approval. Phase 3 is implemented on `feat/baileys-conversation-fidelity` from `875ad9e`; requested independent review/corrections, final automated validation and representative authorized live checks are complete with the explicit history/receipt limits below. `PR3.md` is a local ignored handoff. After that stop gate, the fork owner separately authorized committing, pushing to the fork and opening an upstream PR dependent on PRs #14 and #15. This is fork publication approval, not upstream maintainer approval.
@@ -306,7 +308,7 @@ flowchart TB
 
 ### Phase 1: Foundation
 
-- [ ] U1. **Normalize all inbound events and bound replay processing**
+- [x] U1. **Normalize all inbound events and bound replay processing**
 
 **Goal / requirements**: Handle every relevant upsert item without history/duplicate prompts; R1, R11.
 **Dependencies**: None.
@@ -328,7 +330,7 @@ flowchart TB
 
 **Verification**: Batch-to-Pi integration fixtures show no first-message-only assumption remains. Listener errors are observable; no unhandled promise rejection escapes the socket callback.
 
-- [ ] U2. **Resolve verified identities without losing transport addresses**
+- [x] U2. **Resolve verified identities without losing transport addresses**
 
 **Goal / requirements**: PN/LID-aware allowlists and complete scoped identity; R2, R11.
 **Dependencies**: U1.
@@ -347,7 +349,7 @@ flowchart TB
 
 **Verification**: Resolver/service/tool fixtures agree on identity and destination; existing contact/group configuration remains readable without rewriting credentials.
 
-- [ ] U3. **Preserve full message keys and unify reliable send results**
+- [x] U3. **Preserve full message keys and unify reliable send results**
 
 **Goal / requirements**: Complete lookup/receipt/reaction targets and stable retries; R4, R11.
 **Dependencies**: U1, U2.
@@ -366,7 +368,7 @@ flowchart TB
 
 **Verification**: Existing text result fields and branding remain compatible; all sends record acceptance once, and no result claims recipient delivery without receipts.
 
-- [ ] U4. **Bind replies to consumed request provenance**
+- [x] U4. **Bind replies to consumed request provenance**
 
 **Goal / requirements**: Destination-safe automatic responses/tools in the shared session; R3, R11.
 **Dependencies**: U1–U3.

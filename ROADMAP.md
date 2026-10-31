@@ -8,7 +8,7 @@ The existing [extension improvement records](specs/039-extension-improvements/) 
 
 | Item | Goal | Status |
 | --- | --- | --- |
-| R1 | Fuzzy search in the WhatsApp `/model` command | Implemented in `1.1.0-rc.2`; publication pending |
+| R1 | Fuzzy search in the WhatsApp `/model` command | Delivered in stable `1.1.0` from the prepared RC2 source |
 | R2 | Optional managed CrispASR HTTP servers through `CRISPASR_STT_CMD` and `CRISPASR_TTS_CMD` | Implemented; local macOS STT/TTS/both cases accepted; broader qualification open |
 | R3 | General code review, followed by focused corrections | Planned; review in bounded areas |
 | R4 | Improve and maintain the documentation | Ongoing; extend the current guides |
@@ -19,7 +19,7 @@ Ship small, independently useful changes. This is not a requirement to finish th
 
 ## R1. Fuzzy search in WhatsApp `/model` — implemented
 
-**Status:** implemented for `1.1.0-rc.2` in commit `5b0661e`. RC2 has not been published.
+**Status:** delivered in stable `1.1.0`; originally implemented for `1.1.0-rc.2` in commit `5b0661e`. The prepared RC2 source was promoted to stable rather than published as RC2. See the [stable release record](CHANGELOG.md#110--2026-10-29).
 
 ### Delivered behavior
 
@@ -39,7 +39,7 @@ Ship small, independently useful changes. This is not a requirement to finish th
 - [x] The real Pi production-entry RPC fixture exercises search, pagination and exact selection using synthetic transport/provider data, isolated HOME and blocked network. This is not live WhatsApp evidence.
 - [x] Native Anthropic Opus 5.5 review completed; its private-placeholder search finding was corrected with failing-before/passing-after regressions. Focused re-review returned **OK**.
 - [x] Full source validation passed **1,408 tests across 83 files**, with zero failures/skips; lint, typecheck and whitespace checks passed. The user subsequently confirmed live owner-chat checks after reloading the extension. That live evidence is operator-attested, not independent per-case instrumentation or all-platform certification.
-- [x] Phone help, [README search guidance](README.md#phone-controls) and the [changelog](CHANGELOG.md#unreleased) describe the behavior and shared-session effect.
+- [x] Phone help, [README search guidance](README.md#phone-controls) and the [stable changelog](CHANGELOG.md#110--2026-10-29) describe the behavior and shared-session effect.
 
 Implemented in the existing [command router](src/services/whatsapp-command.router.ts) and [menu service](src/services/command-menu.service.ts), with [router regressions](tests/unit/whatsapp-command.router.test.ts) and [production-entry RPC coverage](tests/unit/phone-control.rpc.test.ts); no second phone-control stack or dependency was added.
 
@@ -213,8 +213,8 @@ Use the [manual acceptance guide](tests/manual/prerelease-acceptance.md) to sele
 
 ## Suggested delivery sequence
 
-1. R1 implementation, review, regressions and user-confirmed live checks are complete; publication of RC2 remains a separately authorized release step.
-2. Correct independent-review findings in R2, then qualify bounded native STT/TTS cases and platform behavior without treating synthetic checks as live evidence.
+1. R1 implementation, review, regressions and user-confirmed live checks are complete; it shipped in stable `1.1.0` from the prepared RC2 source. RC2 itself was not published.
+2. R2 review corrections and local macOS native STT/TTS/combined acceptance are complete; broader platform and real WhatsApp qualification remain open. Keep synthetic, native-inference and client evidence distinct.
 3. Keep R5 deferred until upstream accepts PR #21 or provides a suitable supported API. Once unblocked and revalidated, it can ship independently of managed speech servers.
 4. Use R3 review and R4 documentation continuously around each coherent change, not only at the end.
 5. Select R6 suggestions independently. Prioritize diagnostics and scoped acceptance evidence that support the features being shipped; do not turn the full list into a new release-blocking program.

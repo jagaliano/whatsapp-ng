@@ -1,6 +1,8 @@
 # Stable promotion plan
 
-Historical promotion record, written during release integration using the existing release procedure. See [requirements](spec.md) and [tasks](tasks.md). These steps do not authorize another publication.
+**Record status:** Historical pre-publication checkpoint, not an active implementation backlog. [Task checkboxes](tasks.md) intentionally retain their pre-commit state; post-commit release outcomes require the original receipts and are not asserted here. This clarification does not authorize re-preparation, publication or retries.
+
+This promotion record was written during release integration using the existing release procedure. See [requirements](spec.md).
 
 1. Verify clean source, public version absence and an authenticated listed maintainer. Initial npm E401 stopped work before any publication; the operator explicitly approved interactive npm login and completed browser authentication locally. No credentials/OTPs were read or copied by the agent.
 2. Run `npm run release:version -- 1.1.0` on clean source, selecting `latest` without Git tagging or dependency upgrades. Update current docs and changelog; retain dated RC2/discovery evidence and known risks.

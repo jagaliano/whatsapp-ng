@@ -1,6 +1,8 @@
 # RC2 preparation plan
 
-Historical RC2 integration record, added after implementation. See [requirements](spec.md), [tasks](tasks.md) and [dated evidence/limits](validation.md); this is not authorization to repeat release actions.
+**Record status:** Historical pre-publication checkpoint, not an active implementation backlog. RC2's prepared source was later promoted to [stable 1.1.0](../041-stable-1.1.0/plan.md), rather than published as RC2. [Task checkboxes](tasks.md) intentionally retain this pre-commit checkpoint; post-commit release outcomes require the original receipts and are not asserted here. This clarification does not authorize re-preparation, publication or retries.
+
+This integration record was added after implementation; see [requirements](spec.md) and [dated evidence/limits](validation.md).
 
 1. Inspect the existing working tree and publication scripts. Keep `1.1.0-rc.2`; confirm it is absent from the public registry before preparing a new immutable candidate. Do not upgrade dependencies or alter npm tags.
 2. Reproduce the reported npm pipeline in an isolated, credential-free CLI environment. Compare exact package lookup, search limits/narrowing and direct/filter Pi pages. Record public metadata without credentials or private account material.

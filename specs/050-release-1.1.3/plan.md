@@ -1,5 +1,7 @@
 # Plan
 
+**Record status:** Historical pre-publication checkpoint, not an active implementation backlog. [Task checkboxes](tasks.md) intentionally retain their pre-commit state; [tracked validation](validation.md) describes that checkpoint. Post-commit release outcomes require the original receipts and are not asserted here. This clarification does not authorize re-preparation, publication or retries.
+
 1. Confirm clean `39b2f1b`, installed pi-subagents, exact native Opus 5.5/high read-only configuration and narrow review range. Freeze public files/hashes and dispatch one fresh reviewer with an explicit report binding; keep source immutable during review.
 2. Independently preflight public registry/audits/auth/attempt state; record but do not treat metadata as future reservation. Verify actual completed reviewer/model/tool evidence and findings/coverage. Correct confirmed defects test-first and document optional/pre-existing dispositions separately.
 3. Run affected/full isolated source checks, inspect native skips, validate changed Markdown links/anchors and candidate secrets/diff. Commit only required corrections/records so clean-tree versioning is possible. No dependency-resolution updates without additional owner approval.

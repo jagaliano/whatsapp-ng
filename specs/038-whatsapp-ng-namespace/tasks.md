@@ -8,8 +8,12 @@
 - [x] N006 Run full/native/source/static/actual isolated entry/package/ownership/Linux checks.
 - [x] N007 Exact reviewer preflight/dispatch; confirm actual model and record initial findings (BLOCK; remediation/re-review remains N008).
 - [x] N008 Add failing regressions for findings, correct and retest/re-review.
-- [ ] N009 Queue authorized real migration; coordinate full process shutdown and verify state and bounded live behavior.
+- [x] N009 Coordinate the authorized cold-process handoff and real atomic migration; verify state preservation offline. The [validation record](validation.md#status) confirms the completed move and offline verification, not live connectivity.
 
-Qualification and exact-model review dispositions: [validation record](validation.md). N009 remains an owning-process handoff, not permission for hot migration or forced termination. The owner approved preserving the new unused initialization aside; the guarded launcher passed 12 fixtures and exact-model review. No real move/request has occurred yet; restart and post-verification remain.
+## Deferred acceptance — not migration implementation
 
-No publication or unapproved Git delivery.
+- [ ] N009-live Obtain separate bounded authorization for post-migration live connection/client verification and record only observed results. This is the unperformed live portion of the original N009, not a new migration or standing execution permission.
+
+Qualification, exact-model review and completed handoff dispositions: [validation record](validation.md). The guarded launcher passed 12 fixtures and exact-model review; full-process exit, cold-start move and offline post-verification subsequently passed. Preserve those results and private-state boundaries; do not repeat the migration, force termination or infer live acceptance from offline evidence.
+
+No publication or unapproved Git delivery is authorized by this record.

@@ -13,4 +13,4 @@
 - [x] M043-8: run focused/full source checks and focused same-model re-review.
 - [x] M043-9: all three local native pipelines produced expected results; the owner accepted the disclosed auxiliary resources and directed that they not block completion. Preserve original asset-budget history without claiming strict three-file compliance. No rerun or further native effects were needed.
 
-No model/server/account/provider/Git/release operations are implied by the implementation tasks; the owner's subsequent bounded acceptance request is documented in the review record and still requires its operational details to be settled.
+Local native acceptance is complete with the [owner-accepted auxiliary-resource exception](review.md#owner-disposition--2026-10-30-utc). Broader platform and real WhatsApp acceptance remain open. These implementation/acceptance records imply no further model/server/account/provider/Git/release operations or rerun.

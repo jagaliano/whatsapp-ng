@@ -1,5 +1,7 @@
 # Plan
 
+**Record status:** Historical pre-publication checkpoint, not an active implementation backlog. [Task checkboxes](tasks.md) intentionally retain their pre-commit state; [validation](validation.md) and [requalification](requalification.md) describe their specific checkpoints. Post-commit release outcomes require the original receipts and are not asserted here. This clarification does not authorize re-preparation, publication or retries.
+
 1. Freeze the clean reviewed commit range and supporting public files. Verify installed subagent package, exact registry model, read-only tools/no extensions and fresh context. Dispatch one authorized Opus reviewer; keep independent release preflight separate from the frozen source.
 2. Verify actual reviewer/model/tool evidence and source integrity. Validate each finding against current owners/callers/tests; add a failing regression before a confirmed runtime correction. Document actionable dispositions and any necessary focused re-review. Do not turn future roadmap proposals into implementation.
 3. Apply only the subsequently approved `follow-redirects` 1.16.2 resolution patch, asserting the manifest/other lock entries are unchanged. Use failed/clean production audits as dependency-remediation baseline/result; disclose remaining development and existing-consumer-lock limits. Run source checks in disposable credential-free homes with network guards and synthetic providers. Scan intended files and validate links; commit corrections/records on main so the existing clean-tree version command can run.

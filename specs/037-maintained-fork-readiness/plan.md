@@ -1,7 +1,7 @@
 ---
 title: "whatsapp-ng maintenance and release readiness"
 type: maintenance
-status: active
+status: historical
 date: 2026-10-22
 baseline: d415f0ba7f392b15d5b635f5b3aa9f62ab58c25c
 ---
@@ -10,6 +10,8 @@ baseline: d415f0ba7f392b15d5b635f5b3aa9f62ab58c25c
 
 > Historical pre-namespace record. Identifier-only references are normalized for this maintained tree; dated results/checksums still describe their original artifacts. Legacy names and paths are mapped in [README.md](../../README.md#fork-and-legacy-names); current namespace work is specified in feature 038.
 
+
+**Record status:** Historical maintenance/qualification record. M1–M4 and prepare-only M5 work completed within their documented scope; see [final M3 disposition](#18-final-m3-disposition), [final-runtime M4 disposition](#19-final-runtime-m4-refresh-disposition) and [M5 preparation](#20-m5-preparation-only). Publication was outside this checkpoint, not unfinished implementation. Later release decisions have separate [records](../README.md); historical private-guard/authorization statements below are not current package metadata or standing execution permission.
 
 **Updated:** 2026-10-23
 
@@ -223,9 +225,11 @@ All unofficial personal-account transports retain platform-policy, account-restr
 
 ## 8. Immediate next action and open gates
 
-**Current gate:** M0/M2 and reviewed M4 live evidence are complete. The owner requested closing M1, performed local npm browser login, and the read-only identity/security/name checks passed (section 16). Existing M1 legal/packaging/loader work remains in place; final documentation/artifact refresh records the account closure without publishing. Next is remaining M3 artifact/platform/exclusivity qualification, then separately approved M5. Do not start Phase 4, patch Baileys or publish automatically. Upstream PR merges are not a prerequisite.
+**Historical checkpoint before M3 closure:** retained to preserve the decision sequence. Later [M3](#18-final-m3-disposition), [M4](#19-final-runtime-m4-refresh-disposition) and [prepare-only M5](#20-m5-preparation-only) dispositions supersede this section's open-gate status; it is not a current work queue.
 
-M0 decisions and historical checkpoints are recorded below. Current status:
+**Gate at that checkpoint:** M0/M2 and reviewed M4 live evidence are complete. The owner requested closing M1, performed local npm browser login, and the read-only identity/security/name checks passed (section 16). Existing M1 legal/packaging/loader work remains in place; final documentation/artifact refresh records the account closure without publishing. Next is remaining M3 artifact/platform/exclusivity qualification, then separately approved M5. Do not start Phase 4, patch Baileys or publish automatically. Upstream PR merges are not a prerequisite.
+
+M0 decisions and historical checkpoints are recorded below. Status at that checkpoint:
 
 - M1: pre-publication account readiness verified; no name reservation/ownership or first-create approval is claimed. Keep the private guard.
 - M2: dependency/security/reproducibility slice complete.

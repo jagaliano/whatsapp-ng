@@ -1,5 +1,7 @@
 # Release plan
 
+**Record status:** Historical pre-publication checkpoint, not an active implementation backlog. [Task checkboxes](tasks.md) intentionally retain their pre-commit state; [tracked validation](validation.md) describes that checkpoint. Post-commit release outcomes require the original receipts and are not asserted here. This clarification does not authorize re-preparation, publication or retries.
+
 1. Verify main/origin, source scope, npm version absence/authentication, hooks and publication-attempt state.
 2. Run isolated checks/audits and scan the explicit public candidate. Commit approved feature/docs source on main so the guarded version command can run on a clean tree.
 3. Run `npm run release:version -- 1.1.1`, update changelog/records and validate version-only package/lock edits. Commit and push reviewed source using existing conventions; no history rewrite or tag.

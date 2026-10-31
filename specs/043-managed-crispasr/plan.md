@@ -1,5 +1,7 @@
 # Managed speech implementation plan
 
+**Record status:** Implementation and local macOS native STT/TTS/combined acceptance complete, with the [owner-accepted auxiliary-resource exception](review.md#owner-disposition--2026-10-30-utc). Broader platform and real WhatsApp acceptance remain open, not unfinished implementation. See [source validation](validation.md) and [completed tasks](tasks.md); this record grants no further native or live execution permission.
+
 Scope: [spec.md](spec.md); work items: [tasks.md](tasks.md). Preserve existing speech providers, consent and R5 deferral. Decisions and results are dated records, not standing execution permission.
 
 1. Add failing synthetic descriptor/lifecycle tests: independent roles, occupied ports/leases, wrong backend/model, cancellation/staleness, failure retention, exit, shutdown and parent death.
