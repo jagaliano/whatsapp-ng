@@ -509,7 +509,7 @@ export default function (pi: ExtensionAPI) {
             'Individually approved tool image blocks may be uploaded automatically to the verified owning WhatsApp chat. They are not an explicit answer: provide the final explanation even in legacy caption/tool-only mode. Do not additionally resend a projected image unless asked. Paths/URLs in tool text are never automatic upload instructions; terminal screenshots are never projected.',
             sessionManager.getFinalAfterAttachments()
                 ? 'Sending an attachment does not replace the final explanation. After using send_wa_media, provide a useful final answer; it will be delivered automatically.'
-                : 'Legacy caption/tool-only mode is enabled: an accepted, in-flight or delivery-unknown attachment to the owning chat suppresses automatic final text. Put the explanation in the caption or use send_wa_message explicitly.',
+                : 'Legacy caption/tool-only mode is enabled: an accepted, in-flight or delivery-unknown attachment to the owning chat suppresses the automatic final reply, including voice. Put the explanation in the attachment caption or use send_wa_message explicitly after that attachment covers the final. Before coverage, normal spoken-reply guards still apply.',
             'Configured voice delivery is owned by automatic finalization. Do not synthesize or send a second spoken copy of the final answer. Long/code-heavy answers retain complete text rather than a new model-generated summary.',
             'An explicit accepted, in-flight or delivery-unknown text send already covers that chat: do not repeat it. Acceptance is not proof of recipient delivery. Never automatically retry an uncertain send.',
             'An ambiguous or stale request has no default destination. Do not guess a chat or reconstruct a JID from a displayed number.'
@@ -863,8 +863,8 @@ export default function (pi: ExtensionAPI) {
     pi.registerTool({
         name: "send_wa_message",
         label: "Send WhatsApp Message",
-        description: "Explicit text delivery to a known WhatsApp contact/group JID, not normal replies: those are delivered automatically. Same-chat sends, including quotes, are refused during approved automatic spoken turns. If jid is omitted, uses the unique owning conversation. Ambiguous or terminal-only turns require an explicit JID; idle manual calls retain last-conversation/operator fallback.",
-        promptSnippet: "send_wa_message({message, jid?, quote?}) - Explicit text only. To answer the current WhatsApp request, provide your normal final answer without this tool. Approved Voice/Both/audio-Mirror turns reject owning-chat text, even with a JID or quote. Other-chat/manual text remains available. Omit jid only for a uniquely owned conversation; never reconstruct it from displayed digits. Acceptance is not proof of recipient delivery. Never duplicate or automatically retry a successful or delivery-unknown send.",
+        description: "Explicit text delivery to a known WhatsApp contact/group JID, not normal replies: those are delivered automatically. Same-chat sends, including quotes, are refused while an approved automatic spoken final remains eligible. Already-covered legacy caption/tool-only responses retain explicit explanation. If jid is omitted, uses the unique owning conversation. Ambiguous or terminal-only turns require an explicit JID; idle manual calls retain last-conversation/operator fallback.",
+        promptSnippet: "send_wa_message({message, jid?, quote?}) - Explicit text only. To answer the current WhatsApp request, provide your normal final answer without this tool. Approved Voice/Both/audio-Mirror turns reject owning-chat text while the automatic final is eligible, even with a JID or quote. An already-covering legacy attachment permits explicit explanation. Other-chat/manual text remains available. Omit jid only for a uniquely owned conversation; never reconstruct it from displayed digits. Acceptance is not proof of recipient delivery. Never duplicate or automatically retry a successful or delivery-unknown send.",
         parameters: Type.Object({
             jid: Type.Optional(Type.String({ description: "WhatsApp JID of the recipient" })),
             recipient_jid: Type.Optional(Type.String({ description: "Alternative name for jid" })),
@@ -895,7 +895,7 @@ export default function (pi: ExtensionAPI) {
             const message = params.message ?? '';
 
             const snapshot = router.snapshot();
-            const protectsSpeech = snapshot ? finalOutput.protectsAutomaticSpeech(snapshot) : false;
+            const protectsSpeech = snapshot ? finalOutput.protectsAutomaticSpeech(snapshot) && router.canFinalize(snapshot) : false;
             const protectedReply = (jid: string): boolean => {
                 const target = snapshot?.canonicalTarget && canonicalConversation(snapshot.canonicalTarget);
                 return Boolean(protectsSpeech && target && canonicalConversation(jid) === target);

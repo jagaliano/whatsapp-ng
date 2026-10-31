@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- Protect approved automatic Voice/Both/audio-Mirror replies from accidental same-chat text-tool sends, including aliases and native quotes. Refuse before sending and direct the model to its normal final answer; preserve other-chat/manual sends, consent, text fallback and duplicate/unknown-delivery safety. Clarify tool guidance and whole-reply suppression diagnostics.
+- Protect eligible approved Voice/Both/audio-Mirror finals from accidental same-chat text-tool sends, including aliases and native quotes. Refuse before sending and direct the model to its normal final answer; retain explicit explanations once a legacy caption/tool-only attachment already covers the final. Preserve consent, manual sends, fallback and duplicate/unknown-delivery safety; clarify late-fence outcomes and whole-reply diagnostics.
+- Refresh the maintainer lock from `follow-redirects` 1.16.1 to patched 1.16.2 within the existing Axios range, with no direct-dependency or unrelated resolution changes. Fresh source/consumer audits remain separate from existing consumer locks, host SDK/native-binary exposure and newly disclosed development-tool findings.
 
 ## 1.1.1 — 2026-10-30
 

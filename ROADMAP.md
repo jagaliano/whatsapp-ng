@@ -168,10 +168,10 @@ Use the [manual acceptance guide](tests/manual/prerelease-acceptance.md) to sele
 
 **Status:** proposed (owner-requested 2026-10-30); not implemented.
 
-**Observed problem.** In `mirror` mode with an approved Edge destination and an audio input, a reply was delivered as text only. Configuration was correct. Local probes showed intermittent Edge failures: `TtsService.prepare` failed 1 of 4 runs with `Edge speech synthesis failed`, and direct `msedge-tts@2.1.1` failed 1 of 3 runs with `Stream closed before the synthesis completed (no turn.end received)`. The runtime log had no speech entry, because every layer drops the cause:
+**Reported context (2026-10-30; owner-supplied, not independently verified here).** A text-only `mirror` reply was reported despite reported Edge approval. Supplied local probes reported `TtsService.prepare` failing 1 of 4 runs with `Edge speech synthesis failed`, and direct `msedge-tts@2.1.1` failing 1 of 3 with `Stream closed before the synthesis completed (no turn.end received)`. These probes do not establish the cause of that reply: an explicit same-chat send can suppress the whole final before Edge is called, as addressed by [047](specs/047-spoken-reply-guard/plan.md). Separately, when synthesis actually fails, the current pipeline loses diagnostic detail:
 
 - [`edge-tts.worker.mjs`](src/services/edge-tts.worker.mjs) catches everything and posts only `{ ok: false }`.
-- [`EdgeTtsService.write`](src/services/edge-tts.service.ts) maps every failure, including worker exit, to one generic `TtsError`.
+- [`EdgeTtsService.write`](src/services/edge-tts.service.ts) maps worker failures and worker exit to one generic `TtsError`; cancellation and client-unavailable errors remain distinct.
 - In [`FinalOutputCoordinator.deliver`](src/services/final-output.service.ts), the `prepareSpeech` `catch` falls back to text without a retry or log. The only signal is the terminal-only `speech.textOnly` notice, so a phone user just sees text.
 
 **1. Bounded synthesis retry.**

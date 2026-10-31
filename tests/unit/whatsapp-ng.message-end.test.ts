@@ -454,7 +454,7 @@ describe('whatsapp-ng owned turn delivery', () => {
         expect(result.isError).toBe(true); expect(JSON.parse(result.content[0].text).attempts).toBe(0);
         expect(mocks.whatsappService.sendMessage).not.toHaveBeenCalled(); expect(mocks.recentsService.recordMessage).not.toHaveBeenCalled();
     });
-    it.each(['alias', 'transport'])('fences a newly verified owning-chat %s during actual sender preflight', async change => {
+    it.each(['alias', 'transport', 'admission'])('fences a newly verified owning-chat %s during actual sender preflight', async change => {
         const { pi, ctx } = await setup(); selectSpeech('voice'); await beginOwned(pi, ctx);
         const owner = '5511999998888@s.whatsapp.net'; const other = '15550000003@s.whatsapp.net';
         const { MessageSender } = await import('../../src/services/message.sender.ts');
@@ -473,10 +473,15 @@ describe('whatsapp-ng owned turn delivery', () => {
         const pending = pi.tools.get('send_wa_message').execute('late-alias', { jid: other, message: 'Wrong text' });
         await paused;
         if (change === 'alias') mocks.whatsappService.canonicalConversation.mockImplementation(jid => jid === other ? owner : jid);
+        if (change === 'admission') mocks.sessionManager.getReplyAdmissionKey.mockReturnValue('revoked-admission');
         resume();
         const result = await pending; expect(result.isError).toBe(true); expect(sendMessage).not.toHaveBeenCalled();
+        const outcome = JSON.parse(result.content[0].text);
+        expect(outcome).toMatchObject({ success: false, attempts: 1, error: 'The WhatsApp account or session changed before transmission. Send a fresh request if still needed.' });
+        expect(outcome.delivery).toBeUndefined(); expect(service.registerOutgoing).toHaveBeenCalledOnce();
+        expect(service.recordSendOutcome).toHaveBeenCalledWith(change === 'transport' ? owner : other, expect.any(String), expect.objectContaining({ success: false, attempts: 1 }));
         expect(mocks.recentsService.recordMessage).not.toHaveBeenCalled(); await finalTurn(pi, ctx, 'Normal final');
-        expect(mocks.whatsappService.sendContent).toHaveBeenCalledOnce();
+        expect(mocks.whatsappService.sendContent).toHaveBeenCalledTimes(change === 'admission' ? 0 : 1);
     });
     it('keeps other-chat sends available without covering the owning spoken final', async () => {
         const { pi, ctx } = await setup(); selectSpeech('voice'); await beginOwned(pi, ctx);
@@ -753,6 +758,55 @@ describe('whatsapp-ng owned turn delivery', () => {
         expect(ctx.ui.notify).toHaveBeenCalledWith('Sent reply to WhatsApp contact', 'info');
     });
 
+    it.each((['voice', 'both', 'mirror'] as const).flatMap(mode => [
+        { mode, explain: false, outcome: 'accepted', allowed: true },
+        { mode, explain: false, outcome: 'unknown', allowed: true },
+        { mode, explain: false, outcome: 'failed', allowed: false },
+        { mode, explain: true, outcome: 'accepted', allowed: false },
+        { mode, explain: true, outcome: 'unknown', allowed: false }
+    ]))('preserves explicit explanation after $outcome attachment in $mode (final explanation=$explain)', async ({ mode, explain, outcome, allowed }) => {
+        const root = await mkdtemp(join(tmpdir(), 'wa-spoken-legacy-'));
+        try {
+            const file = join(root, 'fixture.md'); await writeFile(file, 'Synthetic attachment.');
+            const { pi, ctx } = await setup(); selectSpeech(mode); mocks.sessionManager.getFinalAfterAttachments.mockReturnValue(explain);
+            if (mode === 'mirror') mocks.extractIncomingText.mockReturnValue({ kind: 'audio', text: 'Fixture audio' });
+            await beginOwned(pi, ctx);
+            if (outcome !== 'accepted') mocks.whatsappService.sendContent.mockImplementationOnce(async request => {
+                const result = { success: false, attempts: outcome === 'unknown' ? 1 : 0, ...(outcome === 'unknown' ? { delivery: 'unknown' as const } : {}) };
+                await request.onSettled?.(result); return result as Awaited<ReturnType<typeof mocks.whatsappService.sendContent>>;
+            });
+            await pi.tools.get('send_wa_media').execute('attachment', { path: file, type: 'document' }, new AbortController().signal, undefined, { ...ctx, cwd: root });
+            await pi.handlers.get('message_start')!(makeAssistantEvent(''), ctx);
+            const result = await pi.tools.get('send_wa_message').execute('explanation', { message: 'Explicit explanation' });
+            expect(result.isError).toBe(!allowed);
+            expect(mocks.whatsappService.sendMessage).toHaveBeenCalledTimes(allowed ? 1 : 0);
+            await pi.handlers.get('message_start')!(makeAssistantEvent(''), ctx); await finalTurn(pi, ctx, 'Normal explanation');
+            if (allowed) {
+                expect(mocks.whatsappService.sendMessage).toHaveBeenCalledOnce(); expect(mocks.whatsappService.sendContent).toHaveBeenCalledOnce();
+                expect(mocks.speechPrepare).not.toHaveBeenCalled();
+            } else expect(mocks.speechPrepare).toHaveBeenCalledOnce();
+        } finally { await rm(root, { recursive: true, force: true }); }
+    });
+    it('preserves legacy explicit explanation while the attachment is still in flight', async () => {
+        const root = await mkdtemp(join(tmpdir(), 'wa-spoken-pending-'));
+        try {
+            const file = join(root, 'fixture.md'); await writeFile(file, 'Synthetic pending attachment.');
+            const { pi, ctx } = await setup(); selectSpeech('voice'); mocks.sessionManager.getFinalAfterAttachments.mockReturnValue(false);
+            await beginOwned(pi, ctx); let started!: () => void; let finish!: () => void;
+            const entered = new Promise<void>(resolve => { started = resolve; }); const gate = new Promise<void>(resolve => { finish = resolve; });
+            mocks.whatsappService.sendContent.mockImplementationOnce(async request => {
+                started(); await gate; const result = { success: true, messageId: 'ATTACHMENT', attempts: 1 }; await request.onSettled?.(result); return result;
+            });
+            const pending = pi.tools.get('send_wa_media').execute('attachment', { path: file, type: 'document' }, new AbortController().signal, undefined, { ...ctx, cwd: root });
+            await entered;
+            try {
+                const result = await pi.tools.get('send_wa_message').execute('explanation', { message: 'Explicit explanation' });
+                expect(result.isError).toBe(false);
+            } finally { finish(); await pending; }
+            await finalTurn(pi, ctx, 'Redundant final'); expect(mocks.whatsappService.sendMessage).toHaveBeenCalledOnce();
+            expect(mocks.speechPrepare).not.toHaveBeenCalled();
+        } finally { await rm(root, { recursive: true, force: true }); }
+    });
     it.each([true, false])('applies final-after-attachment preference %s without replaying the final', async explain => {
         const root = await mkdtemp(join(tmpdir(), 'wa-a1-media-'));
         try {
