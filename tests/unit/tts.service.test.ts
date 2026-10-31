@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { TtsService, type TtsSynthesisOptions } from '../../src/services/tts.service.ts';
-import { resolveTtsConfig, type TtsConfig } from '../../src/services/tts-config.ts';
+import { resolveTtsConfig, TTS_SYNTHESIS_TIMEOUT_MS, type TtsConfig } from '../../src/services/tts-config.ts';
 
 const mocks = vi.hoisted(() => ({ edge: vi.fn(), media: vi.fn(), fetch: vi.fn(), beforeRemove: vi.fn() }));
 vi.mock('node:fs/promises', async importOriginal => {
@@ -39,7 +39,7 @@ describe('bounded speech preparation, consent and lifecycle', () => {
         await Promise.all(artifacts.splice(0).map(artifact => artifact.dispose()));
         vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true });
     });
-    const create = (timeout = 60_000) => {
+    const create = (timeout?: number) => {
         const service = new TtsService({ workspaceRoot: root, mediaRoot: media, synthesisTimeoutMs: timeout });
         services.push(service); return service;
     };
@@ -124,6 +124,53 @@ describe('bounded speech preparation, consent and lifecycle', () => {
         const started = hold(); const service = create(); let current = true;
         const pending = prepare(service, {}, { isCurrent: () => current }); await started;
         current = false; await expect(pending).rejects.toThrow('cancelled');
+        expect(await readdir(media)).toEqual([]);
+    });
+    it('uses a bounded 180-second default while permitting shorter explicit deadlines', () => {
+        expect(TTS_SYNTHESIS_TIMEOUT_MS).toBe(180_000);
+        for (const synthesisTimeoutMs of [0, -1, 180_001, Number.NaN, Number.POSITIVE_INFINITY]) {
+            expect(() => new TtsService({ workspaceRoot: root, mediaRoot: media, synthesisTimeoutMs })).toThrow('Invalid speech deadline');
+        }
+        expect(create(180_000)).toBeInstanceOf(TtsService);
+        expect(create(60_000)).toBeInstanceOf(TtsService);
+    });
+    it('allows default-budget synthesis beyond sixty seconds to complete without retry', async () => {
+        vi.useFakeTimers();
+        let began!: () => void; const started = new Promise<void>(resolve => { began = resolve; });
+        let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
+        mocks.edge.mockImplementationOnce(async (_text, _config, path, signal) => {
+            await writeFile(path, 'ID3-fixture', { mode: 0o600 }); began();
+            await gate;
+            if (signal.aborted) throw new Error('fixture cancelled');
+        });
+        const pending = prepare(create());
+        try {
+            await started;
+            await vi.advanceTimersByTimeAsync(75_000);
+            expect(mocks.edge.mock.calls[0][3].aborted).toBe(false);
+            release(); await pending;
+            expect(mocks.edge).toHaveBeenCalledTimes(1);
+            expect(mocks.media).toHaveBeenCalledTimes(1);
+            expect(await readdir(media)).toEqual([]);
+        } finally { release(); }
+    });
+    it('expires default-budget active and queued synthesis from each admission time', async () => {
+        vi.useFakeTimers();
+        const firstStarted = hold(); const secondStarted = hold(); const service = create();
+        const first = prepare(service); await firstStarted;
+        await vi.advanceTimersByTimeAsync(60_000);
+        const second = prepare(service);
+        await vi.advanceTimersByTimeAsync(119_999);
+        expect(mocks.edge.mock.calls[0][3].aborted).toBe(false);
+        expect(mocks.edge).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        await expect(first).rejects.toThrow('timed out'); await secondStarted;
+        await vi.advanceTimersByTimeAsync(59_999);
+        expect(mocks.edge.mock.calls[1][3].aborted).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+        await expect(second).rejects.toThrow('timed out');
+        expect(mocks.edge).toHaveBeenCalledTimes(2);
+        expect(mocks.media).not.toHaveBeenCalled();
         expect(await readdir(media)).toEqual([]);
     });
     it('enforces the synthesis deadline with actual cancellation', async () => {

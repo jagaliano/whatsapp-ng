@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-- Raise the speech synthesis budget (including queue wait) from 60 to 180 seconds. Edge streams near real time, so replies above roughly 1,000 characters timed out and fell back to text-only.
-
 ## 1.1.2 — 2026-10-31
+
+- Raise the shared speech synthesis budget, including queue wait, from 60 to 180 seconds for slower providers. Preserve cancellation, the 2,000-character/8 MiB/queue limits, separate Edge connection/inactivity limits and STT budgets; this does not guarantee that every maximum-length reply completes.
 
 - Protect eligible approved Voice/Both/audio-Mirror finals from accidental same-chat text-tool sends, including aliases and native quotes. Refuse before sending and direct the model to its normal final answer; retain explicit explanations once a legacy caption/tool-only attachment already covers the final. Preserve consent, manual sends, fallback and duplicate/unknown-delivery safety; clarify late-fence outcomes and whole-reply diagnostics.
 - Refresh the maintainer lock from `follow-redirects` 1.16.1 to patched 1.16.2 within the existing Axios range, with no direct-dependency or unrelated resolution changes. Fresh source/consumer audits remain separate from existing consumer locks, host SDK/native-binary exposure and newly disclosed development-tool findings.

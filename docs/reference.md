@@ -70,7 +70,7 @@ Fish requires an existing voice reference and a supported model header; no paid 
 
 Server-default voice is an explicit configuration choice, not a fallback for an invalid/missing voice. Selecting it clears an inherited named voice; selecting a named voice clears the inherited default choice. Changing endpoint/effective provider or model requires selecting server default again. `{}` resets it with the other remote fields. The server chooses the actual voice and language; no cloning-consent field is added, and destination/group speech approval remains separate. See the [Chatterbox built-in voice example](crispasr.md#built-in-server-voice).
 
-Preparation permits one active job, five pending, 2,000 spoken Unicode characters, 8 MiB audio and a 180-second synthesis budget including queue wait. Output uses the bounded FFmpeg/Ogg-Opus voice-note path.
+Preparation permits one active job, five pending, 2,000 spoken Unicode characters, 8 MiB audio and a 180-second synthesis budget including queue wait. This is an upper bound, not a guarantee that maximum-length replies complete. Edge retains separate 60-second connection/inactivity limits; output uses the separately bounded FFmpeg/Ogg-Opus voice-note path. STT deadlines are unchanged.
 
 Speech uses a plain-text copy; displayed/saved answers stay unchanged:
 - Remove balanced emphasis, headings, bullets and quote escapes. Ordinary quotes/approximation tildes remain; heading candidates above 1,024 characters stay literal.

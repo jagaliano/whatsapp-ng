@@ -7,6 +7,13 @@
 5. Run `npm run release:prepare` on clean committed source. Qualify the checksummed artifact with lifecycle-disabled isolated consumer installation, no host peer shadow copies, audits and blocked-network installed Pi startup/session replacement.
 6. Verify normal local npm identity/maintainer, immutable version absence and no earlier attempt marker; publish that exact prepared tarball once under latest. Verify registry integrity/both tags and a fresh isolated install of the published artifact. Keep post-commit evidence in local release receipts so tracked edits do not invalidate prepared source.
 
+## Requalification after concurrent speech change
+
+1. Preserve `5239956` without amend/reset; inspect shared synthesis, remote/Edge adapters, pinned inactivity implementation and existing tests. Move its unreleased outcome into 1.1.2 and keep evidence claims qualified.
+2. Exercise the actual default constructor with fake-time synthesis/queue tests; compare the same three cases in a disposable public `bf77b5d` source copy against the old 60-second budget, without changing the active checkout or installing dependencies. Include the cases in fresh broader validation.
+3. Record source/live/review boundaries in [requalification](requalification.md); run isolated source/static/security checks, commit only these additions and push normally. Verify exact new-head CI, reprepare the tarball and qualify the new consumer/installed entry. Supersede, rather than reuse, the old qualification.
+4. Use the release script's documented `--confirm 1.1.2 --tag latest` after fresh identity/maintainer/E404/attempt checks; retain one actual transmission marker and verify registry/published install. Do not reload the live extension, call speech providers, alter authentication, create tags or activate automation.
+
 ## Complexity Tracking
 
 Use existing owners, tests, native review tool and guarded release script. No new runtime abstraction, direct dependency or model bypass. The owner separately approved one compatible transitive security patch after the production audit blocked release; no broad dependency update or audit suppression. If corrections precede versioning, separate commits are required by the existing clean-tree gate; never relax it. Reviewer preflight initially rejected file-only output without a path; no child ran, clean source was verified, then the same reviewer was retried once with an explicit report binding.
