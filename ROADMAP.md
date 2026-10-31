@@ -13,7 +13,7 @@ The existing [extension improvement records](specs/039-extension-improvements/) 
 | R3 | General code review, followed by focused corrections | Planned; review in bounded areas |
 | R4 | Improve and maintain the documentation | Ongoing; extend the current guides |
 | R5 | Answer `pi-ask-user` prompts from WhatsApp | Planned, deferred pending upstream responder support |
-| R6 | Additional suggestions: speech diagnostics/recovery, compatibility and acceptance coverage | Proposed; select independently |
+| R6 | Additional suggestions: speech diagnostics/recovery, compatibility, acceptance coverage and Edge TTS resilience | Proposed; select independently |
 
 Ship small, independently useful changes. This is not a requirement to finish the entire roadmap before the next release.
 
@@ -163,6 +163,53 @@ Use the [manual acceptance guide](tests/manual/prerelease-acceptance.md) to sele
 - [Settings/Off validation](specs/039-extension-improvements/c4-validation.md) includes owner-reported basic smoke acceptance, not independently recorded evidence for every Off/reload/reconnect/logging transition.
 - Refresh actual installed-package checks and the relevant Linux/Windows evidence after runtime/process-management changes. Record production and host/development dependency exposure separately.
 - Keep speech pronunciation, multilingual accuracy and client rendering claims limited to the models/devices actually checked. Do not reset authentication or repeat uncertain sends to manufacture coverage.
+
+### R6.4. Edge TTS retry and fallback diagnostics
+
+**Status:** proposed (owner-requested 2026-10-30); not implemented.
+
+**Observed problem.** In `mirror` mode with an approved Edge destination and an audio input, a reply was delivered as text only. Configuration was correct. Local probes showed intermittent Edge failures: `TtsService.prepare` failed 1 of 4 runs with `Edge speech synthesis failed`, and direct `msedge-tts@2.1.1` failed 1 of 3 runs with `Stream closed before the synthesis completed (no turn.end received)`. The runtime log had no speech entry, because every layer drops the cause:
+
+- [`edge-tts.worker.mjs`](src/services/edge-tts.worker.mjs) catches everything and posts only `{ ok: false }`.
+- [`EdgeTtsService.write`](src/services/edge-tts.service.ts) maps every failure, including worker exit, to one generic `TtsError`.
+- In [`FinalOutputCoordinator.deliver`](src/services/final-output.service.ts), the `prepareSpeech` `catch` falls back to text without a retry or log. The only signal is the terminal-only `speech.textOnly` notice, so a phone user just sees text.
+
+**1. Bounded synthesis retry.**
+
+- Retry only *pre-send synthesis* failures that are classified as transient. Retrying is safe here because nothing has been uploaded. Never retry after `sendVoice` is invoked or when delivery is unknown; the no-retry-on-uncertain-send rule is unchanged.
+- Place the retry inside `TtsService.run`, or a small wrapper around the provider `write` call, with a fresh `tts-` temp directory/partial file per attempt. Then the queue, timeout, cancellation and cleanup ownership stay in one place. `FinalOutputCoordinator` keeps a single `prepareSpeech` call.
+- Worker classification:
+  - Return a fixed, non-sensitive failure category instead of a bare `ok: false`: `transport` (connect/close/no `turn.end`/timeout), `empty`, `limit`, `config` or `unknown`.
+  - Never forward provider messages, text, voice payloads or stack traces.
+  - Retry only `transport` and `empty`. `limit`, `config`, consent/destination, cancellation and stale-job (`isCurrent`) failures fail immediately.
+- Budget:
+  - At most two retries (three attempts) with short backoff (for example 250 ms, then 750 ms).
+  - All attempts must fit inside the existing per-job synthesis timeout. Do not extend the overall budget.
+  - Re-check `signal`, `isCurrent` and the approved destination key before each attempt.
+- Apply the same policy to remote OpenAI-compatible/Fish TTS only where the HTTP status is clearly transient (connection reset, 429/5xx without a partial body). Otherwise keep remote providers single-attempt. Managed CrispASR admission is not re-run per attempt.
+
+**2. Fallback diagnostics.**
+
+- Log one bounded metadata-only line per synthesis outcome to the runtime log, for example `[Speech] TTS failed provider=edge category=transport attempts=3 fallback=text`. Optionally log success with `attempts>1`.
+- Never log text, chat identity, voice payloads, keys, endpoints beyond the already-disclosed host, or raw provider errors (see the diagnostics rule in [AGENTS.md](AGENTS.md)).
+- Give `FinalOutputResult` a `fallbackReason` (`synthesis`, `consent`, `speech-text-unavailable`, `voice-send-failed`) so the terminal notice and the log line can tell consent problems apart from provider instability.
+- Optional, needs owner decision: a short phone-visible marker on text fallbacks in voice/mirror chats (for example a localized "(voice unavailable)" suffix). The current default is silent text fallback.
+
+**Tests.**
+
+- Unit tests for worker category mapping using a fake `msedge-tts` client.
+- `TtsService` retry tests:
+  - transient failure then success
+  - exhausted retries
+  - non-retryable category
+  - cancellation between attempts
+  - timeout spanning attempts
+  - temp-file cleanup per attempt
+- `FinalOutputCoordinator` tests showing that no retry happens after `sendVoice`/unknown delivery and that the fallback reason propagates.
+- A log-redaction regression.
+- Live Edge behavior stays manual and owner-approved; tests must not call the real service.
+
+**Done when.** Transient Edge failures are usually absorbed without a text fallback. Every remaining fallback leaves a categorized runtime-log line. Docs ([reference](docs/reference.md) speech section, [changelog](CHANGELOG.md)) describe the retry budget and the log fields.
 
 ## Suggested delivery sequence
 
