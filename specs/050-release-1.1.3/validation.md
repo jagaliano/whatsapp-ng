@@ -26,6 +26,6 @@ Public lookup established structured E404 for 1.1.3, latest 1.1.2/next 1.1.0-rc.
 
 ## Remaining release gates and limits
 
-Source/static/candidate checks are complete as above. Scoped correction/record commit, guarded version-only bump/metadata checks, exact-head CI, clean-commit artifact/consumer qualification and one-shot publication/registry verification remain separate actual checkpoints. Final post-commit outcomes belong in local receipts; they are not asserted complete here.
+Source/static/candidate checks are complete as above. Scoped tests/docs/review/050 records were committed as `66ab6e9`. On clean source, `npm run release:version -- 1.1.3` exited 0 and selected latest. Post-bump isolated release/namespace suites passed 82 tests/two files; normalized package/lock comparison confirms version-only changes. Eight changed Markdown files/58 relative links and anchors and whitespace checks passed. Final metadata commit/push, exact-head CI, clean-commit artifact/consumer qualification and one-shot publication/registry verification remain separate actual checkpoints. Final post-commit outcomes belong in local receipts; they are not asserted complete here.
 
 No current live speech/listening/transcription, WhatsApp/Telegram, private session/config/keys, model download/server startup, owning-Pi reload or new broad Linux/Windows acceptance ran. The release does not establish the acoustic cause or elimination of every garbled transcript word. Previous reviews, platform checks and native findings remain dated rather than recast as fresh evidence.

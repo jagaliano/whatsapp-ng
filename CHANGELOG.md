@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.1.3 — 2026-10-31
+
 - Remove standalone Unicode horizontal divider lines from the spoken copy of replies, preserving paragraph breaks, original displayed text and code/link/table safeguards. Dates, names, approximation signs and meaningful dashes are unchanged; no provider or transcription-accuracy claim.
 
 ## 1.1.2 — 2026-10-31
