@@ -115,6 +115,8 @@ All allowed chats share Pi's context. Replies use the uniquely owned consumed in
 
 Automatic replies wait for tool results. Attachments do not suppress the final explanation by default; **Replies → Reply delivery** also offers legacy **Caption/tool only** behavior. An accepted, in-flight or uncertain explicit text send to the owning chat suppresses an automatic duplicate. Progress updates do not.
 
+Before sending, `send_wa_message` refuses owning-chat text (including explicit JIDs and native quotes) when the captured approved policy requests Voice, Voice + text or verified audio-Mirror. The zero-attempt error directs the model to provide its normal final answer; it does not synthesize the tool text, reserve final-response coverage or enable speech. Canonical aliases and gateway destinations cannot bypass the check; the sender rechecks late identity/currentness changes before transmission. A captured spoken frame remains protected after consent revocation, while actual final delivery is cancelled. Other-chat sends, terminal/idle/manual replies, text-only policies, non-audio Mirror and groups without speech opt-in retain their behavior. Select Text mode for intentional model-issued same-chat quoted text. Normal speech-to-text fallback and unknown-delivery protections are unchanged.
+
 Optional reporting is off by default:
 
 - **Final stats:** elapsed time and observed tool success/failure counts, without arguments, results, reasoning or costs.

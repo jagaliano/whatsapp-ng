@@ -60,8 +60,8 @@ export interface QuoteTarget {
 export interface TextSendOptions {
     quote?: QuoteTarget;
     signal?: AbortSignal;
-    /** Trusted finalization check, revalidated synchronously before transmission. */
-    isCurrent?: () => boolean;
+    /** Trusted check; the sender supplies its final resolved recipient immediately before transmission. */
+    isCurrent?: (recipientJid?: string) => boolean;
     onSettled?: (result: MessageResult) => void | Promise<void>;
 }
 
@@ -73,8 +73,8 @@ export interface MessageRequest {
     sendOptions?: MiscMessageGenerationOptions;
     sessionContext?: WhatsAppSessionContext;
     signal?: AbortSignal;
-    /** Internal predicate, never a model-provided tool argument. */
-    isCurrent?: () => boolean;
+    /** Internal predicate, never a tool argument; the sender supplies its actual transport recipient. */
+    isCurrent?: (recipientJid?: string) => boolean;
     sendTimeoutMs?: number;
     /** Internal control polls: protocol secrets belong only to the bounded menu lifetime. */
     ephemeralProtocol?: boolean;

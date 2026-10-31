@@ -73,6 +73,17 @@ export class FinalOutputCoordinator {
             policy: Object.freeze({ ...policy, tts: policy.tts ? Object.freeze({ ...policy.tts }) : undefined }) });
     }
 
+    /** Refusal only: revocation cannot turn a captured spoken reply into a raw-text escape. */
+    protectsAutomaticSpeech(snapshot: RoutingSnapshot): boolean {
+        const captured = this.captures.get(snapshot);
+        if (!captured || this.dependencies.router.getControlOrigin(snapshot) !== 'whatsapp') return false;
+        try {
+            const policy = captured.policy;
+            return Boolean(policy.isCurrent && this.effectiveMode(snapshot, policy) !== 'text'
+                && policy.approvedDestinationKey === resolveTtsConfig(policy.tts ?? {}).destinationKey);
+        } catch { return false; }
+    }
+
     cancelAll(): void {
         for (const job of this.active) job.controller.abort();
     }
@@ -93,9 +104,7 @@ export class FinalOutputCoordinator {
         let delegated = false;
         try {
             if (!this.current(job)) return { cancelled: true };
-            let mode = job.policy.mode;
-            if (mode === 'mirror') mode = this.dependencies.router.getRequestMetadata(snapshot).inputKind === 'audio' ? 'voice' : 'text';
-            if (snapshot.target?.endsWith('@g.us') && job.policy.groupOptIn !== true) mode = 'text';
+            let mode = this.effectiveMode(snapshot, job.policy);
             let spoken = mode === 'text' ? undefined : speechReplyText(text, mode === 'both');
             if (mode !== 'text' && spoken === undefined) { mode = 'text'; result.fallback = true; }
             if (mode === 'text' || mode === 'both') {
@@ -157,6 +166,13 @@ export class FinalOutputCoordinator {
                 this.dependencies.router.finishFinalization(snapshot);
             }
         }
+    }
+
+    private effectiveMode(snapshot: RoutingSnapshot, policy: Readonly<FinalOutputPolicy>): Exclude<ReplyOutputMode, 'mirror'> {
+        const mode = policy.mode === 'mirror'
+            ? this.dependencies.router.getRequestMetadata(snapshot).inputKind === 'audio' ? 'voice' : 'text'
+            : policy.mode;
+        return snapshot.target?.endsWith('@g.us') && policy.groupOptIn !== true ? 'text' : mode;
     }
 
     private async text(job: Job, text: string): Promise<MessageResult> {

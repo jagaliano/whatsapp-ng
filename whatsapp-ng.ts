@@ -135,7 +135,7 @@ export default function (pi: ExtensionAPI) {
         canonicalConversation,
         routingScope,
         key => whatsappService.markIncomingProcessing(key, 'consumed'),
-        (_target, state) => logger.log(`[WhatsApp-NG] Suppressed final text: inFlight=${state.inFlight} confirmed=${state.confirmed} unknown=${state.unknown}`),
+        (_target, state) => logger.log(`[WhatsApp-NG] Suppressed automatic reply: inFlight=${state.inFlight} confirmed=${state.confirmed} unknown=${state.unknown}`),
         () => sessionManager.getFinalAfterAttachments(),
         key => whatsappService.resolveIncomingActor(key),
         retiredInputs
@@ -863,8 +863,8 @@ export default function (pi: ExtensionAPI) {
     pi.registerTool({
         name: "send_wa_message",
         label: "Send WhatsApp Message",
-        description: "Send text to a known WhatsApp contact/group JID. If jid is omitted, uses the unique conversation owning the current turn. Ambiguous or terminal-only turns require an explicit JID; idle manual calls retain last-conversation/operator fallback.",
-        promptSnippet: "send_wa_message({message, jid?, quote?}) - Send text, optionally quoting a retained same-chat message by ID. Omit jid only for the uniquely owned current WhatsApp conversation; never reconstruct it from a displayed number. Acceptance is not proof of recipient delivery. Do not duplicate a successful or delivery-unknown send. Report definite pre-send errors; never retry an uncertain outcome automatically.",
+        description: "Explicit text delivery to a known WhatsApp contact/group JID, not normal replies: those are delivered automatically. Same-chat sends, including quotes, are refused during approved automatic spoken turns. If jid is omitted, uses the unique owning conversation. Ambiguous or terminal-only turns require an explicit JID; idle manual calls retain last-conversation/operator fallback.",
+        promptSnippet: "send_wa_message({message, jid?, quote?}) - Explicit text only. To answer the current WhatsApp request, provide your normal final answer without this tool. Approved Voice/Both/audio-Mirror turns reject owning-chat text, even with a JID or quote. Other-chat/manual text remains available. Omit jid only for a uniquely owned conversation; never reconstruct it from displayed digits. Acceptance is not proof of recipient delivery. Never duplicate or automatically retry a successful or delivery-unknown send.",
         parameters: Type.Object({
             jid: Type.Optional(Type.String({ description: "WhatsApp JID of the recipient" })),
             recipient_jid: Type.Optional(Type.String({ description: "Alternative name for jid" })),
@@ -895,11 +895,20 @@ export default function (pi: ExtensionAPI) {
             const message = params.message ?? '';
 
             const snapshot = router.snapshot();
+            const protectsSpeech = snapshot ? finalOutput.protectsAutomaticSpeech(snapshot) : false;
+            const protectedReply = (jid: string): boolean => {
+                const target = snapshot?.canonicalTarget && canonicalConversation(snapshot.canonicalTarget);
+                return Boolean(protectsSpeech && target && canonicalConversation(jid) === target);
+            };
+            const automaticReplyRequired = { isError: true, details: undefined,
+                content: [{ type: 'text' as const, text: JSON.stringify({ success: false, error: t('speech.automaticReplyRequired'), attempts: 0 }) }] };
+            if (protectedReply(resolvedJid)) return automaticReplyRequired;
             const quote = quoteTarget(params.quote);
             const quotedJid = quote ? whatsappService.getQuotedMessage(resolvedJid, quote)?.key.remoteJid : undefined;
             if (quote && !quotedJid) return { isError: true, details: undefined, content: [{ type: 'text' as const, text: JSON.stringify({ success: false, error: t('quote.unavailable'), attempts: 0 }) }] };
             const outboundJid = quotedJid ?? (snapshot?.target === resolvedJid
                 ? resolvedJid : whatsappService.resolveOutboundRecipientJid(resolvedJid));
+            if (protectedReply(outboundJid)) return automaticReplyRequired;
             const recordResult = async (outcome: MessageResult) => {
                 if (outcome.success && outcome.messageId) await recentsService.recordMessage({
                     messageId: outcome.messageId, senderNumber: toRecentSenderNumber(outboundJid),
@@ -907,7 +916,9 @@ export default function (pi: ExtensionAPI) {
                     ...(quote ? { quotedMessageId: quote.messageId } : {})
                 });
             };
-            const options = quote || _signal ? { quote, signal: _signal, onSettled: recordResult } : undefined;
+            const options = quote || _signal || protectsSpeech ? { quote, signal: _signal, onSettled: recordResult,
+                ...(protectsSpeech && snapshot ? { isCurrent: (recipientJid = outboundJid) => router.isCurrent(snapshot)
+                    && !protectedReply(resolvedJid) && !protectedReply(outboundJid) && !protectedReply(recipientJid) } : {}) } : undefined;
             const result = await sendWithOwnership(outboundJid, message, snapshot, options);
             if (!options) await recordResult(result);
 

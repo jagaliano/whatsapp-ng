@@ -123,6 +123,8 @@ Open `/whatsapp` → **Voice** to choose a speech backend, voice, speed and repl
 | Voice + text | Both formats. |
 | Mirror | Voice for verified audio input; text otherwise. |
 
+Provide normal replies without a send tool. During approved spoken turns, `send_wa_message` refuses text to the owning chat, including model-issued native quotes. Other-chat sends and manual replies remain available; select Text mode for intentional model-issued same-chat text.
+
 Backends include Fish, OpenAI-compatible speech APIs and the unofficial Microsoft Edge speech service. A compatible [CrispASR TTS server](docs/crispasr.md#tts-server), such as the Kokoro example, can provide local synthesis through the same endpoint client. Edge requires no configured API key but is an online service, not offline synthesis. The transcription and speech backends are independent. Compatible servers with a built-in voice, including Chatterbox, can explicitly use [`ttsUseServerVoice: true`](docs/crispasr.md#built-in-server-voice); this omits `voice`, not a substitute voice ID.
 
 Speech is disabled until you approve its destination in the terminal Voice menu. Groups need separate opt-in. Changing the endpoint requires new approval; configuring a backend with `configure_wa_tts` does not enable speech or grant consent.

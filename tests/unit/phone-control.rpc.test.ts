@@ -10,7 +10,7 @@ import { resolveTtsConfig } from '../../src/services/tts-config.ts';
 
 /** Real Pi command context/lifecycle; WhatsApp transport and fixture model streams are synthetic. */
 describe('production phone-control Pi RPC gateway', () => {
-    it.each(['direct', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'autoconnect', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async mode => {
+    it.each(['direct', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard', 'autoconnect', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async mode => {
         const root = await mkdtemp(join(tmpdir(), 'wa-phone-rpc-')); const home = join(root, 'home'); const workspace = join(root, 'workspace');
         const data = join(home, '.pi/agent/extensions/whatsapp-ng'); const metricsPath = join(root, 'metrics.json'); const networkPath = join(root, 'network.json');
         await mkdir(join(data, 'auth'), { recursive: true }); await mkdir(workspace);
@@ -21,10 +21,11 @@ describe('production phone-control Pi RPC gateway', () => {
             if (!address || typeof address === 'string') throw new Error('Missing synthetic speech port');
             endpoint = `http://127.0.0.1:${address.port}/v1`; await new Promise<void>(resolve => server.close(() => resolve()));
         }
-        const selfChat = mode === 'self-lid' || mode === 'self-auto'; const modelFixture = ['stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice'].includes(mode) || managed;
+        const selfChat = mode === 'self-lid' || mode === 'self-auto'; const modelFixture = ['stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard'].includes(mode) || managed;
         const owner = selfChat ? '15550000009@s.whatsapp.net' : '15550000001@s.whatsapp.net';
         await writeFile(join(data, 'config.json'), JSON.stringify({ operatorJid: owner, allowList: [{ number: '+' + owner.split('@')[0] }],
             ...(automatic ? { autoConnect: true } : {}),
+            ...(mode === 'spoken-guard' ? { voicePreferences: { enabled: true, mode: 'voice', approvedDestinationKey: resolveTtsConfig({}).destinationKey, chats: {} } } : {}),
             ...(managed ? { sttEndpoint: endpoint, sttModel: 'fixture-api-model', sttEnv: 'FIXTURE_KEY' } : {}),
             ...(mode === 'self-lid' ? { voicePreferences: { enabled: true, mode: 'text', approvedDestinationKey: resolveTtsConfig({}).destinationKey,
                 chats: { [owner]: { mode: 'mirror' }, '90000000009@s.whatsapp.net': { mode: 'text' } } } } : {}),
@@ -41,7 +42,7 @@ describe('production phone-control Pi RPC gateway', () => {
         Object.assign(env, { HOME: home, PI_CODING_AGENT_DIR: join(root, 'agent'), PI_OFFLINE: '1', WHATSAPP_NG_LOCALE: 'en',
             WA_PHONE_RPC_METRICS: metricsPath, WA_PHONE_RPC_CONFIG: join(data, 'config.json'), WA_PHONE_RPC_SELF_LID: selfChat ? '1' : '0', WA_PHONE_RPC_STATS: mode === 'stats' ? '1' : '0',
             WA_PHONE_RPC_GROUPS: ['groups', 'settings'].includes(mode) ? '1' : '0', WA_PHONE_RPC_SELF_AUTO: mode === 'self-auto' ? '1' : '0', WA_PHONE_RPC_MODELS: mode === 'models' ? '1' : '0',
-            WA_PHONE_RPC_OPTIONAL: ['images', 'terminal'].includes(mode) ? mode : '', WA_PHONE_RPC_REPORTING: mode === 'reporting' ? '1' : '0', WA_PHONE_RPC_SERVER_VOICE: mode === 'server-voice' ? '1' : '0',
+            WA_PHONE_RPC_OPTIONAL: ['images', 'terminal'].includes(mode) ? mode : '', WA_PHONE_RPC_REPORTING: mode === 'reporting' ? '1' : '0', WA_PHONE_RPC_SERVER_VOICE: mode === 'server-voice' ? '1' : '0', WA_PHONE_RPC_SPOKEN_GUARD: mode === 'spoken-guard' ? '1' : '0',
             ...(managed ? { WA_PHONE_RPC_MANAGED: '1', WA_PHONE_RPC_MANAGED_ENDPOINT: endpoint, FIXTURE_KEY: 'synthetic-key', CRISPASR_STT_CMD: JSON.stringify({ executable: process.execPath,
                 args: [join(repo, 'tests/fixtures/managed-speech-server.mjs'), new URL(endpoint).port, 'whisper', 'fixture-loaded-model', 'normal', serverMetrics], cwd: root,
                 endpoint, backend: 'whisper', model: 'fixture-api-model', loadedModel: 'fixture-loaded-model', startupTimeoutMs: 5000 }) } : {}),
@@ -145,6 +146,18 @@ describe('production phone-control Pi RPC gateway', () => {
                 expect(records.filter(record => record.type === 'agent_start' || record.type === 'extension_error')).toEqual([]);
                 const config = JSON.parse(await readFile(join(data, 'config.json'), 'utf8')); expect(config.operatorJid).toBe(owner); expect(config.autoConnect).toBe(false);
                 expect(config.allowList).toEqual([{ number: '+' + owner.split('@')[0] }]); return;
+            }
+            if (mode === 'spoken-guard') {
+                await prompt('/phone-fixture stats-start');
+                await expect.poll(async () => (await metrics()).statsSettled, { timeout: 10_000 }).toBe(1);
+                const calls = records.filter(record => record.type === 'tool_execution_end' && record.toolName === 'send_wa_message');
+                expect(calls).toHaveLength(1); expect(calls[0].isError).toBe(true);
+                expect(JSON.parse(calls[0].result.content[0].text)).toMatchObject({ success: false, attempts: 0, error: expect.stringContaining('normal final answer') });
+                const sent = await metrics(); expect(sent.messages).toHaveLength(1);
+                expect(sent.messages[0]).toContain('RPC guard final'); expect(sent.messages[0]).not.toContain('Wrong explicit text');
+                expect(sent.providerRequests).toBe(2); expect(sent.modelStarts).toBe(1);
+                expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
+                expect(records.filter(record => record.type === 'extension_error')).toEqual([]); return;
             }
             if (mode === 'server-voice') {
                 await prompt('/phone-fixture stats-start');

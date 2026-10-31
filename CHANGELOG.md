@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Protect approved automatic Voice/Both/audio-Mirror replies from accidental same-chat text-tool sends, including aliases and native quotes. Refuse before sending and direct the model to its normal final answer; preserve other-chat/manual sends, consent, text fallback and duplicate/unknown-delivery safety. Clarify tool guidance and whole-reply suppression diagnostics.
+
 ## 1.1.1 — 2026-10-30
 
 - Add explicit `ttsUseServerVoice` for compatible OpenAI-style servers such as Chatterbox: omit the HTTP voice field to use the server's built-in voice without requiring a separate voice pack. Preserve strict named-voice defaults, Fish/Edge validation, atomic settings and separate speech consent; reselect the default after endpoint/provider/model changes.

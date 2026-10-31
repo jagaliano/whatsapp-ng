@@ -51,6 +51,16 @@ describe('MessageSender', () => {
         });
     });
 
+    it('passes the final transport recipient to the synchronous pre-transmission guard', async () => {
+        const recipientJid = '15550000001@s.whatsapp.net'; const sendMessage = vi.fn();
+        whatsappService.getSocket.mockReturnValue({ sendMessage });
+        const isCurrent = vi.fn((actualRecipient?: string) => actualRecipient !== recipientJid);
+        const sender = new MessageSender(whatsappService as unknown as ConstructorParameters<typeof MessageSender>[0]);
+        const result = await sender.send({ recipientJid, text: 'Guarded text', isCurrent, options: { maxRetries: 1 } });
+        expect(isCurrent).toHaveBeenCalledExactlyOnceWith(recipientJid);
+        expect(result.success).toBe(false); expect(result.delivery).toBeUndefined(); expect(sendMessage).not.toHaveBeenCalled();
+    });
+
     it('does not dump native send errors or message bodies into console diagnostics', async () => {
         whatsappService.getSocket.mockReturnValue({ sendMessage: vi.fn().mockRejectedValueOnce(new Error('PRIVATE-C4-NATIVE-BODY')) });
         await new MessageSender(whatsappService as any).send({ recipientJid: '15550000001@s.whatsapp.net', text: 'PRIVATE-C4-ANSWER', options: { maxRetries: 1 } });

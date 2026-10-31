@@ -19,6 +19,7 @@ This directory is a design/history archive, not a list of features still waiting
 | [044 server-default voice](044-server-default-voice/plan.md) | Explicit OpenAI-compatible built-in/startup voice selection; [validation and native-inference exclusions](044-server-default-voice/validation.md). No saved-setting mutation or download authorization. |
 | [045 documentation cleanup](045-documentation-cleanup/plan.md) | Concise current guides and plans 038 onward; examples checked without native effects, historical evidence preserved. |
 | [046 release 1.1.1](046-release-1.1.1/plan.md) | Authorized main/version-only-lock/isolated-consumer release; exact artifact and one-shot publication gates. Local receipts hold post-commit outcomes. |
+| [047 spoken-reply guard](047-spoken-reply-guard/plan.md) | Refuse model-issued owning-chat text during captured approved spoken turns; preserve manual/other-chat sends and existing finalization safety. |
 
 ## Cleanup policy
 

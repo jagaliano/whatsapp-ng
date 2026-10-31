@@ -8,7 +8,8 @@ export default function (pi: ExtensionAPI) {
     const optional = process.env.WA_PHONE_RPC_OPTIONAL; const images = optional === 'images'; const terminal = optional === 'terminal';
     const reporting = process.env.WA_PHONE_RPC_REPORTING === '1'; const managed = process.env.WA_PHONE_RPC_MANAGED === '1';
     const search = process.env.WA_PHONE_RPC_MODELS === '1'; const serverVoice = process.env.WA_PHONE_RPC_SERVER_VOICE === '1';
-    const selfAuto = process.env.WA_PHONE_RPC_SELF_AUTO === '1'; const modelFixture = stats || groups || selfAuto || images || terminal || reporting || search || managed || serverVoice;
+    const spokenGuard = process.env.WA_PHONE_RPC_SPOKEN_GUARD === '1';
+    const selfAuto = process.env.WA_PHONE_RPC_SELF_AUTO === '1'; const modelFixture = stats || groups || selfAuto || images || terminal || reporting || search || managed || serverVoice || spokenGuard;
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEElEQVR4nGP4z8DwHwohFABFzAf5Zsv/OQAAAABJRU5ErkJggg==';
     if (images) pi.registerTool({ name: 'fixture_image', label: 'Synthetic image', description: 'Isolated fixture image result only', parameters: Type.Object({}),
         execute: async () => ({ content: [{ type: 'image', mimeType: 'image/png', data: png }, { type: 'image', mimeType: 'image/png', data: png }], details: {} }) });
@@ -20,9 +21,11 @@ export default function (pi: ExtensionAPI) {
             const stream = createAssistantMessageEventStream();
             if (!options?.signal?.aborted) { const state = fixture(); state.metrics.providerRequests = (state.metrics.providerRequests ?? 0) + 1; state.save(); }
             const messages = (_context as { messages?: Array<{ role: string; content?: unknown }> }).messages ?? [];
-            const tool = (images || reporting || managed || serverVoice) && messages.at(-1)?.role === 'user';
+            const tool = (images || reporting || managed || serverVoice || spokenGuard) && messages.at(-1)?.role === 'user';
             const message: AssistantMessage = { role: 'assistant', api: model.api, provider: model.provider, model: model.id,
-                timestamp: Date.now(), content: tool ? serverVoice
+                timestamp: Date.now(), content: tool ? spokenGuard
+                    ? [{ type: 'toolCall', id: `fixture-explicit-${fixture().metrics.providerRequests}`, name: 'send_wa_message', arguments: { message: 'Wrong explicit text' } }]
+                    : serverVoice
                     ? [{ type: 'toolCall', id: `fixture-voice-${fixture().metrics.providerRequests}`, name: 'configure_wa_tts', arguments: {
                         ttsEndpoint: 'http://127.0.0.1:8098/v1/audio/speech', ttsProtocol: 'openai-compatible', ttsModel: 'chatterbox', ttsEnv: 'FIXTURE_KEY', ttsUseServerVoice: true } }]
                     : managed
@@ -31,7 +34,7 @@ export default function (pi: ExtensionAPI) {
                     : reporting
                     ? [{ type: 'thinking', thinking: 'PRIVATE-REASONING' }, { type: 'text', text: '**Checking** the fixture file.' }, { type: 'toolCall', id: `fixture-write-${fixture().metrics.providerRequests}`, name: 'write', arguments: { path: 'c1-progress.txt', content: 'PRIVATE-TOOL-CONTENT' } }]
                     : [{ type: 'toolCall', id: `fixture-image-${fixture().metrics.providerRequests}`, name: 'fixture_image', arguments: {} }]
-                    : [{ type: 'text', text: reporting ? '# RPC formatted final\n**Done** [Docs](https://example.test/a_b)\n```ts\nconst code = "**literal**";\n```' : 'RPC stats final' }], stopReason: tool ? 'toolUse' : 'stop',
+                    : [{ type: 'text', text: reporting ? '# RPC formatted final\n**Done** [Docs](https://example.test/a_b)\n```ts\nconst code = "**literal**";\n```' : spokenGuard ? 'RPC guard final\n```sh\ngit status\n```' : 'RPC stats final' }], stopReason: tool ? 'toolUse' : 'stop',
                 usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
             const publish = () => {
                 if (options?.signal?.aborted) stream.push({ type: 'error', reason: 'aborted', error: { ...message, stopReason: 'aborted', errorMessage: 'Synthetic cancellation' } });

@@ -156,7 +156,7 @@ export class MessageSender {
                 if (request.quote && !quoted) throw new WhatsAppError('QUOTE_UNAVAILABLE', t('quote.unavailable'));
                 // No await between this authority check and socket transmission.
                 // A polling signal alone cannot fence revocation during preflight.
-                if (request.isCurrent && !request.isCurrent()) {
+                if (request.isCurrent && !request.isCurrent(request.recipientJid)) {
                     return { success: false, error: t('message.sender.sessionChanged'), attempts };
                 }
                 transmissionStarted = true;

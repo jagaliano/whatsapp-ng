@@ -424,6 +424,92 @@ describe('whatsapp-ng owned turn delivery', () => {
         mocks.speechPrepare.mockResolvedValue(artifact); return artifact;
     };
 
+    it.each(['voice', 'both', 'mirror'] as const)('refuses explicit owning-chat text in %s before effects and retains one automatic spoken final', async mode => {
+        const { pi, ctx } = await setup(); selectSpeech(mode);
+        if (mode === 'mirror') mocks.extractIncomingText.mockReturnValue({ kind: 'audio', text: 'Fixture audio' });
+        await beginOwned(pi, ctx);
+        const result = await pi.tools.get('send_wa_message').execute('wrong-path', { message: 'Wrong explicit answer' });
+        expect(result.isError).toBe(true);
+        expect(JSON.parse(result.content[0].text)).toMatchObject({ success: false, attempts: 0, error: expect.stringContaining('normal final answer') });
+        expect(mocks.whatsappService.sendMessage).not.toHaveBeenCalled(); expect(mocks.whatsappService.sendContent).not.toHaveBeenCalled();
+        expect(mocks.speechPrepare).not.toHaveBeenCalled(); expect(mocks.recentsService.recordMessage).not.toHaveBeenCalled();
+        await pi.handlers.get('message_start')!(makeAssistantEvent(''), ctx);
+        await finalTurn(pi, ctx, 'Normal final answer'); await pi.handlers.get('turn_end')!({}, ctx);
+        expect(mocks.speechPrepare).toHaveBeenCalledOnce(); expect(mocks.whatsappService.sendContent).toHaveBeenCalledOnce();
+        expect(mocks.whatsappService.sendMessage).toHaveBeenCalledTimes(mode === 'both' ? 1 : 0);
+    });
+    it.each(['jid', 'recipient_jid'] as const)('does not permit a verified PN/LID %s alias or quote to bypass spoken protection', async field => {
+        const { pi, ctx } = await setup(); selectSpeech('voice');
+        const owner = '5511999998888@s.whatsapp.net'; const alias = '90000000001@lid';
+        mocks.whatsappService.canonicalConversation.mockImplementation(jid => jid === alias ? owner : jid);
+        await beginOwned(pi, ctx);
+        const result = await pi.tools.get('send_wa_message').execute('alias-quote', { [field]: alias, message: 'Quoted text', quote: { messageId: 'fixture-quote' } });
+        expect(result.isError).toBe(true); expect(JSON.parse(result.content[0].text).error).toContain('normal final answer');
+        expect(mocks.whatsappService.getQuotedMessage).not.toHaveBeenCalled(); expect(mocks.whatsappService.sendMessage).not.toHaveBeenCalled();
+    });
+    it('rechecks the resolved outbound destination so a gateway cannot bypass spoken protection', async () => {
+        const { pi, ctx } = await setup(); selectSpeech('voice'); await beginOwned(pi, ctx);
+        mocks.whatsappService.resolveOutboundRecipientJid.mockReturnValue('5511999998888@s.whatsapp.net');
+        const result = await pi.tools.get('send_wa_message').execute('gateway', { jid: '15550000003@s.whatsapp.net', message: 'Gateway text' });
+        expect(result.isError).toBe(true); expect(JSON.parse(result.content[0].text).attempts).toBe(0);
+        expect(mocks.whatsappService.sendMessage).not.toHaveBeenCalled(); expect(mocks.recentsService.recordMessage).not.toHaveBeenCalled();
+    });
+    it.each(['alias', 'transport'])('fences a newly verified owning-chat %s during actual sender preflight', async change => {
+        const { pi, ctx } = await setup(); selectSpeech('voice'); await beginOwned(pi, ctx);
+        const owner = '5511999998888@s.whatsapp.net'; const other = '15550000003@s.whatsapp.net';
+        const { MessageSender } = await import('../../src/services/message.sender.ts');
+        let entered!: () => void; let resume!: () => void;
+        const paused = new Promise<void>(resolve => { entered = resolve; }); const gate = new Promise<void>(resolve => { resume = resolve; });
+        const sendMessage = vi.fn().mockResolvedValue({ key: { id: 'fixture-wire' }, message: { conversation: 'Wrong text' } });
+        const socket = { sendMessage }; const context = mocks.whatsappService.getSessionContext();
+        const service = { ...mocks.whatsappService, getSocket: () => socket, prepareArchive: async () => {},
+            registerOutgoing: vi.fn(), cacheSentMessage: vi.fn(), recordSendOutcome: vi.fn(),
+            flushArchive: async () => { entered(); await gate; } };
+        const sender = new MessageSender(service as unknown as ConstructorParameters<typeof MessageSender>[0]);
+        mocks.whatsappService.sendMessage.mockImplementationOnce(async (...args: unknown[]) => sender.send({
+            recipientJid: change === 'transport' ? owner : other, text: String(args[1]), sessionContext: context,
+            ...(args[3] as Pick<MessageRequest, 'signal' | 'isCurrent' | 'quote' | 'onSettled'> | undefined), options: { maxRetries: 1 }
+        }));
+        const pending = pi.tools.get('send_wa_message').execute('late-alias', { jid: other, message: 'Wrong text' });
+        await paused;
+        if (change === 'alias') mocks.whatsappService.canonicalConversation.mockImplementation(jid => jid === other ? owner : jid);
+        resume();
+        const result = await pending; expect(result.isError).toBe(true); expect(sendMessage).not.toHaveBeenCalled();
+        expect(mocks.recentsService.recordMessage).not.toHaveBeenCalled(); await finalTurn(pi, ctx, 'Normal final');
+        expect(mocks.whatsappService.sendContent).toHaveBeenCalledOnce();
+    });
+    it('keeps other-chat sends available without covering the owning spoken final', async () => {
+        const { pi, ctx } = await setup(); selectSpeech('voice'); await beginOwned(pi, ctx);
+        const result = await pi.tools.get('send_wa_message').execute('other', { jid: '15550000003@s.whatsapp.net', message: 'Other chat' });
+        expect(result.isError).toBe(false); await finalTurn(pi, ctx, 'Normal final answer');
+        expect(mocks.whatsappService.sendMessage).toHaveBeenCalledOnce(); expect(mocks.whatsappService.sendContent).toHaveBeenCalledOnce();
+    });
+    it('keeps non-audio Mirror and terminal/idle explicit text available', async () => {
+        const { pi, ctx } = await setup(); selectSpeech('mirror'); await beginOwned(pi, ctx);
+        expect((await pi.tools.get('send_wa_message').execute('text-mirror', { message: 'Explicit text' })).isError).toBe(false);
+        await pi.handlers.get('agent_end')!({ messages: [] }, ctx); selectSpeech('voice');
+        expect((await pi.tools.get('send_wa_message').execute('idle', { message: 'Manual idle text' })).isError).toBe(false);
+        await pi.handlers.get('agent_start')!({}, ctx);
+        await pi.handlers.get('input')!({ source: 'interactive', text: 'Local task' }, ctx);
+        await pi.handlers.get('message_start')!({ message: { role: 'user', content: 'Local task' } }, ctx);
+        await pi.handlers.get('message_start')!(makeAssistantEvent(''), ctx);
+        expect((await pi.tools.get('send_wa_message').execute('local', { jid: '5511999998888@s.whatsapp.net', message: 'Manual local text' })).isError).toBe(false);
+        expect(mocks.whatsappService.sendMessage).toHaveBeenCalledTimes(3); expect(mocks.speechPrepare).not.toHaveBeenCalled();
+    });
+    it.each([false, true])('keeps explicit text when real speech preferences are disabled or unapproved (enabled=%s)', async enabled => {
+        const { pi, ctx } = await setup(); mocks.outputPolicy = undefined;
+        mocks.sessionManager.getSpeechSettings.mockReturnValue({ config: {}, enabled, mode: 'voice', chats: {} });
+        await beginOwned(pi, ctx);
+        expect((await pi.tools.get('send_wa_message').execute('no-consent', { message: 'Text only' })).isError).toBe(false);
+        expect(mocks.whatsappService.sendMessage).toHaveBeenCalledOnce(); expect(mocks.speechPrepare).not.toHaveBeenCalled();
+    });
+    it('does not let a revoked captured spoken policy open an explicit-text escape', async () => {
+        const { pi, ctx } = await setup(); selectSpeech('voice'); let current = true;
+        mocks.outputPolicy.isCurrent = () => current; await beginOwned(pi, ctx); current = false;
+        const result = await pi.tools.get('send_wa_message').execute('revoked', { message: 'No alternate delivery' });
+        expect(result.isError).toBe(true); await finalTurn(pi, ctx, 'Cancelled final');
+        expect(mocks.whatsappService.sendMessage).not.toHaveBeenCalled(); expect(mocks.whatsappService.sendContent).not.toHaveBeenCalled();
+    });
     it('wires an approved final voice through the actual coordinator into sendContent', async () => {
         const { pi, ctx } = await setup(); const artifact = selectSpeech('voice');
         await beginOwned(pi, ctx); await finalTurn(pi, ctx, 'Final answer');

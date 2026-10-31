@@ -54,6 +54,44 @@ function setup(mode: FinalOutputPolicy['mode'] = 'text', kind: any = 'text', tar
 }
 
 describe('four-mode final-output coordinator', () => {
+    it.each([
+        ['voice', 'text', true], ['both', 'text', true], ['mirror', 'audio', true],
+        ['mirror', 'text', false], ['mirror', 'unknown', false], ['text', 'audio', false]
+    ] as const)('protects captured %s/%s automatic speech without preparing or sending', (mode, kind, expected) => {
+        const h = setup(mode, kind);
+        expect(h.output.protectsAutomaticSpeech(h.snapshot)).toBe(expected);
+        expect(h.prepare).not.toHaveBeenCalled(); expect(h.text).not.toHaveBeenCalled(); expect(h.voice).not.toHaveBeenCalled();
+        expect(h.router.canFinalize(h.snapshot)).toBe(true);
+    });
+    it('protects only captured approved speech, never an unapproved destination or missing policy owner', () => {
+        const h = setup('voice'); h.select({ ...policy('voice'), approvedDestinationKey: 'unapproved' });
+        expect(h.output.protectsAutomaticSpeech(h.capture())).toBe(false);
+        h.select({ ...policy('voice'), isCurrent: undefined });
+        expect(h.output.protectsAutomaticSpeech(h.capture())).toBe(false);
+    });
+    it('shares the separate group opt-in boundary with automatic delivery', () => {
+        const h = setup('voice', 'audio', '120363000001@g.us');
+        expect(h.output.protectsAutomaticSpeech(h.snapshot)).toBe(false);
+        h.select({ ...policy('voice'), groupOptIn: true });
+        expect(h.output.protectsAutomaticSpeech(h.capture())).toBe(true);
+    });
+    it('retains captured spoken protection after policy revocation without authorizing final delivery', async () => {
+        const h = setup('voice'); h.revoke();
+        expect(h.output.protectsAutomaticSpeech(h.snapshot)).toBe(true);
+        expect((await h.output.deliver(h.snapshot, 'Answer')).cancelled).toBe(true);
+        expect(h.prepare).not.toHaveBeenCalled(); expect(h.text).not.toHaveBeenCalled(); expect(h.voice).not.toHaveBeenCalled();
+    });
+    it('does not reread a changed mode or protect a terminal, uncaptured or replaced frame', () => {
+        const h = setup('voice'); h.select(policy('text'));
+        expect(h.output.protectsAutomaticSpeech(h.snapshot)).toBe(true);
+        const next = h.capture(); expect(h.output.protectsAutomaticSpeech(next)).toBe(false);
+        expect(h.output.protectsAutomaticSpeech(h.snapshot)).toBe(false);
+        h.router.freeze(); expect(h.output.protectsAutomaticSpeech(h.router.snapshot()!)).toBe(false);
+        h.select(policy('voice')); h.router.observeInput({ source: 'interactive', text: 'Local request' });
+        h.router.consume({ role: 'user', content: 'Local request' }); h.router.freeze();
+        const terminal = h.router.snapshot()!; h.output.capture(terminal, '/fixture/workspace');
+        expect(h.output.protectsAutomaticSpeech(terminal)).toBe(false);
+    });
     it('text mode makes no synthesis or voice request', async () => {
         const h = setup(); const result = await h.output.deliver(h.snapshot, 'Complete answer');
         expect(result.text?.success).toBe(true); expect(h.text).toHaveBeenCalledOnce();
