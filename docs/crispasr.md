@@ -49,7 +49,7 @@ The extension's **direct CLI path always uses CPU** (`--no-gpu`) and a compatibl
 | --- | --- | --- |
 | Local STT | Whisper-compatible CLI | CPU; ten-minute preparation/execution budget |
 | HTTP STT | `/v1/audio/transcriptions` | Sixty-second request; one backend per process |
-| HTTP TTS | `/v1/audio/speech` | Provider voice or explicit server-default voice; sixty seconds including queue wait |
+| HTTP TTS | `/v1/audio/speech` | Provider voice or explicit server-default voice; 180 seconds including queue wait |
 | OmniVoice | Manual CLI only for its reference workflow | This client does not send cloning attestation |
 
 STT and TTS are independent. Edge and existing remote providers remain alternatives.
@@ -322,7 +322,7 @@ Do not supply a placeholder `ttsVoice`. `ttsUseServerVoice: true` omits the HTTP
 
 Use **Connection → Connect WhatsApp** or saved auto-connect. Selecting matching settings while already connected can also start the server. Configuration success does not prove readiness or inference.
 
-In **Voice**, approve the destination, enable speech and choose the mode; groups need separate opt-in. **Mirror** speaks replies to verified voice-note inputs, not ordinary text. Test a short approved sample after readiness. STT requests and TTS synthesis retain their sixty-second budgets; startup time is separate.
+In **Voice**, approve the destination, enable speech and choose the mode; groups need separate opt-in. **Mirror** speaks replies to verified voice-note inputs, not ordinary text. Test a short approved sample after readiness. STT requests retain their sixty-second budget and TTS synthesis its 180-second budget; startup time is separate.
 
 ## STT server
 
@@ -373,7 +373,7 @@ Chatterbox contains default voice conditioning; use `ttsUseServerVoice: true` as
 
 TTS requests add no `language` or cloning-consent field. Select language through the server/model/voice. Strict compatible servers may reject extra fields.
 
-OmniVoice's reference-audio HTTP workflow requires per-request `consent_attestation`, which this client does not send; it is not directly integrated. Manual CLI use is separate. No proxy is supplied; any operator gateway must handle legitimate speaker rights and attestation itself. Slow CPU models, including TADA/OmniVoice, may exceed the sixty-second budget; CLI timings are not HTTP latency guarantees.
+OmniVoice's reference-audio HTTP workflow requires per-request `consent_attestation`, which this client does not send; it is not directly integrated. Manual CLI use is separate. No proxy is supplied; any operator gateway must handle legitimate speaker rights and attestation itself. Slow CPU models, including TADA/OmniVoice, may exceed the 180-second synthesis budget; CLI timings are not HTTP latency guarantees.
 
 ## Check safely
 

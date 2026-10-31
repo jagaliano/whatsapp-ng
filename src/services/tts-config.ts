@@ -3,7 +3,8 @@ import { allowsPlainHttp } from './endpoint-policy.js';
 export const EDGE_TTS_ENDPOINT = 'wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1';
 export const TTS_MAX_CHARACTERS = 2_000;
 export const TTS_MAX_AUDIO_BYTES = 8 * 1024 * 1024;
-export const TTS_SYNTHESIS_TIMEOUT_MS = 60_000;
+// Edge streams near real time (~0.8 s per audio second); long replies exceed 60 s.
+export const TTS_SYNTHESIS_TIMEOUT_MS = 180_000;
 export const TTS_MAX_PENDING = 5;
 
 export class TtsError extends Error {}

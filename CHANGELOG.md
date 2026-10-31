@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Raise the speech synthesis budget (including queue wait) from 60 to 180 seconds. Edge streams near real time, so replies above roughly 1,000 characters timed out and fell back to text-only.
+
 ## 1.1.2 — 2026-10-31
 
 - Protect eligible approved Voice/Both/audio-Mirror finals from accidental same-chat text-tool sends, including aliases and native quotes. Refuse before sending and direct the model to its normal final answer; retain explicit explanations once a legacy caption/tool-only attachment already covers the final. Preserve consent, manual sends, fallback and duplicate/unknown-delivery safety; clarify late-fence outcomes and whole-reply diagnostics.
