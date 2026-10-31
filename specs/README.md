@@ -21,7 +21,8 @@ This directory is a design/history archive, not a list of features still waiting
 | [046 release 1.1.1](046-release-1.1.1/plan.md) | Authorized main/version-only-lock/isolated-consumer release; exact artifact and one-shot publication gates. Local receipts hold post-commit outcomes. |
 | [047 spoken-reply guard](047-spoken-reply-guard/plan.md) | Protect eligible spoken finals; preserve legacy explicit explanations and existing safety. [Opus review/dispositions](047-spoken-reply-guard/review.md). |
 | [048 release 1.1.2](048-release-1.1.2/plan.md) | Authorized Opus-reviewed corrections, narrow dependency-security exception and exact committed-artifact release gates; no Telegram or live operations. |
-| [049 spoken separators](049-spoken-separators/plan.md) | Remove standalone Unicode decorative rules from speech only; preserve original answers and safety, with synthetic regression evidence and no live pronunciation claim. |
+| [049 spoken separators](049-spoken-separators/plan.md) | Remove standalone Unicode decorative rules from speech only; preserve original answers and safety. [Opus review/dispositions](049-spoken-separators/review.md); no live pronunciation claim. |
+| [050 release 1.1.3](050-release-1.1.3/plan.md) | Later explicit review/correction/version/commit/push/publication authority for 049; exact-artifact gates and unchanged live/platform limits. |
 
 ## Cleanup policy
 

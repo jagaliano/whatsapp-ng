@@ -76,7 +76,7 @@ Speech uses a plain-text copy; displayed/saved answers stay unchanged:
 - Remove balanced emphasis, headings, bullets, quote escapes and standalone horizontal divider lines (such as `────`), keeping paragraph breaks. Ordinary quotes, dates, approximation tildes and meaningful inline dashes remain; heading candidates above 1,024 characters stay literal.
 - Voice/audio Mirror retains complete text if a Markdown link would lose its HTTP(S) destination. Voice + text may speak labels only after the full text is accepted; failed/unknown text is not retried or omitted. URL-shaped labels keep their addresses.
 - Inline labels up to 80 characters (`config.json`, `/whatsapp`, `--verbose`, `Voice settings`) are eligible. Command-like multiword snippets, fences, tables, ambiguous/unclosed code and overlong answers retain complete text.
-- Bound input before parsing and cleaned speech to 2,000 characters. No summarization, truncation, fetching or extra model call.
+- Automatic finals must fit 4,000 raw UTF-16 code units before parsing; cleaned speech must fit 2,000 Unicode code points. Removing decorative rules may make an otherwise overlong raw answer fit the spoken limit. No summarization, truncation, fetching or extra model call.
 
 A definite pre-transmission voice failure can fall back to the full text once. Voice + text does not resend its text. Unknown delivery never triggers another voice send or speculative text fallback. Already-issued uploads cannot be recalled; their snapshots remain owned until settlement.
 

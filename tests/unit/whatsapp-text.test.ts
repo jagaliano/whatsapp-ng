@@ -53,7 +53,7 @@ describe('plain speech projection', () => {
             expect(cleanSpeechText('Antes\n' + rule + '\n' + body)).toBeUndefined();
         }
     });
-    it('keeps separator-only output silent and applies bounds before decorative cleanup', () => {
+    it('keeps separators silent, rejects oversized raw input and preserves meaningful mixed lines', () => {
         expect(cleanSpeechText('─'.repeat(80))).toBeUndefined();
         expect(cleanSpeechText('─'.repeat(65_537))).toBeUndefined();
         const meaningful = 'Resumen\n' + '─'.repeat(2000) + 'dato';

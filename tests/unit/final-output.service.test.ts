@@ -150,6 +150,23 @@ describe('four-mode final-output coordinator', () => {
         if (mode === 'both') expect(h.text.mock.calls[0][1]).toBe(answer);
         else expect(h.text).not.toHaveBeenCalled();
     });
+    it.each([2000, 2001])('applies the cleaned %s-character speech limit after removing rules', async length => {
+        const spoken = 'a'.repeat(length);
+        const answer = '─'.repeat(1000) + '\n' + spoken;
+        expect(answer.length).toBeGreaterThan(2000);
+        expect(answer.length).toBeLessThanOrEqual(4000);
+        expect(isSpeakableReply(answer)).toBe(length === 2000);
+        const h = setup('voice'); const result = await h.output.deliver(h.snapshot, answer);
+        if (length === 2000) {
+            expect(result.voice?.success).toBe(true);
+            expect(h.prepare.mock.calls[0][0]).toBe(spoken);
+            expect(h.text).not.toHaveBeenCalled();
+        } else {
+            expect(result.fallback).toBe(true);
+            expect(h.text.mock.calls[0][1]).toBe(answer);
+            expect(h.prepare).not.toHaveBeenCalled(); expect(h.voice).not.toHaveBeenCalled();
+        }
+    });
     it('keeps real inline code, commands, tables and fenced code as complete text', async () => {
         for (const answer of ['Run `git status`.', 'Use `const n = 42`.', '```ts\nconst n = 42;\n```', '~~~sh\ngit status\n~~~',
             'git status', '| Key | Value |\n| --- | --- |\n| n | 42 |']) {
