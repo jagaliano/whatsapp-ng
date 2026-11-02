@@ -1,12 +1,12 @@
 {
-  "version": "0.8.14.dev0",
+  "version": "1.2.7.dev0",
   "integration_state_schema": 1,
   "installed_integrations": [
     "pi"
   ],
   "integration_settings": {
     "pi": {
-      "script": "ps",
+      "script": "sh",
       "invoke_separator": "."
     }
   },

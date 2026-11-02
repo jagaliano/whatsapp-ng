@@ -1,16 +1,16 @@
 {
   "integration": "pi",
-  "version": "0.8.14.dev0",
-  "installed_at": "2026-06-03T00:07:46.107827+00:00",
+  "version": "1.2.7.dev0",
+  "installed_at": "2026-11-02T23:51:08.149656+00:00",
   "files": {
-    ".pi/prompts/speckit.analyze.md": "56285817b93f55ae926eade0528673d25ffcf441e8109492323bfbe8941be8f7",
-    ".pi/prompts/speckit.checklist.md": "53ce35462c1df402780e730ea54150a30872e6e0d6d44a8bd38dd8b5d42900a9",
-    ".pi/prompts/speckit.clarify.md": "97b14836d6174f0ef51d8bbda0b731c87ef0b011aa36ccd4171a2fc3d7e3280a",
-    ".pi/prompts/speckit.constitution.md": "58d35eb026f56bb7364d91b8b0382d5dd1249ded6c1449a2b69546693afb85f7",
-    ".pi/prompts/speckit.implement.md": "ea8e0ce5b01147da298c49603da8c68322ab8f4c029d1a54b3c2436f6180a7bb",
-    ".pi/prompts/speckit.plan.md": "b9534d77d040b2ec242e8c60718f52b6ad32b736aecd8970b993449ccc8d35e8",
-    ".pi/prompts/speckit.specify.md": "c7b1ab7ceafc42607e86dd6c0dab0b5cb74462a93a3cdd3b5e7173468cc88bdf",
-    ".pi/prompts/speckit.tasks.md": "7aa5300dd7387f7c418243f70904b618d01984760d2337a50124a1371d5a0dbf",
-    ".pi/prompts/speckit.taskstoissues.md": "12532e50c8f9aeb453a565aec6aa6f53abe53cf92926ca553b3d2c61b6b7b6e3"
+    ".pi/prompts/speckit.analyze.md": "91fe16257ededdea9cc21d3cb27d539fcdd12d93ddcea52332cd4b68176b6a8d",
+    ".pi/prompts/speckit.clarify.md": "dd11eb5b9759f7d3cd18c9d7f23a0ae2fe7973fc6ca2486dbfaf53a5569224b1",
+    ".pi/prompts/speckit.constitution.md": "9a7e9296f0878cdf4ed011b0de74cfb3656938680b64e43e808553fdfd054efc",
+    ".pi/prompts/speckit.implement.md": "e036ce63702db93e656e1c91ee6c02a8dc3d4a4f8624f8ba4adc69027fe68983",
+    ".pi/prompts/speckit.converge.md": "3cb55244c9dc5b9bf52ee3127ba177c52cabd5e5e5197e1312497b3eaeb8b9a4",
+    ".pi/prompts/speckit.plan.md": "3be8b011db9c6bb1cc77037f7d90756a6dbcbda1995cda2192818385732b27ff",
+    ".pi/prompts/speckit.checklist.md": "fa58b19e2604ce56ff5f5427061f6ee94fd44d7194e740b874824d9bf21ee15b",
+    ".pi/prompts/speckit.specify.md": "f187308807970a6da6df55c4ac6a5be992c14059e607eda950ffde1bd17531dd",
+    ".pi/prompts/speckit.tasks.md": "6754ae39649c8e73a5ed376ad5cfcf04422e321a10e07c5ccd92fd1b9bccf776"
   }
 }

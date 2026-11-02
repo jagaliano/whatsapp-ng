@@ -4,6 +4,6 @@
   "context_file": "AGENTS.md",
   "here": true,
   "integration": "pi",
-  "script": "ps",
-  "speckit_version": "0.8.14.dev0"
+  "script": "sh",
+  "speckit_version": "1.2.7.dev0"
 }
