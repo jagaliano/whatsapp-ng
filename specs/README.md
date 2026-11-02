@@ -28,6 +28,7 @@ Completed implementation and separately deferred live/platform acceptance are di
 | [051 plan status reconciliation](051-plan-status-reconciliation/plan.md) | Documentation-only reconciliation of completed work, deferred acceptance and frozen release checkpoints; historical evidence and the 039 planning gap remain explicit. |
 | [052 owner-menu guidance](052-owner-menu-guidance/plan.md) | Correct phone/localized owner guidance to the grouped terminal menu without changing verified-owner or speech-consent policy; synthetic regressions and remaining operator scope are recorded in its tasks. |
 | [053 consistent settings menus](053-consistent-settings-menus/plan.md) | Chat-first speech setup, advanced provider controls and scoped Back/Cancel consistency; validation and independent Opus review are recorded in its tasks. |
+| [054 release 1.1.4](054-release-1.1.4/plan.md) | Owner-authorized stable/latest release checkpoint for reviewed 052/053; post-commit artifact/CI/npm outcomes require original receipts and registry verification. |
 
 ## Cleanup policy
 

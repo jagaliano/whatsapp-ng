@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.1.4 — 2026-11-02
+
 - Make Voice chat-first, separate advanced provider controls, support explicit compatible server-default voices in the menu and explain shared enablement/retained overrides. Make settings Back/Cancel consistent and preserve the original request authority across nested dialogs; identify missing phone speech permissions without granting them or sending previews.
 
 - Correct owner-authorization and pairing guidance to the grouped terminal **Chats / Owner → Owner** menu, including localized Owner/Recents paths. Preserve verified-owner checks and separate speech destination/group approval; no automatic owner assignment or saved-setting change.
