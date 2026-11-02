@@ -1,5 +1,10 @@
 <!--
 Sync Impact Report:
+- Version change: 1.1.0 → 1.2.0 (Development Workflow scoped to features/behaviour changes; core principles unchanged)
+- Modified sections: Development Workflow (which changes need spec/plan/tasks records)
+- Templates requiring updates: none
+
+Previous report:
 - Version change: 1.0.0 → 1.1.0 (project namespace only; core principles unchanged)
 - List of modified principles:
     - [PRINCIPLE_1_NAME] → I. Object Oriented Programming (OOP)
@@ -48,8 +53,18 @@ using Promises/async/await.
 
 ## Development Workflow
 
-Every change MUST be documented in the corresponding specification and plan files. Tasks MUST be
-derived from the plan. Code reviews MUST ensure adherence to these constitutional principles.
+A new feature or a change to user-visible or runtime behaviour MUST be documented in a specification
+and plan under `specs/<###-feature>/`, with tasks derived from the plan. Prefer the Spec Kit commands
+(`/speckit.specify`, `/speckit.plan`, `/speckit.tasks`) so records follow the templates. Follow-up
+corrections to an existing feature (review findings, bug fixes in its scope) update that feature's
+records rather than creating a new folder.
+
+The following do NOT get a new spec folder: releases and version bumps, documentation-only edits,
+dependency/security patches without behaviour change, test-only changes and small fixes that do not
+alter documented behaviour. Record their impact in `CHANGELOG.md`; release procedure lives in
+`docs/releases.md` and post-commit release evidence stays in local receipts.
+
+Code reviews MUST ensure adherence to these constitutional principles.
 
 ## Governance
 
@@ -61,4 +76,4 @@ Use `.specify/memory/constitution.md` as the source of truth.
 2. All code reviews MUST check against these 5 principles.
 3. Any deviation MUST be documented in the "Complexity Tracking" section of the plan.
 
-**Version**: 1.1.0 | **Ratified**: 2026-04-09 | **Last Amended**: 2026-10-23
+**Version**: 1.2.0 | **Ratified**: 2026-04-09 | **Last Amended**: 2026-11-02
