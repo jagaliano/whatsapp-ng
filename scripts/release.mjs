@@ -144,7 +144,13 @@ export function release(args, { root = resolve(dirname(fileURLToPath(import.meta
         if (audit.metadata?.vulnerabilities?.total !== 0) throw new Error('Production dependency audit is not clean');
         current();
         const directory = resolve(output, `${manifest.version}-${randomUUID()}`); mkdirSync(directory, { recursive: true, mode: 0o700 });
-        const [packed] = npmJson(['pack', '--ignore-scripts', '--json', '--pack-destination', directory]);
+        const packResult = npmJson(['pack', '--ignore-scripts', '--json', '--pack-destination', directory]);
+        // npm 11 returns an array; npm 12 keys results by package name. Admit
+        // exactly one expected package, never the first of ambiguous results.
+        const packed = Array.isArray(packResult) && packResult.length === 1 ? packResult[0]
+            : packResult && typeof packResult === 'object' && !Array.isArray(packResult)
+                && Object.keys(packResult).length === 1 && Object.hasOwn(packResult, manifest.name) ? packResult[manifest.name] : undefined;
+        if (!packed || typeof packed !== 'object' || Array.isArray(packed) || !Array.isArray(packed.files)) throw new Error('Malformed npm pack JSON; preparation refused');
         if (packed.name !== manifest.name || packed.version !== manifest.version || packed.filename !== `${manifest.name}-${manifest.version}.tgz`) throw new Error('Packed identity differs from source');
         const allowed = new Set(git('ls-files', '-z').split('\0'));
         const required = new Set(['package.json', 'README.md', 'LICENSE', manifest.main, 'src/services/edge-tts.worker.mjs', 'src/services/managed-speech.worker.mjs', 'docs/reference.md', 'docs/crispasr.md', 'docs/releases.md']);

@@ -28,6 +28,8 @@ Requires a clean worktree/index, including non-ignored untracked files. Preparat
 5. Hashes the tarball, runs `npm publish --dry-run` under the intended tag, checks integrity and rechecks unchanged clean source/HEAD.
 6. Writes `.pi/cache/releases/prepared.json`: version, commit, tag, registry, artifact path and SHA-512 integrity.
 
+Preparation accepts npm 11's single-entry pack array and npm 12's single expected-package keyed result. Empty, foreign-package, multi-package and malformed results are refused, not guessed or reduced to their first entry.
+
 No real publication occurs. A new attempt invalidates the prior prepared receipt before checks; completed tarballs are retained. Any source commit/edit—including documentation—requires preparation again.
 
 Preparation does not replace secret scans, host/full-tree dependency assessment, isolated consumer/Pi startup, platform checks or approved live-client acceptance. A production audit excludes host peers and cannot clear SDK findings. Record deferred scope explicitly. There is no build step: the package loads TypeScript source.

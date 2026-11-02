@@ -9,6 +9,10 @@ Requirements: [spec](spec.md). Checkpoint status: [tasks](tasks.md). This plan a
 5. Recheck matching source/artifact/CI, current npm identity/rights, structured target-version absence and no attempt marker. Request ordinary owner `npm login` when E401 occurs; never read credential files or use alternative keys.
 6. Invoke `npm run release:publish -- --confirm 1.1.4 --tag latest` once. Verify exact registry integrity/version/latest and report `next` without retagging it. Confirm a fresh exact registry artifact in a disposable consumer. Unknown outcomes stop for inspection, never automatic replay.
 
+## Owner-approved preparation follow-up
+
+The npm 12 pack-output failure and the explicitly selected compatibility fix have a separate [requirements/plan/task checkpoint](npm12-compatibility.md). Re-prepare the new committed source; do not reuse the failed candidate or manufacture its receipt.
+
 ## Complexity Tracking
 
 No new release tooling, dependency or runtime abstraction. Use existing guarded release commands, synthetic startup fixtures and read-only registry/CI queries. The owner explicitly allowed only root lock version metadata; any graph change is a stop condition. Checkpoint records deliberately precede clean-source preparation; post-commit outcomes are retained locally so documentation edits cannot invalidate a prepared receipt.

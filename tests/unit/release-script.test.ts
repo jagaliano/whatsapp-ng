@@ -233,6 +233,34 @@ describe('explicit local release commands', () => {
         const h = fixture(); const lock = read('package-lock.json'); lock.version = '9.0.0'; write('package-lock.json', lock);
         expect(() => h.invoke('prepare')).toThrow(/mismatch/); expect(h.actualPublishes()).toHaveLength(0);
     });
+    it('prepares from npm 12 single-package keyed pack JSON without weakening existing gates', () => {
+        const h = fixture(); const original = h.run.getMockImplementation()!;
+        h.run.mockImplementation((name, args, options) => {
+            const result = original(name, args, options);
+            if (name === 'npm' && args[0] === 'pack') return JSON.stringify({ 'whatsapp-ng': JSON.parse(result)[0] });
+            return result;
+        });
+        h.invoke('prepare'); expect(read(receiptPath)).toMatchObject({ name: 'whatsapp-ng', packageVersion: '1.1.0-rc.1', commit: 'fixture-head' });
+        expect(h.actualPublishes()).toHaveLength(0);
+        expect(h.run.mock.calls.filter(([name, args]) => name === 'npm' && args[0] === 'publish' && args.includes('--dry-run'))).toHaveLength(1);
+    });
+    it.each(['empty-array', 'multiple-array', 'foreign-key', 'multiple-keyed', 'bare-object', 'null', 'primitive', 'null-entry', 'invalid-files'])(
+        'rejects %s pack JSON without writing a receipt or running publish dry-run', shape => {
+            const h = fixture(); const original = h.run.getMockImplementation()!;
+            h.run.mockImplementation((name, args, options) => {
+                const result = original(name, args, options);
+                if (name !== 'npm' || args[0] !== 'pack') return result;
+                const packed = JSON.parse(result)[0];
+                const malformed: Record<string, unknown> = {
+                    'empty-array': [], 'multiple-array': [packed, packed], 'foreign-key': { foreign: packed },
+                    'multiple-keyed': { 'whatsapp-ng': packed, foreign: packed }, 'bare-object': packed,
+                    null: null, primitive: 'private-output-sentinel', 'null-entry': [null], 'invalid-files': [{ ...packed, files: null }]
+                };
+                return JSON.stringify(malformed[shape]);
+            });
+            expect(() => h.invoke('prepare')).toThrow('Malformed npm pack JSON'); expect(existsSync(resolve(root, receiptPath))).toBe(false);
+            expect(h.run.mock.calls.some(([name, args]) => name === 'npm' && args[0] === 'publish')).toBe(false); expect(h.actualPublishes()).toHaveLength(0);
+        });
     it('prepares an immutable receipt after validation/audit/dry-run only', () => {
         const h = fixture(); vi.stubEnv('RELEASE_TEST_SECRET', 'synthetic-do-not-inherit'); h.invoke('prepare');
         const receipt = read(receiptPath); expect(receipt).toMatchObject({ name: 'whatsapp-ng', packageVersion: '1.1.0-rc.1', commit: 'fixture-head', tag: 'next', registry: 'https://registry.npmjs.org' });
