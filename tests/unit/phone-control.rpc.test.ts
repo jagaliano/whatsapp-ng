@@ -10,7 +10,7 @@ import { resolveTtsConfig } from '../../src/services/tts-config.ts';
 
 /** Real Pi command context/lifecycle; WhatsApp transport and fixture model streams are synthetic. */
 describe('production phone-control Pi RPC gateway', () => {
-    it.each(['direct', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard', 'autoconnect', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async mode => {
+    it.each(['direct', 'owner-guidance', 'menu-ui', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard', 'autoconnect', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async mode => {
         const root = await mkdtemp(join(tmpdir(), 'wa-phone-rpc-')); const home = join(root, 'home'); const workspace = join(root, 'workspace');
         const data = join(home, '.pi/agent/extensions/whatsapp-ng'); const metricsPath = join(root, 'metrics.json'); const networkPath = join(root, 'network.json');
         await mkdir(join(data, 'auth'), { recursive: true }); await mkdir(workspace);
@@ -23,7 +23,7 @@ describe('production phone-control Pi RPC gateway', () => {
         }
         const selfChat = mode === 'self-lid' || mode === 'self-auto'; const modelFixture = ['stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard'].includes(mode) || managed;
         const owner = selfChat ? '15550000009@s.whatsapp.net' : '15550000001@s.whatsapp.net';
-        await writeFile(join(data, 'config.json'), JSON.stringify({ operatorJid: owner, allowList: [{ number: '+' + owner.split('@')[0] }],
+        await writeFile(join(data, 'config.json'), JSON.stringify({ operatorJid: mode === 'owner-guidance' ? '' : owner, allowList: [{ number: '+' + owner.split('@')[0] }],
             ...(automatic ? { autoConnect: true } : {}),
             ...(mode === 'spoken-guard' ? { voicePreferences: { enabled: true, mode: 'voice', approvedDestinationKey: resolveTtsConfig({}).destinationKey, chats: {} } } : {}),
             ...(managed ? { sttEndpoint: endpoint, sttModel: 'fixture-api-model', sttEnv: 'FIXTURE_KEY' } : {}),
@@ -146,6 +146,47 @@ describe('production phone-control Pi RPC gateway', () => {
                 expect(records.filter(record => record.type === 'agent_start' || record.type === 'extension_error')).toEqual([]);
                 const config = JSON.parse(await readFile(join(data, 'config.json'), 'utf8')); expect(config.operatorJid).toBe(owner); expect(config.autoConnect).toBe(false);
                 expect(config.allowList).toEqual([{ number: '+' + owner.split('@')[0] }]); return;
+            }
+            if (mode === 'menu-ui') {
+                await expect.poll(async () => JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).status, { timeout: 10_000 }).toBe('connected');
+                await prompt('/phone-fixture voice-mirror');
+                expect((await metrics()).messages.at(-1)).toContain('Speech is disabled');
+                expect((await metrics()).messages.at(-1)).toContain('Set up replies for a chat');
+                const before = await readFile(join(data, 'config.json'), 'utf8');
+                const cancelled = prompt('/whatsapp'); await select('Voice'); await select('Advanced speech settings');
+                await select('Speech backend / connection'); await select('Remote speech service'); await select('OpenAI-compatible');
+                let input: any;
+                await expect.poll(() => { input = records.find(record => record.type === 'extension_ui_request' && record.method === 'input' && !answered.has(record.id)); return !!input; }, { timeout: 10_000 }).toBe(true);
+                answered.add(input.id); child.stdin.write(JSON.stringify({ type: 'extension_ui_response', id: input.id }) + '\n');
+                await cancelled; expect(await readFile(join(data, 'config.json'), 'utf8')).toBe(before);
+                const setup = prompt('/whatsapp'); await select('Voice'); await select('Set up replies for a chat');
+                await select(`(${owner})`); await select('Mirror audio input'); await confirm();
+                expect((await select('Back')).title).toMatch(/^Voice:/); expect((await select('Back')).title).toMatch(/^WhatsApp — /); await setup;
+                const config = JSON.parse(await readFile(join(data, 'config.json'), 'utf8'));
+                expect(config.voicePreferences).toMatchObject({ enabled: true, mode: 'text', chats: { [owner]: { mode: 'mirror' } } });
+                await prompt('/phone-fixture voice-mirror'); expect((await metrics()).messages.at(-1)).toContain('reply mode: mirror');
+                const back = prompt('/whatsapp'); await select('Replies'); await select('Optional outputs');
+                await select('Choose automatic image tools'); expect((await select('Back')).title).toContain('actual image result blocks');
+                expect((await select('Back')).title).toContain('Optional outputs'); expect((await select('Back')).title).toBe('Replies');
+                expect((await select('Back')).title).toMatch(/^WhatsApp — /); await back;
+                expect((await metrics()).messages).toHaveLength(2); expect((await metrics()).modelStarts).toBe(0);
+                expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
+                expect(records.filter(record => record.type === 'agent_start' || record.type === 'extension_error')).toEqual([]); return;
+            }
+            if (mode === 'owner-guidance') {
+                await expect.poll(async () => JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).status, { timeout: 10_000 }).toBe('connected');
+                const before = JSON.parse(await readFile(join(data, 'config.json'), 'utf8'));
+                await prompt('/phone-fixture voice-mirror');
+                expect((await metrics()).messages.at(-1)).toContain('/whatsapp > Chats / Owner > Owner');
+                const menu = prompt('/whatsapp'); await select('Chats / Owner'); await select('Owner');
+                expect((await select('Back')).title).toBe('Phone settings owner: not configured');
+                expect((await select('Back')).title).toBe('Chats / Owner'); expect((await select('Back')).title).toMatch(/^WhatsApp — /); await menu;
+                const after = JSON.parse(await readFile(join(data, 'config.json'), 'utf8'));
+                expect(after.operatorJid).toBe(before.operatorJid); expect(after.operatorJid).toBe('');
+                expect(after.voicePreferences).toEqual(before.voicePreferences);
+                expect((await metrics()).modelStarts).toBe(0);
+                expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
+                expect(records.filter(record => record.type === 'agent_start' || record.type === 'extension_error')).toEqual([]); return;
             }
             if (mode === 'spoken-guard') {
                 await prompt('/phone-fixture stats-start');

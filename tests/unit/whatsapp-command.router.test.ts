@@ -33,6 +33,16 @@ function fixture() {
 }
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 describe('exact owner phone controls', () => {
+    it('distinguishes unapproved destination from disabled shared speech without granting either', async () => {
+        const h = fixture(); await h.handle('/voice mirror');
+        expect(h.sent.at(-1)).toContain('destination is not approved'); expect(h.sent.at(-1)).toContain('Set up replies for a chat');
+        h.enableSpeech(); h.settings().enabled = false; await h.handle('/voice mirror');
+        expect(h.sent.at(-1)).toContain('Speech is disabled'); expect(h.ports.session.setSpeechSettings).not.toHaveBeenCalled();
+    });
+    it('identifies missing group opt-in independently of shared speech approval', async () => {
+        const h = fixture(); h.enableSpeech(); await h.handle('/voice mirror', owner, group);
+        expect(h.sent.at(-1)).toContain('group speech opt-in'); expect(h.ports.session.setSpeechSettings).not.toHaveBeenCalled();
+    });
     it('preserves existing phone reply/stat controls when saved optional reporting is malformed', async () => {
         const h = fixture(); h.ports.session.getReplyReporting.mockImplementation(() => { throw new Error('Invalid saved reporting'); });
         await h.handle('/replies'); expect(h.sent.at(-1)).toContain('final stats Off'); await h.handle('3'); expect(h.ports.session.getReplyStats()).toBe(true);
@@ -53,6 +63,13 @@ describe('exact owner phone controls', () => {
         const h = fixture(); expect(await h.handle(command, other)).toBe(true); expect(h.sent.join()).toContain('Owner authorization');
         expect(h.ports.pi.setModel).not.toHaveBeenCalled(); expect(h.ports.pi.setThinkingLevel).not.toHaveBeenCalled();
         expect(h.ctx.compact).not.toHaveBeenCalled(); expect(h.ports.stop).not.toHaveBeenCalled(); expect(h.ports.off).not.toHaveBeenCalled(); expect(h.ports.pi.sendUserMessage).not.toHaveBeenCalled();
+    });
+    it.each(['/voice mirror', '/voice text'])('routes denied %s to the grouped terminal Owner menu without changing speech', async command => {
+        const h = fixture(); const before = structuredClone(h.settings());
+        expect(await h.handle(command, other)).toBe(true);
+        expect(h.sent.at(-1)).toContain('/whatsapp > Chats / Owner > Owner');
+        expect(h.ports.session.setSpeechSettings).not.toHaveBeenCalled();
+        expect(h.settings()).toEqual(before);
     });
     it('uses the actual group participant, not the allowed group or a spoofed header', async () => {
         const h = fixture(); await h.handle('/model fixture/chat/exact', other, group); expect(h.ports.pi.setModel).not.toHaveBeenCalled();

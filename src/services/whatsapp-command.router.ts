@@ -6,6 +6,7 @@ import type { SessionManager } from './session.manager.js';
 import { CommandMenuService, safeLabel, type CommandMenuBinding, type CommandPollInput } from './command-menu.service.js';
 import { chatReplyPolicy, outputMode, setChatReplyPreferences } from './speech-settings.js';
 import { resolveTtsConfig } from './tts-config.js';
+import { t } from '../i18n.js';
 
 type Model = NonNullable<ExtensionContext['model']>;
 type Thinking = ReturnType<ExtensionAPI['getThinkingLevel']>;
@@ -14,7 +15,7 @@ interface Frame extends CommandMenuBinding { revision: number }
 interface ResumeTicket { profile: string; account: string; sessionId: string; actor: string; chat: string; expires: number }
 const handoffs = globalThis as typeof globalThis & { __whatsappNgControlHandoffs?: Map<string, ResumeTicket> };
 const commands = new Set(['help', 'status', 'stop', 'abort', 'model', 'think', 'compact', 'new', 'voice', 'replies', 'off', 'quit']);
-const DENIED = 'Owner authorization required. Choose the owner in terminal /whatsapp > Owner.';
+const DENIED = 'Owner authorization required. Choose the owner in terminal /whatsapp > Chats / Owner > Owner.';
 const BUSY = 'The shared Pi session is busy. Use /stop explicitly before changing it.';
 const SHARED = 'This affects the shared Pi session, not a private chat session.';
 
@@ -200,8 +201,15 @@ export class WhatsAppCommandRouter {
                 if (!outputMode(action.value)) { await this.reply(frame, 'Usage: /voice text|voice|both|mirror'); return; }
                 const revision = this.ports.session.getSpeechRevision(); const settings = this.ports.session.getSpeechSettings();
                 const policy = chatReplyPolicy(settings, frame.chat, this.ports.canonical);
-                if (action.value !== 'text' && (!settings.enabled || settings.approvedDestinationKey !== resolveTtsConfig(settings.config).destinationKey
-                    || (frame.chat.endsWith('@g.us') && !policy.groupOptIn))) { await this.reply(frame, 'Approve this speech destination and any group opt-in in terminal /whatsapp > Voice first. No speech was enabled.'); return; }
+                const missing = [
+                    ...(!settings.enabled ? ['Speech is disabled'] : []),
+                    ...(settings.approvedDestinationKey !== resolveTtsConfig(settings.config).destinationKey ? ['Speech destination is not approved'] : []),
+                    ...(frame.chat.endsWith('@g.us') && !policy.groupOptIn ? ['This group speech opt-in is missing'] : [])
+                ];
+                if (action.value !== 'text' && missing.length) {
+                    await this.reply(frame, `${missing.join('; ')}. Use terminal /whatsapp > Voice > ${t('voice.setupChat')} and select this chat. Nothing changed; no speech was enabled.`);
+                    return;
+                }
                 await this.ports.session.setSpeechSettings(setChatReplyPreferences(settings, frame.chat, { mode: action.value }, this.ports.canonical), revision, frame.current);
                 await this.reply(frame, `This chat's reply mode: ${action.value}.`);
             } else if (action.command === 'replies') {

@@ -114,7 +114,7 @@ Updates preserve omitted settings. Call `configure_wa_stt({})` to return to loca
 
 ## Speech replies (opt-in)
 
-Open `/whatsapp` → **Voice** to choose a speech backend, voice, speed and reply mode:
+Open `/whatsapp` → **Voice → Set up replies for a chat**, select a known chat and choose a reply mode. Review the required speech/group consent; the saved status shows whether automatic replies are paused. Backend, voice, speed, format and shared defaults live under **Advanced speech settings**:
 
 | Mode | Output |
 | --- | --- |
@@ -127,7 +127,7 @@ Provide normal replies without a send tool. While an approved spoken final remai
 
 Backends include Fish, OpenAI-compatible speech APIs and the unofficial Microsoft Edge speech service. A compatible [CrispASR TTS server](docs/crispasr.md#tts-server), such as the Kokoro example, can provide local synthesis through the same endpoint client. Edge requires no configured API key but is an online service, not offline synthesis. The transcription and speech backends are independent. Compatible servers with a built-in voice, including Chatterbox, can explicitly use [`ttsUseServerVoice: true`](docs/crispasr.md#built-in-server-voice); this omits `voice`, not a substitute voice ID.
 
-Speech is disabled until you approve its destination in the terminal Voice menu. Groups need separate opt-in. Changing the endpoint requires new approval; configuring a backend with `configure_wa_tts` does not enable speech or grant consent.
+Chat setup enables shared speech only after the required terminal confirmation. That review explains retained defaults and other chat overrides that become eligible again; paused chats stay paused and groups need separate opt-in. Changing the endpoint requires new approval; backend configuration alone, including `configure_wa_tts`, does not enable speech or grant consent.
 
 Voice settings include per-chat pause controls and a confirmed preview. Speech uses a cleaned plain-text copy without changing the displayed answer. Long/code-heavy replies, tables and links that would lose their address remain complete text. See the [speech reference](docs/reference.md#speech-replies) for formatting, fields and failure behavior.
 
@@ -135,7 +135,7 @@ Voice settings include per-chat pause controls and a confirmed preview. Speech u
 
 ## Chats and replies
 
-The `/whatsapp` menu groups settings into **Connection**, **Chats / Owner**, **Replies**, **Voice**, **Groups** and **Advanced**. See [Off behavior and diagnostic privacy](docs/reference.md#off-and-diagnostics) for shutdown and log retention.
+The `/whatsapp` menu groups settings into **Connection**, **Chats / Owner**, **Replies**, **Voice**, **Groups** and **Advanced**. **Back** returns to the parent; cancelling a selection/input/editor closes the settings request without saving that action. Declining a confirmation changes nothing; message-detail overlays retain their own close gesture. See [Off behavior and diagnostic privacy](docs/reference.md#off-and-diagnostics) for shutdown and log retention.
 
 - **Contacts:** add phone numbers in `+E164` format; use aliases to identify them.
 - **Groups:** add the group JID. By default, the agent responds to actual WhatsApp mentions of its account or replies to that account's messages. Change this under **Groups → Group replies**.

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SessionManager } from '../../src/services/session.manager.ts';
 import { showOptionalOutputSettings } from '../../src/ui/optional-output-settings.view.ts';
+import { withSettingsRequest } from '../../src/ui/whatsapp-settings.view.ts';
 
 const owner = { ownerJid: '15550000001@s.whatsapp.net', accountScope: 'fixture' };
 describe('optional output settings consent', () => {
@@ -12,6 +13,20 @@ describe('optional output settings consent', () => {
     afterEach(async () => { await rm(root, { recursive: true, force: true }); });
     const ui = (...choices: string[]) => ({ ui: { select: vi.fn(async () => choices.shift()), confirm: vi.fn(async () => true), notify: vi.fn() } }) as any;
     const actions = () => ({ current: () => true, owner: () => owner, tools: () => ['screenshot', 'read', 'send_wa_media'] });
+    it('returns from tool-picker Back to Optional outputs without saving', async () => {
+        const ctx = ui('Choose automatic image tools', 'Back', 'Back');
+        expect(await showOptionalOutputSettings(ctx, session, actions())).toBe('back');
+        expect(ctx.ui.select).toHaveBeenCalledTimes(3); expect(ctx.ui.confirm).not.toHaveBeenCalled(); expect(ctx.ui.notify).not.toHaveBeenCalled();
+        expect(session.getOptionalOutputs()).toEqual({ imageTools: [] });
+    });
+    it('does not renew owner authority when Back exits the tool picker', async () => {
+        const ctx = ui(); ctx.ui.select.mockResolvedValueOnce('Choose automatic image tools').mockImplementationOnce(async () => {
+            await session.setOperatorJid(owner.ownerJid); return 'Back';
+        });
+        await withSettingsRequest(ctx, () => () => true, async scoped => { await showOptionalOutputSettings(scoped, session, actions()); });
+        expect(ctx.ui.select).toHaveBeenCalledTimes(2); expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining('Settings changed'), 'info');
+        expect(session.getOptionalOutputs()).toEqual({ imageTools: [] });
+    });
     it('enables only one explicitly selected tool after confirmation', async () => {
         const ctx = ui('Choose automatic image tools', 'Enable screenshot'); await showOptionalOutputSettings(ctx, session, actions());
         expect(ctx.ui.confirm).toHaveBeenCalledTimes(1); expect(session.getOptionalOutputs()).toEqual({ imageTools: ['screenshot'] });

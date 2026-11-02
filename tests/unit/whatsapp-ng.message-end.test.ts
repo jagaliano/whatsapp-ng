@@ -129,7 +129,11 @@ vi.mock('../../src/services/audio.service.ts', () => ({
 }));
 
 vi.mock('../../src/ui/menu.handler.ts', () => ({
-    MenuHandler: vi.fn(function (...args: any[]) { mocks.settingsMenus = args[3]; return mocks.menuHandler; })
+    MenuHandler: vi.fn(function (...args: any[]) {
+        const settings = args[3];
+        mocks.settingsMenus = { ...settings, voice: (ctx: any) => settings.voice(ctx, settings.captureCurrent()) };
+        return mocks.menuHandler;
+    })
 }));
 
 vi.mock('../../src/services/incoming-message.resolver.ts', async importOriginal => ({
@@ -699,7 +703,7 @@ describe('whatsapp-ng owned turn delivery', () => {
         expect(mocks.whatsappService.sendMessage).not.toHaveBeenCalled(); expect(mocks.whatsappService.sendContent).not.toHaveBeenCalled();
     });
     const previewMenu = (ctx: ReturnType<typeof createMockContext>) => {
-        ctx.ui.select.mockResolvedValueOnce('Fixed-phrase preview (review & send)')
+        ctx.ui.select.mockResolvedValueOnce('Advanced speech settings').mockResolvedValueOnce('Fixed-phrase preview (review & send)')
             .mockImplementationOnce(async (_title, options) => options.find((option: string) => option.includes('5511999998888@s.whatsapp.net')));
         ctx.ui.confirm.mockResolvedValueOnce(true);
     };

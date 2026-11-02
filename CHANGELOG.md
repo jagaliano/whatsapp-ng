@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Make Voice chat-first, separate advanced provider controls, support explicit compatible server-default voices in the menu and explain shared enablement/retained overrides. Make settings Back/Cancel consistent and preserve the original request authority across nested dialogs; identify missing phone speech permissions without granting them or sending previews.
+
+- Correct owner-authorization and pairing guidance to the grouped terminal **Chats / Owner → Owner** menu, including localized Owner/Recents paths. Preserve verified-owner checks and separate speech destination/group approval; no automatic owner assignment or saved-setting change.
+
 ## 1.1.3 — 2026-10-31
 
 - Remove standalone Unicode horizontal divider lines from the spoken copy of replies, preserving paragraph breaks, original displayed text and code/link/table safeguards. Dates, names, approximation signs and meaningful dashes are unchanged; no provider or transcription-accuracy claim.

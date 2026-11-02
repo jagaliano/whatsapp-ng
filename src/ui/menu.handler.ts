@@ -8,7 +8,7 @@ import * as qrcode from 'qrcode-terminal';
 import type { ExtensionCommandContext } from '@mariozechner/pi-coding-agent';
 import { t } from '../i18n.js';
 import { groupReplyModes, validateGroupReplies, type GroupReplies, type GroupReplyMode } from '../services/group-message.policy.js';
-import { chooseWhatsAppSetting } from './whatsapp-settings.view.js';
+import { chooseWhatsAppSetting, withSettingsRequest, type SettingsNavigation, type SettingsCategory } from './whatsapp-settings.view.js';
 import { METADATA_LOG_POLICY } from '../services/whatsapp-ng.logger.js';
 
 interface HistoryOptionEntry {
@@ -30,11 +30,15 @@ export class MenuHandler {
         private readonly whatsappService: WhatsAppService,
         private readonly sessionManager: SessionManager,
         private readonly recentsService: RecentsService,
-        private readonly settings?: { voice(ctx: ExtensionCommandContext): Promise<void>; owner(ctx: ExtensionCommandContext): Promise<void>; connect?(): void; captureCurrent?(): () => boolean; groupChanged?(): void; optional?(ctx: ExtensionCommandContext): Promise<void>; off?(ctx: ExtensionCommandContext): Promise<void>; enabled?(): boolean }
+        private readonly settings?: { voice(ctx: ExtensionCommandContext, current: () => boolean): Promise<SettingsNavigation>; owner(ctx: ExtensionCommandContext, current: () => boolean): Promise<SettingsNavigation>; connect?(): void; captureCurrent?(): () => boolean; groupChanged?(): void; optional?(ctx: ExtensionCommandContext, current: () => boolean): Promise<SettingsNavigation>; off?(ctx: ExtensionCommandContext): Promise<void>; enabled?(): boolean }
     ) {}
 
-    async handleCommand(ctx: ExtensionCommandContext) {
-        const settingsCurrent = this.settings?.captureCurrent?.() ?? (() => true);
+    async handleCommand(ctx: ExtensionCommandContext, category?: SettingsCategory): Promise<void> {
+        return withSettingsRequest(ctx, () => this.settings?.captureCurrent?.() ?? (() => true),
+            (scoped, current) => this.showSettings(scoped, current, category));
+    }
+
+    private async showSettings(ctx: ExtensionCommandContext, settingsCurrent: () => boolean, category?: SettingsCategory): Promise<void> {
         const checkCurrent = () => {
             if (settingsCurrent()) return true;
             ctx.ui.notify('Settings changed while this menu was open. Reopen /whatsapp.', 'info');
@@ -51,7 +55,7 @@ export class MenuHandler {
         const replyDeliveryLabel = t('menu.replyDelivery.title');
         const historyScopeLabel = t('archive.menu.scope');
         let choice: string | undefined;
-        let resumeCategory: 'Connection' | undefined;
+        let resumeCategory = category;
         for (;;) {
             choice = await chooseWhatsAppSetting(ctx, () => ({ status: this.whatsappService.getEffectiveStatus(), enabled: this.settings?.enabled?.() ?? true, registered,
                 archive: Boolean(this.recentsService.getArchiveState?.()?.enabled), optional: Boolean(this.settings?.optional), owner: Boolean(this.settings) }), checkCurrent, resumeCategory);
@@ -73,16 +77,16 @@ export class MenuHandler {
                 ctx.ui.notify(METADATA_LOG_POLICY, 'info');
                 break;
             case 'Optional outputs':
-                await this.settings?.optional?.(ctx);
+                if (await this.settings?.optional?.(ctx, settingsCurrent) === 'back') return this.handleCommand(ctx, 'Replies');
                 break;
             case t('voice.menu'):
-                await this.settings?.voice(ctx);
+                if (await this.settings?.voice(ctx, settingsCurrent) === 'back') return this.handleCommand(ctx);
                 break;
             case t('voice.owner'):
-                await this.settings?.owner(ctx);
+                if (await this.settings?.owner(ctx, settingsCurrent) === 'back') return this.handleCommand(ctx, 'Chats / Owner');
                 break;
             case 'Group replies':
-                await this.manageGroupReplies(ctx, settingsCurrent);
+                if (await this.manageGroupReplies(ctx, settingsCurrent) === 'back') return this.handleCommand(ctx, 'Groups');
                 break;
             case replyDeliveryLabel: {
                 const explain = t('menu.replyDelivery.explain');
@@ -98,6 +102,7 @@ export class MenuHandler {
                     .map(([key, label]) => ({ key, label: `${flags[key] ? 'Disable' : 'Enable'} ${label}` }));
                 const selected = await ctx.ui.select(t('menu.replyDelivery.current', { current }) + ` — final stats: ${this.sessionManager.getReplyStats() ? 'On' : 'Off'}; files ${flags.changedFiles ? 'On' : 'Off'}, interim ${flags.interimText ? 'On' : 'Off'}, activity ${flags.liveActivity ? 'On' : 'Off'}`,
                     [explain, legacy, statsOn, statsOff, ...reporting.map(option => option.label), backLabel]);
+                if (selected === backLabel) return this.handleCommand(ctx, 'Replies');
                 const report = reporting.find(option => option.label === selected);
                 if (report) {
                     if (!flags[report.key] && !await ctx.ui.confirm('Enable optional reply reporting?', 'Share observed workspace-relative file paths, completed intermediate assistant text or tool names with allowed WhatsApp chats, according to the selected setting? Never thinking/tool bodies. Applies only to future owned inputs; already-issued sends cannot be recalled.')) break;
@@ -154,16 +159,17 @@ export class MenuHandler {
                 const current = t('archive.menu.current');
                 const entries = scopes.map(scope => ({ scope, label: `${scope.profile}: ${scope.account ?? 'legacy-unassigned'} (${scope.id.slice(0, 8)})` }));
                 const selected = await ctx.ui.select(historyScopeLabel, [current, ...entries.map(entry => entry.label), backLabel]);
-                if (selected && selected !== backLabel) {
+                if (selected === backLabel) return this.handleCommand(ctx, 'Advanced');
+                if (selected) {
                     await this.recentsService.selectHistoryScope(selected === current ? undefined : entries.find(entry => entry.label === selected)?.scope.id);
-                    await this.manageRecents(ctx);
+                    await this.manageRecents(ctx, 'Advanced');
                 }
                 break;
             }
         }
     }
 
-    private async manageGroupReplies(ctx: ExtensionCommandContext, current: () => boolean): Promise<void> {
+    private async manageGroupReplies(ctx: ExtensionCommandContext, current: () => boolean): Promise<SettingsNavigation> {
         let settings: GroupReplies; let invalid = false;
         try { settings = this.sessionManager.getGroupReplies(); } catch { settings = validateGroupReplies(undefined); invalid = true; }
         const revision = this.sessionManager.getGroupRepliesRevision();
@@ -172,7 +178,8 @@ export class MenuHandler {
         const back = t('menu.root.back');
         const choice = await ctx.ui.select(invalid ? 'Invalid saved group policy; choose explicitly to repair' : `Shared group replies: ${labels[settings.mode]} / preceding context ${settings.context ? 'On' : 'Off'}`,
             [...groupReplyModes.map(mode => labels[mode]), context, back]);
-        if (!choice || choice === back) return;
+        if (choice === back) return 'back';
+        if (!choice) return;
         if (choice === context) {
             if (!settings.context && !await ctx.ui.confirm('Enable group context?', 'Future allowed group text may be sent with triggered model requests and stored in normal Pi history. The memory buffer holds at most 20 messages, 2000 characters each, expiring after 30 minutes. No media is downloaded for context. All chats share Pi context.')) return;
             settings = { ...settings, context: !settings.context };
@@ -206,7 +213,7 @@ export class MenuHandler {
         }
 
         if (choice === backLabel || !choice) {
-            await this.handleCommand(ctx);
+            await this.handleCommand(ctx, 'Chats / Owner');
             return;
         }
 
@@ -357,7 +364,7 @@ export class MenuHandler {
         }
 
         if (choice === backLabel || !choice) {
-            await this.handleCommand(ctx);
+            await this.handleCommand(ctx, 'Groups');
             return;
         }
 
@@ -456,7 +463,7 @@ export class MenuHandler {
         ctx.ui.notify(this.printedAllowedGroups.join('\n'), 'info');
     }
 
-    private async manageRecents(ctx: ExtensionCommandContext) {
+    private async manageRecents(ctx: ExtensionCommandContext, parent: SettingsCategory = 'Chats / Owner') {
         const recentConversations = await this.recentsService.getRecentConversations();
         const groupedEntries = this.groupRecentConversations(recentConversations);
         const title = t('menu.recents.title');
@@ -467,7 +474,7 @@ export class MenuHandler {
 
         if (groupedEntries.length === 0) {
             ctx.ui.notify(t('menu.recents.empty'), 'info');
-            await this.handleCommand(ctx);
+            await this.handleCommand(ctx, parent);
             return;
         }
 
@@ -483,7 +490,7 @@ export class MenuHandler {
 
             const choice = await ctx.ui.select(title, options);
             if (!choice || choice === backLabel) {
-                await this.handleCommand(ctx);
+                await this.handleCommand(ctx, parent);
                 return;
             }
 
@@ -505,12 +512,12 @@ export class MenuHandler {
                 return;
             }
 
-            await this.manageRecentConversation(ctx, selectedEntry.conversations[0]);
+            await this.manageRecentConversation(ctx, selectedEntry.conversations[0], parent);
             return;
         }
     }
 
-    private async manageRecentConversation(ctx: ExtensionCommandContext, conversation: RecentConversationSummary) {
+    private async manageRecentConversation(ctx: ExtensionCommandContext, conversation: RecentConversationSummary, parent: SettingsCategory) {
         const displayName = this.getConversationDisplayName(conversation);
         const isGroup = SessionManager.isGroupJid(conversation.senderNumber);
         const allowedContact = isGroup
@@ -547,7 +554,7 @@ export class MenuHandler {
                 await this.sessionManager.addNumber(conversation.senderNumber, conversation.senderName);
                 ctx.ui.notify(t('menu.recents.addedToAllowList', { number: conversation.senderNumber }), 'info');
             }
-            await this.manageRecentConversation(ctx, conversation);
+            await this.manageRecentConversation(ctx, conversation, parent);
             return;
         }
 
@@ -561,17 +568,17 @@ export class MenuHandler {
             await this.manageRecentConversation(ctx, {
                 ...conversation,
                 senderName: undefined
-            });
+            }, parent);
             return;
         }
 
         if (choice === historyLabel) {
             await this.showConversationHistory(ctx, conversation);
-            await this.manageRecentConversation(ctx, conversation);
+            await this.manageRecentConversation(ctx, conversation, parent);
             return;
         }
 
-        await this.manageRecents(ctx);
+        await this.manageRecents(ctx, parent);
     }
 
     private async sendMessageToAllowedContact(ctx: ExtensionCommandContext, contact: Contact) {

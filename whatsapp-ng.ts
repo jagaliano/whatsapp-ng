@@ -107,21 +107,20 @@ export default function (pi: ExtensionAPI) {
     const incomingMediaService = new IncomingMediaService(audioService, logger);
     const groupPolicy = new GroupMessagePolicy();
     const menuHandler = new MenuHandler(whatsappService, sessionManager, recentsService, {
-        voice: ctx => showVoiceSettings(ctx, sessionManager, voiceActions(ctx)),
-        owner: ctx => showOwnerSettings(ctx, sessionManager, voiceActions(ctx)),
+        voice: (ctx, current) => showVoiceSettings(ctx, sessionManager, voiceActions(ctx, current)),
+        owner: (ctx, current) => showOwnerSettings(ctx, sessionManager, voiceActions(ctx, current)),
         connect: () => { cancelStartupRetry(); setOutboundEnabled(true); managedSpeech.retry(); syncManagedSpeech(); },
         off: ctx => turnWhatsAppOff(ctx),
         enabled: () => !deliberatelyOff,
         groupChanged: () => groupPolicy.reset(),
-        optional: ctx => {
-            const current = voiceActions(ctx).current;
+        optional: (ctx, current) => {
             return showOptionalOutputSettings(ctx, sessionManager, { current, tools: () => pi.getAllTools().map(tool => tool.name), owner: optionalOwner });
         },
         captureCurrent: () => {
-            const runtime = router.getRuntimeId(); const context = whatsappService.getSessionContext();
+            const runtime = router.getRuntimeId(); const context = whatsappService.getSessionContext(); const owner = sessionManager.getOperatorRevision();
             return () => {
                 const now = whatsappService.getSessionContext();
-                return runtime === router.getRuntimeId() && context.accountScope === now.accountScope && context.generation === now.generation;
+                return runtime === router.getRuntimeId() && context.accountScope === now.accountScope && context.generation === now.generation && owner === sessionManager.getOperatorRevision();
             };
         }
     });
@@ -449,12 +448,12 @@ export default function (pi: ExtensionAPI) {
             } catch { return []; }
         });
     }
-    function voiceActions(ctx: Parameters<typeof showVoiceSettings>[0]): VoiceSettingsActions {
+    function voiceActions(ctx: Parameters<typeof showVoiceSettings>[0], requestCurrent: () => boolean): VoiceSettingsActions {
         const runtime = router.getRuntimeId();
         const context = whatsappService.getSessionContext();
         const current = () => {
             const now = whatsappService.getSessionContext();
-            return runtime === router.getRuntimeId() && context.accountScope === now.accountScope && context.generation === now.generation;
+            return requestCurrent() && runtime === router.getRuntimeId() && context.accountScope === now.accountScope && context.generation === now.generation;
         };
         return { current, canonical: canonicalConversation, chats: voiceChats,
             preview: (chat, config, key, revision, workspace) => settingsSend(ctx, current, chat, revision, { config, key, workspace }),
