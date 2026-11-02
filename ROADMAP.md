@@ -58,9 +58,9 @@ The owner-approved trigger is now **verified WhatsApp connection**, including ma
 
 ### Validation and remaining scope
 
-See [implementation/validation records](specs/043-managed-crispasr/validation.md), [setup and descriptor examples](docs/crispasr.md#optional-managed-startup) and the [operating contract](docs/reference.md#optional-managed-speech-servers). The source includes macOS `lsof` and Linux procfs ownership paths; synthetic macOS tests are not Linux/native-model qualification. Windows management is explicitly unsupported; manual Windows endpoints remain unchanged.
+See [implementation/validation records](specs/040-speech-and-settings-1.1/evidence.md), [setup and descriptor examples](docs/crispasr.md#optional-managed-startup) and the [operating contract](docs/reference.md#optional-managed-speech-servers). The source includes macOS `lsof` and Linux procfs ownership paths; synthetic macOS tests are not Linux/native-model qualification. Windows management is explicitly unsupported; manual Windows endpoints remain unchanged.
 
-Three local macOS native cases were accepted with English Whisper tiny.en and Kokoro Q8_0/af_heart, including maintainer-accepted native auxiliary resources; the [review/acceptance record](specs/043-managed-crispasr/review.md) preserves the original download-scope history. Broader platform/model and real WhatsApp acceptance remain open. Simultaneous watchdog/OS failure, daemonizing wrappers and damaged retained locks need operator inspection. Richer speech status/recovery UI remains R6 work. R5 stays deferred.
+Three local macOS native cases were accepted with English Whisper tiny.en and Kokoro Q8_0/af_heart, including maintainer-accepted native auxiliary resources; the [review/acceptance record](specs/040-speech-and-settings-1.1/evidence.md#native-download-scope-exception) preserves the original download-scope history. Broader platform/model and real WhatsApp acceptance remain open. Simultaneous watchdog/OS failure, daemonizing wrappers and damaged retained locks need operator inspection. Richer speech status/recovery UI remains R6 work. R5 stays deferred.
 
 ## R3. General code review
 
@@ -168,7 +168,7 @@ Use the [manual acceptance guide](tests/manual/prerelease-acceptance.md) to sele
 
 **Status:** proposed (owner-requested 2026-10-30); not implemented.
 
-**Reported context (2026-10-30; owner-supplied, not independently verified here).** A text-only `mirror` reply was reported despite reported Edge approval. Supplied local probes reported `TtsService.prepare` failing 1 of 4 runs with `Edge speech synthesis failed`, and direct `msedge-tts@2.1.1` failing 1 of 3 with `Stream closed before the synthesis completed (no turn.end received)`. These probes do not establish the cause of that reply: an explicit same-chat send can suppress the whole final before Edge is called, as addressed by [047](specs/047-spoken-reply-guard/plan.md). Separately, when synthesis actually fails, the current pipeline loses diagnostic detail:
+**Reported context (2026-10-30; owner-supplied, not independently verified here).** A text-only `mirror` reply was reported despite reported Edge approval. Supplied local probes reported `TtsService.prepare` failing 1 of 4 runs with `Edge speech synthesis failed`, and direct `msedge-tts@2.1.1` failing 1 of 3 with `Stream closed before the synthesis completed (no turn.end received)`. These probes do not establish the cause of that reply: an explicit same-chat send can suppress the whole final before Edge is called, as addressed by [the spoken-reply guard](specs/040-speech-and-settings-1.1/spec.md#user-story-4---protected-automatic-spoken-replies-priority-p1). Separately, when synthesis actually fails, the current pipeline loses diagnostic detail:
 
 - [`edge-tts.worker.mjs`](src/services/edge-tts.worker.mjs) catches everything and posts only `{ ok: false }`.
 - [`EdgeTtsService.write`](src/services/edge-tts.service.ts) maps worker failures and worker exit to one generic `TtsError`; cancellation and client-unavailable errors remain distinct.

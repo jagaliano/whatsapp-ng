@@ -12,7 +12,7 @@ npm run release:version -- NEW_VERSION
 
 The command synchronizes package/lock versions with lifecycle scripts and Git tagging disabled. Prereleases select `next`; an explicitly approved stable version selects `latest`. Same/older versions and build metadata are rejected. No dependency upgrade or publication occurs; edits remain uncommitted.
 
-Update the changelog, review/validate the diff, then commit/push only through the separately authorized Git workflow. Preparation requires the intended release source already committed. The [1.1.0 promotion plan](../specs/041-stable-1.1.0/plan.md) is historical, not permission to republish that version or repair indexing with another release.
+Update the changelog, review/validate the diff, then commit/push only through the separately authorized Git workflow. Preparation requires the intended release source already committed. The [1.1.0 changelog entry](../CHANGELOG.md#110--2026-10-29) is historical, not permission to republish that version or repair indexing with another release.
 
 ## 2. Prepare without publishing
 

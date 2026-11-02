@@ -168,7 +168,7 @@ See the [speech reference](reference.md#remote-speech-endpoints) for request, ca
 - Off, disconnect, committed session replacement, reload/shutdown and relevant backend changes retire owned processes. `/stop` cancels speech work without retiring a connected server. Reconnect reloads models, which can be expensive on CPU.
 - A Node watchdog handles parent IPC loss/SIGHUP, with three seconds for TERM and two for KILL of its owned non-daemonized process group. Never remove unknown locks or kill by name/port. Daemonizing wrappers, simultaneous watchdog/OS failure and damaged retained locks require operator inspection.
 
-Ownership uses `lsof` on macOS and procfs on Linux; **Windows management is unsupported**. This is cooperative ownership, not a hostile-same-user sandbox. [Dated validation and native acceptance](../specs/043-managed-crispasr/review.md) do not establish every platform/model combination.
+Ownership uses `lsof` on macOS and procfs on Linux; **Windows management is unsupported**. This is cooperative ownership, not a hostile-same-user sandbox. [Dated validation and native acceptance](../specs/040-speech-and-settings-1.1/evidence.md#native-crispasr-acceptance) do not establish every platform/model combination.
 
 The checked unified server (0.8.48, commit `cc114d2b4a5a9413738f390093e9131576743cb6`) returns `/health` status/backend and authenticated `/v1/models` metadata. An explicit model's ID is its resolved path. Verify metadata only on a known owned server using securely loaded credentials; older standalone server implementations may have a different schema.
 
