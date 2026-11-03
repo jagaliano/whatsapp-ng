@@ -1,6 +1,6 @@
 # Feature Specification: Speech and settings improvements for 1.1.x
 
-**Feature Directory**: `specs/040-speech-and-settings-1.1/`
+**Feature Directory**: `specs/040-speech-and-settings/`
 **Created**: 2026-11-02 (consolidated)
 **Status**: Implemented; shipped in 1.1.0–1.1.4
 **Input**: Consolidation of former records 040–054 (October 29 – November 2, 2026). Those folders mixed feature decisions with per-release checklists. This record keeps the behavior decisions as one specification. Release history lives in [CHANGELOG.md](../../CHANGELOG.md).
