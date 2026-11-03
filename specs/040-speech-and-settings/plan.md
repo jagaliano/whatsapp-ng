@@ -1,7 +1,7 @@
 # Implementation Plan: Speech and settings improvements for 1.1.x
 
 **Spec**: [spec.md](spec.md) | **Tasks**: [tasks.md](tasks.md) | **Evidence**: [evidence.md](evidence.md)
-**Status**: Implemented and shipped (1.1.0–1.1.4). This consolidated record describes the design as built. It grants no permission to start servers, download models, release or publish.
+**Status**: Implemented; released in 1.1.0–1.1.3, with US7–US9 in the 1.1.4 source pending publication. This consolidated record describes the design as built, not registry availability. It grants no permission to start servers, download models, release or publish.
 
 ## Technical Context
 

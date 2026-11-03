@@ -1,6 +1,6 @@
 # Tasks: Speech and settings improvements for 1.1.x
 
-Derived from [plan.md](plan.md). All tasks are complete; IDs from the former records are kept in parentheses for traceability. Each regression was observed failing before its production change unless noted ([evidence](evidence.md)).
+Derived from [plan.md](plan.md). Implementation tasks are complete, not a claim that 1.1.4 is published; IDs from the former records are kept in parentheses for traceability. Baseline chronology and retrospective exceptions are recorded in [evidence](evidence.md).
 
 ## Phase 1 — US1 Saved auto-connect and Back (1.1.0)
 
@@ -27,7 +27,7 @@ Derived from [plan.md](plan.md). All tasks are complete; IDs from the former rec
 - [x] T012 Failing coordinator/entrypoint (17) and real-Pi `spoken-guard` RPC regressions (S047-1).
 - [x] T013 Captured-protection query, shared mode resolver, canonical pre-send refusal, late alias / final-transport fencing via optional predicate argument (S047-2, S047-3).
 - [x] T014 Opus F1: legacy-attachment eligibility via `router.canFinalize` (seven failing cases first); N1/N2 test hardening; N3 roadmap provenance (S047-7, R048-2).
-- [x] T015 180-second `TTS_SYNTHESIS_TIMEOUT_MS`: three deterministic default-budget cases, failing against the old 60-second source copy (R048-7).
+- [x] T015 Requalify concurrent commit `5239956`'s 180-second `TTS_SYNTHESIS_TIMEOUT_MS`: three deterministic default-budget cases added afterward, failing against a disposable old 60-second source copy (R048-7).
 
 ## Phase 5 — US6 Decorative separators (1.1.3)
 
@@ -47,4 +47,4 @@ Derived from [plan.md](plan.md). All tasks are complete; IDs from the former rec
 ## Cross-cutting
 
 - [x] T022 Current behaviour documented in [README](../../README.md), [reference](../../docs/reference.md), [CrispASR guide](../../docs/crispasr.md) and [changelog](../../CHANGELOG.md).
-- [x] T023 Consolidate former records 040–054 into this folder; release/documentation-only records folded into the changelog (2026-11-02).
+- [x] T023 Consolidate former records 040–054 into this folder; release/documentation-only outcomes remain summarized by existing changelog entries and current guides (2026-11-02). Original dated records remain at Git revision `0aba78e`.

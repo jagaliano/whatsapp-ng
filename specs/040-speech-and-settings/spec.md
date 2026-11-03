@@ -2,14 +2,14 @@
 
 **Feature Directory**: `specs/040-speech-and-settings/`
 **Created**: 2026-11-02 (consolidated)
-**Status**: Implemented; shipped in 1.1.0–1.1.4
+**Status**: Implemented; released in 1.1.0–1.1.3. US7–US9 are in the 1.1.4 source; publication remains pending and must be checked against the public registry.
 **Input**: Consolidation of former records 040–054 (October 29 – November 2, 2026). Those folders mixed feature decisions with per-release checklists. This record keeps the behavior decisions as one specification. Release history lives in [CHANGELOG.md](../../CHANGELOG.md).
 
 Companion documents: [plan](plan.md), [tasks](tasks.md), [evidence](evidence.md).
 
 ## Scope and provenance
 
-| User story | Former record | Shipped in |
+| User story | Former record | Version |
 | --- | --- | --- |
 | US1 Saved auto-connect and Back navigation | 040 | 1.1.0 |
 | US2 Managed CrispASR speech servers | 043 | 1.1.1 |
@@ -21,13 +21,15 @@ Companion documents: [plan](plan.md), [tasks](tasks.md), [evidence](evidence.md)
 | US8 Chat-first Voice menu and consistent Back/Cancel | 053 | 1.1.4 |
 | US9 Release tooling compatible with npm 12 | 054 | 1.1.4 |
 
-These former records only covered documentation, releases or dependencies, so their content went into the changelog or current guides instead of this spec:
+The release/documentation-only portions of these former records are summarized by existing changelog entries and current guides rather than duplicated in this spec:
 
 - 041, 046, 048, 050 and 054 (releases)
 - 042 (speech-provider README introduction)
 - 045 (documentation cleanup)
 - 051 (plan-status reconciliation)
 - the `follow-redirects` 1.16.2 security patch
+
+The original dated records remain in Git at revision `0aba78e`, for example `git show 0aba78e:specs/048-release-1.1.2/requalification.md`. Consolidation does not turn their pre-publication checkpoints or retrospective tests into release or test-first evidence.
 
 Fuzzy `/model` search shipped in 1.1.0 but never had a spec. That gap is recorded here and is not backfilled.
 
@@ -146,7 +148,7 @@ As a new user, I want to set up voice replies for one known chat without going t
 
 1. **Given** the Voice menu, **When** it opens, **Then** it shows these options, in this order:
    - Set up replies for a chat
-   - Manage chat replies and introductions
+   - Chats: modes, automatic replies and introduction
    - Advanced speech settings
    - Text-only everywhere / revoke speech consent
    - Back
@@ -192,7 +194,7 @@ As the maintainer, I want `npm run release:prepare` to work with npm 11 and npm 
 - **FR-006**: Same-chat model text MUST be refused while an approved spoken final is eligible. The refusal uses the router's read-only `canFinalize` check and canonical identity/transport resolution.
 - **FR-007**: The default synthesis budget MUST be 180 s, measured from admission. The other resource limits MUST stay unchanged.
 - **FR-008**: The spoken copy MUST drop standalone Unicode horizontal rules. The displayed and saved text MUST stay unchanged.
-- **FR-009**: Owner guidance MUST name the real grouped menu path in all four locales.
+- **FR-009**: Terminal Owner guidance MUST name the real grouped menu path in all four locales. The phone owner refusal remains English with the literal `Owner` label; phone-language localization is not implemented.
 - **FR-010**: Settings navigation MUST give consistent Back (parent) and Cancel (close) behavior, with captured authority shared across nested and recursive views.
 - **FR-011**: Configuration MUST NOT synthesize, preview or send anything by itself.
 - **FR-012**: Release preparation MUST accept exactly one expected package result from npm 11 or npm 12 and reject everything else.
@@ -207,7 +209,7 @@ As the maintainer, I want `npm run release:prepare` to work with npm 11 and npm 
 
 ## Success Criteria
 
-- **SC-001**: Each user story has failing regressions recorded before its fix, and passing source checks afterward ([evidence](evidence.md)).
+- **SC-001**: Each user story has passing source checks with its actual baseline chronology preserved ([evidence](evidence.md)). US1's integration records were retrospective, US2 began with a missing-module scaffold, and US5's old-source comparison followed the concurrent production change; none is a blanket pre-implementation test-first claim.
 - **SC-002**: Production-entry RPC fixtures show zero external network attempts and no real account, provider or settings access.
 - **SC-003**: Local macOS STT-only, TTS-only and combined CrispASR cases produce correct transcripts and valid Opus audio ([native acceptance](evidence.md#native-crispasr-acceptance)).
 - **SC-004**: A user can configure Mirror for one chat without opening Advanced settings.

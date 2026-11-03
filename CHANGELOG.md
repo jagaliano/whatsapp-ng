@@ -4,6 +4,8 @@
 
 ## 1.1.4 — 2026-11-02
 
+- Scope specification records to features and behaviour changes, consolidate the 1.1.x speech/settings history without upgrading dated evidence, and refresh Spec Kit's Bash workflow. Disable automatic Git initialization, branch creation and commit hooks; Git and publication actions still require explicit authorization.
+
 - Keep local release preparation compatible with npm 11 and npm 12 pack JSON while rejecting ambiguous or malformed package results; preserve artifact, authentication and one-shot publication checks.
 
 - Make Voice chat-first, separate advanced provider controls, support explicit compatible server-default voices in the menu and explain shared enablement/retained overrides. Make settings Back/Cancel consistent and preserve the original request authority across nested dialogs; identify missing phone speech permissions without granting them or sending previews.
