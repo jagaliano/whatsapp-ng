@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add source-reviewed Mermaid maps of terminal and phone menus, including conditional actions, navigation returns and separate consent boundaries; leave README linking for later review.
+
 - Upgrade the local Spec Kit record from 1.2.7 to 1.3.2 for install metadata, integration manifests and the bundled `speckit` workflow (1.0.0 to 1.0.1), and clear the reported managed-file drift. The customized plan template keeps this project's five-principle Constitution Check, so its manifest hash now records the reviewed file; shared scripts and templates stay at their installed (rendered) content, which differs from 1.3.2's raw copies only by command-name placeholders.
 
 - Point the ignored local feature pointer at `specs/040-speech-and-settings` instead of the superseded 035 storage-path migration record, and repair five broken relative links inside historical specification records. No runtime behaviour changes.
