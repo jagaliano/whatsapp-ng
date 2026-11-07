@@ -75,9 +75,9 @@ describe('maintained candidate packaging', () => {
     });
 
     it('pins development aliases to the tested host and patched test tooling', () => {
-        expect(manifest.devDependencies['@earendil-works/pi-ai']).toBe('1.4.0');
-        expect(manifest.devDependencies['@mariozechner/pi-coding-agent']).toBe('npm:@earendil-works/pi-coding-agent@1.4.0');
-        expect(manifest.devDependencies['@mariozechner/pi-tui']).toBe('npm:@earendil-works/pi-tui@1.4.0');
+        expect(manifest.devDependencies['@earendil-works/pi-ai']).toBe('1.5.0');
+        expect(manifest.devDependencies['@mariozechner/pi-coding-agent']).toBe('npm:@earendil-works/pi-coding-agent@1.5.0');
+        expect(manifest.devDependencies['@mariozechner/pi-tui']).toBe('npm:@earendil-works/pi-tui@1.5.0');
         expect(manifest.devDependencies['@sinclair/typebox']).toBe('npm:typebox@1.3.27');
         expect(manifest.devDependencies.vitest).toBe('5.0.5');
         expect(manifest.devDependencies['@vitest/coverage-v8']).toBe('5.0.5');

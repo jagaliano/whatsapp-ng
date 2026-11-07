@@ -19,7 +19,7 @@ Read the relevant owner, callers, mirrored tests and configuration before editin
 
 ## Stack and repository map
 
-- Development baseline: Node 26.x and Pi 1.4.0. Resolve exact dependency versions from `package.json` and `package-lock.json`, not old specifications.
+- Development baseline: Node 26.x and Pi 1.5.0. Resolve exact dependency versions from `package.json` and `package-lock.json`, not old specifications.
 - Runtime: TypeScript ES modules, Baileys (`baileys`, not the historical scoped package), Pino, QR support, LiteParse and optional speech backends.
 - Pi supplies SDK/TUI/TypeBox runtime peers. Preserve the existing wildcard peers and development aliases; do not bundle shadow host copies or change dependencies without authorization.
 - `whatsapp-ng.ts` is the source entrypoint and composition root for Pi hooks, tools and `/whatsapp`. There is no build script or generated `dist` runtime.

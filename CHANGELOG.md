@@ -6,6 +6,8 @@
 
 - Point the ignored local feature pointer at `specs/040-speech-and-settings` instead of the superseded 035 storage-path migration record, and repair five broken relative links inside historical specification records. No runtime behaviour changes.
 
+- Align the SDK/AI/TUI development cohort and lockfile with Pi 1.5.0 while keeping wildcard runtime host peers and the `typebox` 1.3.27 alias; the manifest contract test now pins those aliases so cohort drift fails the suite. Development baseline statements in the README, `AGENTS.md`, `SECURITY.md` and `DEPENDENCIES.md` follow the new cohort. Validation on macOS/Node 26.13.0 passed 1633 tests/86 files with two workers and no skips, lint and typecheck, and `npm ci` reproduced the lock unchanged. Dated 1.4.0 evidence is retained as history rather than re-dated.
+
 ## 1.1.4 — 2026-11-02
 
 - Scope specification records to features and behaviour changes, consolidate the 1.1.x speech/settings history without upgrading dated evidence, and refresh Spec Kit's Bash workflow. Disable automatic Git initialization, branch creation and commit hooks; Git and publication actions still require explicit authorization.

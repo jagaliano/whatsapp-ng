@@ -200,7 +200,7 @@ See the [operating reference](docs/reference.md) for migration, recovery, media 
 
 ## Development
 
-The development baseline is Node 26.x and Pi 1.4.0.
+The development baseline is Node 26.x and Pi 1.5.0.
 
 ```bash
 git clone https://github.com/jagaliano/whatsapp-ng.git

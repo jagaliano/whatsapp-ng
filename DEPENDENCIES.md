@@ -2,7 +2,7 @@
 
 ## Maintainer reproduction
 
-Use the committed npm lockfile with Node 26.x and Pi 1.4.0, matching the development SDK/AI/TUI cohort retained unchanged for `1.1.0`:
+Use the committed npm lockfile with Node 26.x and Pi 1.5.0, matching the development SDK/AI/TUI cohort:
 
 ```sh
 npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
@@ -41,8 +41,8 @@ The following is the earlier source/control checkpoint, not the current RC2 arti
 | Transport | Baileys 7.0.0-rc14 exact | Preserve the characterized transport; no protocol patch or newer prerelease. |
 | PDF | LiteParse 2.17.0 exact | Upgrade from 2.15.1; native text extraction, real local OCR, corrupt-file recovery and worker cleanup tested. |
 | Edge speech | msedge-tts 2.1.1 exact, MIT | Adopt merged PR #43's Bing/v2 signing fix; align consent identity, require completed protocol/audio and retain bounded worker cancellation. |
-| Dev SDK/AI/TUI | Official Pi 1.4.0 packages, retaining legacy SDK/TUI import aliases | Align the SDK cohort with the installed host; keep runtime host peers wildcard rather than bundling copies. |
-| Dev TypeBox | Legacy name aliased to typebox 1.3.27 | Pi 1.4.0 still supplies this independent TypeBox version; it is intentionally not changed to 1.4.0. |
+| Dev SDK/AI/TUI | Official Pi 1.5.0 packages, retaining legacy SDK/TUI import aliases | Align the SDK cohort with the installed host; keep runtime host peers wildcard rather than bundling copies. |
+| Dev TypeBox | Legacy name aliased to typebox 1.3.27 | Pi 1.4.0 and 1.5.0 both depend on this independent TypeBox version; the alias is intentionally kept there. |
 | Test tools | Vitest/coverage 5.0.5, required Vite peer 8.3.5, Node types 26.6.5 | Remove the old critical Tinypool/test-server paths and satisfy declared tooling peers. |
 
 The wildcard runtime host peers remain unchanged; dev copies are not runtime dependencies. The real SDK policy/input/image ownership test is retained with the current ModelRuntime API, an intercepted stream, blocked fetch and assertions of zero provider fetches.
@@ -133,6 +133,12 @@ The local transcription fix was reproduced on macOS: a working `whisper-cli` on 
 
 The SDK, AI and TUI development dependencies and their Pi dependencies use version 1.4.0. Runtime peers are still supplied by Pi. A clean `npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund` reproduced the lock without changing it or building native tools/downloading models. Validation of that dependency update passed 515 tests/53 files, lint and typecheck on macOS, including real SDK policy/input/image ownership checks with provider requests blocked. Isolated Pi startup, session replacement and package-discovery checks also passed. Those results cover the dependency update, not later source changes or other platforms.
 
+### Pi 1.5.0 alignment
+
+The SDK, AI and TUI development dependencies and their Pi dependencies moved from 1.4.0 to 1.5.0; runtime peers remain wildcard host-supplied imports and are not bundled. Pi 1.5.0 still resolves `typebox` 1.3.27, so the legacy `@sinclair/typebox` alias is unchanged. A clean `npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund` reproduced the committed lock without modifying it or building native tools/downloading models.
+
+Validation on **November 7, 2026** (macOS x86_64, Node v26.13.0, two workers, disposable `HOME`/`PI_CODING_AGENT_DIR`, allow-listed credential-free environment) passed **1633 tests/86 files** with zero failures and zero skips, plus lint and typecheck. `tests/unit/package-manifest.test.ts` now pins the 1.5.0 aliases, so an accidental cohort drift fails the suite. Those results cover the dependency bump and non-audio unit/contract coverage on this platform; they do not establish other platforms, live WhatsApp behavior, provider calls, native-binary qualification or the installed host's own dependency graph.
+
 ### Latest audit refresh
 
 The 2026-10-31 release 1.1.2 preparation initially found one high production advisory, [cross-realm credential-header handling in follow-redirects](https://github.com/advisories/GHSA-mrwp-f3q8-3g9p), through `msedge-tts` → Axios. The owner authorized a targeted, lifecycle-disabled `follow-redirects` **1.16.1 → 1.16.2** refresh within Axios's existing `^1.16.0` range. Only that lock entry changed; the manifest and all other resolutions stayed unchanged. The refreshed source production audit reports **0 findings**. A maintainer lock refresh does not force existing consumer locks to refresh: audit/update those separately; fresh isolated consumer qualification is a separate release gate.
@@ -141,7 +147,7 @@ The fresh full-tree audit reports **12 affected development-tree packages (one h
 
 The 2026-10-30 release 1.1.1 source refresh reports **0 production findings** and **2 affected development-tree packages (one high, one moderate)**. Package counts are unchanged, but the Undici 8.10.2 record now includes **eight advisories**, not three. In addition to the dated findings below, it reports [cross-origin redirect cache poisoning/disclosure](https://github.com/advisories/GHSA-4w7w-5xrc-9h26), [dropped Agent TLS options](https://github.com/advisories/GHSA-2m5v-pch6-74hx), [TLS renegotiation denial of service](https://github.com/advisories/GHSA-qrxm-fqhp-jwvm), [automatic WebSocket PONG buffering](https://github.com/advisories/GHSA-9fm3-97px-rjf6) and [decompress-interceptor exceptions](https://github.com/advisories/GHSA-55wc-3pg8-jfw6). No dependency override/change was applied. This is a fresh source dependency audit, **not** a new installed-host/bundled-code or native-binary reassessment; the existing upstream-remediation policy and unresolved host limits remain.
 
-The 2026-10-24 publication-review refresh with Pi 1.4.0 still reports **0 production findings**, but **2 affected packages in the full tree: one high and one moderate**. The development SDK cohort is **1.4.0**; the recorded host assessment also used Pi **1.4.0**, pinning `undici@8.10.2`. That alignment did not remove the Undici findings. The later Edge-update production-only audit remains clean, but is not a fresh full-tree or installed-host reassessment.
+The 2026-10-24 publication-review refresh with Pi 1.4.0 still reports **0 production findings**, but **2 affected packages in the full tree: one high and one moderate**. The development SDK cohort was **1.4.0** at that assessment and the recorded host used Pi **1.4.0**, pinning `undici@8.10.2`. That alignment did not remove the Undici findings. The later Edge-update production-only audit remains clean, but is not a fresh full-tree or installed-host reassessment.
 
 That dated Undici record included three advisories, all patched at **8.12.2**:
 
