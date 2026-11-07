@@ -2,7 +2,7 @@
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-04-10
-**Feature**: [specs/005-verbose-mode-support/spec.md](spec.md)
+**Feature**: [specs/005-verbose-mode-support/spec.md](../spec.md)
 
 ## Content Quality
 

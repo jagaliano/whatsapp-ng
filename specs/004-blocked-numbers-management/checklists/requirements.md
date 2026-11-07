@@ -2,7 +2,7 @@
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-04-10
-**Feature**: [specs/004-blocked-numbers-management/spec.md](spec.md)
+**Feature**: [specs/004-blocked-numbers-management/spec.md](../spec.md)
 
 ## Content Quality
 
