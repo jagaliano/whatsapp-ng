@@ -8,7 +8,7 @@
 - **Language/Runtime**: TypeScript ES modules on Node 26.x; Pi 1.4.0 development peers.
 - **Dependencies**: unchanged except the separately approved `follow-redirects` 1.16.2 lock refresh (see the [1.1.2 changelog](../../CHANGELOG.md#112--2026-10-31)).
 - **Testing**: Vitest unit tests. Real behaviour is exercised through production-entry Pi RPC fixtures (`tests/unit/phone-control.rpc.test.ts`), which use a synthetic socket, model and provider and a network guard.
-- **Platform**: development and native acceptance on macOS x86_64. Linux procfs ownership exists but is unqualified. Windows managed startup is refused.
+- **Platform**: development and native acceptance on macOS. Linux procfs ownership exists but is unqualified. Windows managed startup is refused.
 
 ## Constitution Check
 

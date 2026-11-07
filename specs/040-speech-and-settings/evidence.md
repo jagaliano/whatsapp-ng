@@ -1,6 +1,6 @@
 # Evidence: Speech and settings improvements for 1.1.x
 
-Condensed from former records 040–054, preserved at Git revision `0aba78e`. Recorded source gates used macOS x86_64, Pi 1.4.0 development peers and, where stated, Node v26.13.0, with disposable HOME/`PI_CODING_AGENT_DIR`, an allow-listed credential-free environment and existing network guards. US8 also had a separate Pi 1.5.0 actual-entry replay; native acceptance used ephemeral test-only credentials on loopback. Source checks, independent review, artifact qualification and live acceptance are separate evidence tiers; post-commit release outcomes live in local release receipts and the public registry, not here.
+Condensed from former records 040–054, preserved at Git revision `0aba78e`. Recorded source gates used macOS, Pi 1.4.0 development peers and, where stated, Node v26.13.0, with disposable HOME/`PI_CODING_AGENT_DIR`, an allow-listed credential-free environment and existing network guards. US8 also had a separate Pi 1.5.0 actual-entry replay; native acceptance used ephemeral test-only credentials on loopback. Source checks, independent review, artifact qualification and live acceptance are separate evidence tiers; post-commit release outcomes live in local release receipts and the public registry, not here.
 
 ## Source gates per story
 

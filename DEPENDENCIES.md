@@ -137,7 +137,7 @@ The SDK, AI and TUI development dependencies and their Pi dependencies use versi
 
 The SDK, AI and TUI development dependencies and their Pi dependencies moved from 1.4.0 to 1.5.0; runtime peers remain wildcard host-supplied imports and are not bundled. Pi 1.5.0 still resolves `typebox` 1.3.27, so the legacy `@sinclair/typebox` alias is unchanged. A clean `npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund` reproduced the committed lock without modifying it or building native tools/downloading models.
 
-Validation on **November 7, 2026** (macOS x86_64, Node v26.13.0, two workers, disposable `HOME`/`PI_CODING_AGENT_DIR`, allow-listed credential-free environment) passed **1633 tests/86 files** with zero failures and zero skips, plus lint and typecheck. `tests/unit/package-manifest.test.ts` now pins the 1.5.0 aliases, so an accidental cohort drift fails the suite. Those results cover the dependency bump and non-audio unit/contract coverage on this platform; they do not establish other platforms, live WhatsApp behavior, provider calls, native-binary qualification or the installed host's own dependency graph.
+Validation on **November 7, 2026** (macOS, Node v26.13.0, two workers, disposable `HOME`/`PI_CODING_AGENT_DIR`, allow-listed credential-free environment) passed **1633 tests/86 files** with zero failures and zero skips, plus lint and typecheck. `tests/unit/package-manifest.test.ts` now pins the 1.5.0 aliases, so an accidental cohort drift fails the suite. Those results cover the dependency bump and non-audio unit/contract coverage on this platform; they do not establish other platforms, live WhatsApp behavior, provider calls, native-binary qualification or the installed host's own dependency graph.
 
 ### Latest audit refresh
 
