@@ -1,7 +1,0 @@
-# Tasks
-
-- [x] T001 Add failing synthetic regressions for registry presence outcomes (absent, present, non-`E404` failure, blank success) in `tests/unit/release-script.test.ts`.
-- [x] T002 Implement the `E404`-only presence check and conditional dry-run in `scripts/release.mjs` `prepare`; record the decision in the receipt.
-- [x] T003 Document the conditional dry-run in `docs/releases.md` and the changelog.
-- [x] T004 Run the affected suite, full `npm test -- --maxWorkers=2`, lint, typecheck and `git diff --check`.
-- [x] T005 Observe the prepare-only workflow run for an already-published version as real-world confirmation. Push CI on the correction commit logged the corrected path (`whatsapp-ng@1.1.5 is already published; skipping the publish dry-run`, run `42398256584`). The original `v1.1.5` tag was cut at `7e1570a`, which predates this correction, so its prepare job ran the old dry-run and failed on npm immutability (run `42398437941`, publish job disabled and skipped). The owner then re-pointed the annotated tag to `648e5d7` so the tag event runs the corrected script; that run (`42399386953`) succeeded, with the publish job skipped because `NPM_PUBLISH_ENABLED` is unset. The tagged tree differs from the published payload only in `CHANGELOG.md` and `docs/releases.md`; no shipped code differs. Re-pointing deliberately relaxes the documented "never delete/recreate tags" rule here, because no publication outcome was unknown: the registry artifact was already verified against `7e1570a`. The superseded run remains in the Actions history.

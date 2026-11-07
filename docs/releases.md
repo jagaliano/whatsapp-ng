@@ -95,6 +95,12 @@ See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/) and [Gi
 
 **No automatic retry:** publication concurrency does not cancel earlier runs; reruns (`GITHUB_RUN_ATTEMPT > 1`) cannot publish. A fresh runner lacks another runner's marker. Inspect registry/candidate/attempt evidence before approved recovery; never delete/recreate tags, mint tokens, edit receipts or rerun jobs to bypass unknown outcomes.
 
+### Recorded tag immutability exception
+
+**November 7, 2026**, `v1.1.5`: the annotated tag was deleted and recreated at `648e5d7` instead of the published source commit `7e1570a`, because a tag event runs the workflow file and `scripts/release.mjs` from the tagged tree, and `7e1570a` predates the prepare correction that stops the dry-run for an existing version. The exception was only about running the tag workflow, never about publication: the registry artifact was already published and verified against `7e1570a` before the re-point. The tagged tree differs from the published payload only in `CHANGELOG.md` and `docs/releases.md`; no shipped code differs, and the release body records the same. Do not treat it as precedent for moving a tag around an uncertain or failed publication.
+
+`release:prepare` skips only the publish dry-run when the manifest version is already public (step 5); it still runs the isolated validation, production audit, pack checks, integrity comparison and unchanged-HEAD recheck.
+
 ## Package discovery
 
 Historical checks on **October 29, 2026**, before stable promotion:

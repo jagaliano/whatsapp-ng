@@ -4,6 +4,8 @@
 
 - Make release preparation accurate after a version is published: prove version absence with an `E404`-only registry lookup, run the publish dry-run only while the version is absent, and record `dryRun: verified|skipped-existing-version` in the prepared receipt. Every other preparation gate, and publication's own absence proof, is unchanged; a CI push or release-tag run at an already-published version no longer fails on npm's immutability error.
 
+- Fold the release-gate decision record into the release procedure: the conditional dry-run, its receipt field and the dated `v1.1.5` tag-immutability exception are recorded in `docs/releases.md`, with regression coverage in `tests/unit/release-script.test.ts`.
+
 ## 1.1.5 — 2026-11-07
 
 - Add source-reviewed Mermaid maps of terminal and phone menus, including conditional actions, navigation returns and separate consent boundaries; leave README linking for later review.
