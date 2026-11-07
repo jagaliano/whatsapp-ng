@@ -233,6 +233,30 @@ describe('explicit local release commands', () => {
         const h = fixture(); const lock = read('package-lock.json'); lock.version = '9.0.0'; write('package-lock.json', lock);
         expect(() => h.invoke('prepare')).toThrow(/mismatch/); expect(h.actualPublishes()).toHaveLength(0);
     });
+    it('skips the publish dry-run for an already-published version and records why', () => {
+        const h = fixture(); h.state.existing = true; h.invoke('prepare');
+        expect(h.run.mock.calls.filter(([name, args]) => name === 'npm' && args[0] === 'publish' && args.includes('--dry-run'))).toHaveLength(0);
+        expect(read(receiptPath)).toMatchObject({ name: 'whatsapp-ng', packageVersion: '1.1.0-rc.1', commit: 'fixture-head', dryRun: 'skipped-existing-version' });
+        expect(read(receiptPath).integrity).toBe(integrity(readFileSync(resolve(root, '.pi/cache/releases', read(receiptPath).artifact))));
+        expect(h.actualPublishes()).toHaveLength(0);
+        expect(h.run.mock.calls.filter(([name, args]) => name === 'npm' && args[0] === 'run').map(([, args]) => args[1])).toEqual(['test', 'lint', 'typecheck']);
+    });
+    it('records a verified dry-run in the receipt while the version is absent', () => {
+        const h = fixture(); h.invoke('prepare'); expect(read(receiptPath).dryRun).toBe('verified');
+    });
+    it.each(['E401', 'ENOTFOUND', undefined])('refuses preparation when presence cannot be verified (%s) instead of assuming absence', code => {
+        const h = fixture(); h.state.viewError = code!;
+        expect(() => h.invoke('prepare')).toThrow(/presence could not be verified/);
+        expect(existsSync(resolve(root, receiptPath))).toBe(false);
+        expect(h.run.mock.calls.some(([name, args]) => name === 'npm' && args[0] === 'publish')).toBe(false);
+    });
+    it.each(['', '""', '"1.1.0-rc.2"'])('refuses a successful presence response of %j rather than inventing absence', output => {
+        const h = fixture(); const original = h.run.getMockImplementation()!;
+        h.run.mockImplementation((name, args, options) => name === 'npm' && args[0] === 'view' && args[2] === 'version' ? output : original(name, args, options));
+        expect(() => h.invoke('prepare')).toThrow(/presence could not be verified/);
+        expect(existsSync(resolve(root, receiptPath))).toBe(false);
+        expect(h.run.mock.calls.some(([name, args]) => name === 'npm' && args[0] === 'publish')).toBe(false);
+    });
     it('prepares from npm 12 single-package keyed pack JSON without weakening existing gates', () => {
         const h = fixture(); const original = h.run.getMockImplementation()!;
         h.run.mockImplementation((name, args, options) => {

@@ -164,11 +164,31 @@ export function release(args, { root = resolve(dirname(fileURLToPath(import.meta
         if (required.size) throw new Error('Required runtime/license/documentation file is missing');
         const artifact = resolve(directory, packed.filename); const integrity = 'sha512-'+digest(readFileSync(artifact));
         if (packed.integrity !== integrity) throw new Error('Packed integrity mismatch');
-        const dry = npmJson(['publish', artifact, '--dry-run', '--ignore-scripts', '--tag', tag, '--access', 'public', '--registry='+registry, '--json']);
-        if ((dry[manifest.name] ?? dry).integrity !== integrity) throw new Error('Publish dry-run integrity mismatch');
+        // npm refuses to dry-run publish a version that already exists, so absence must be proven
+        // first. Only a structured E404 counts as absence; every other outcome refuses preparation.
+        let alreadyPublished;
+        try {
+            const present = npm(['view', `${manifest.name}@${manifest.version}`, 'version', '--json', '--registry='+registry]);
+            let parsed;
+            try { parsed = JSON.parse(present); }
+            catch { throw new Error('Registry version presence could not be verified; preparation refused'); }
+            if (typeof parsed !== 'string' || parsed !== manifest.version) throw new Error('Registry version presence could not be verified; preparation refused');
+            alreadyPublished = true;
+        } catch (error) {
+            if (error.code !== 'E404') throw new Error('Registry version presence could not be verified; preparation refused');
+            alreadyPublished = false;
+        }
+        let dryRun = 'verified';
+        if (alreadyPublished) {
+            dryRun = 'skipped-existing-version';
+            log(`${manifest.name}@${manifest.version} is already published; skipping the publish dry-run that npm refuses for an existing version. Every other preparation gate still applies.`);
+        } else {
+            const dry = npmJson(['publish', artifact, '--dry-run', '--ignore-scripts', '--tag', tag, '--access', 'public', '--registry='+registry, '--json']);
+            if ((dry[manifest.name] ?? dry).integrity !== integrity) throw new Error('Publish dry-run integrity mismatch');
+        }
         current();
         if ('sha512-'+digest(readFileSync(artifact)) !== integrity) throw new Error('Artifact changed during preparation');
-        save(receiptPath, { version: 1, name: manifest.name, packageVersion: manifest.version, tag, registry, commit: head, artifact: relative(output, artifact), integrity });
+        save(receiptPath, { version: 1, name: manifest.name, packageVersion: manifest.version, tag, registry, commit: head, artifact: relative(output, artifact), integrity, dryRun });
         log(`Prepared ${manifest.name}@${manifest.version} for ${tag}: ${artifact}\nIntegrity: ${integrity}\nReceipt: ${receiptPath}\nNot published. Installed-Pi/live/platform acceptance and host/development audit review remain separate.`); return;
     }
     if (!ciPublish && (rest[1] !== manifest.version || rest[3] !== tag)) throw new Error('Confirm the exact prepared version and matching distribution tag');

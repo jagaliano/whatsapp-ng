@@ -25,7 +25,7 @@ Requires a clean worktree/index, including non-ignored untracked files. Preparat
 2. Runs `npm run test -- --maxWorkers=2`, lint and typecheck in a disposable HOME/agent directory without inherited credentials. `PI_OFFLINE=1` is not a network sandbox; fixtures/guards still own isolation.
 3. Runs `npm audit --omit=dev --json` against public npm; findings or audit/network failure stop preparation.
 4. Packs with lifecycle scripts disabled into private `.pi/cache/releases/<version>-<unique-id>/`, checking required runtime/workers, licences/guides and unexpected files.
-5. Hashes the tarball, runs `npm publish --dry-run` under the intended tag, checks integrity and rechecks unchanged clean source/HEAD.
+5. Hashes the tarball, proves version absence with `npm view <name>@<version> version --json` (`E404` only), then runs `npm publish --dry-run` under the intended tag and checks integrity. When the version is already published, npm refuses that dry-run, so the step is skipped and the receipt records `dryRun: "skipped-existing-version"`; every other gate still applies and only a structured `E404` counts as absence. It then rechecks unchanged clean source/HEAD.
 6. Writes `.pi/cache/releases/prepared.json`: version, commit, tag, registry, artifact path and SHA-512 integrity.
 
 Preparation accepts npm 11's single-entry pack array and npm 12's single expected-package keyed result. Empty, foreign-package, multi-package and malformed results are refused, not guessed or reduced to their first entry.
