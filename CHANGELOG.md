@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.1.7 — 2026-11-08
+
 - Polish WhatsApp phone presentation in English, pt-BR, Spanish and French: group `/help` commands with explanations, split `/status` into shared and this-chat settings, add friendly choices/current markers and clear numbered-reply, five-minute expiry, group-quoting and cancellation guidance. Keep the complete `/replies` disclosure and shared-session guidance in a bounded, unabridged text-menu body rather than truncated titles. Preserve commands, arguments, actions, authorization, consent meaning, confirmations, routing, delivery, optional polls and terminal menus. Synthetic four-locale unit/encrypted-poll/production-entry RPC coverage is separate from pending operator visual/live acceptance.
 
 ## 1.1.6 — 2026-11-08
