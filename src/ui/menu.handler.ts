@@ -41,7 +41,7 @@ export class MenuHandler {
     private async showSettings(ctx: ExtensionCommandContext, settingsCurrent: () => boolean, category?: SettingsCategory): Promise<void> {
         const checkCurrent = () => {
             if (settingsCurrent()) return true;
-            ctx.ui.notify('Settings changed while this menu was open. Reopen /whatsapp.', 'info');
+            ctx.ui.notify(t('menu.expired'), 'info');
             return false;
         };
         const registered = await this.sessionManager.isRegistered();
@@ -51,7 +51,6 @@ export class MenuHandler {
         const disconnectWhatsAppLabel = t('menu.root.disconnectWhatsApp');
         const connectWhatsAppLabel = t('menu.root.connectWhatsApp');
         const logoffDeleteSessionLabel = t('menu.root.logoffDeleteSession');
-        const backLabel = t('menu.root.back');
         const replyDeliveryLabel = t('menu.replyDelivery.title');
         const historyScopeLabel = t('archive.menu.scope');
         let choice: string | undefined;
@@ -60,23 +59,23 @@ export class MenuHandler {
             choice = await chooseWhatsAppSetting(ctx, () => ({ status: this.whatsappService.getEffectiveStatus(), enabled: this.settings?.enabled?.() ?? true, registered,
                 archive: Boolean(this.recentsService.getArchiveState?.()?.enabled), optional: Boolean(this.settings?.optional), owner: Boolean(this.settings) }), checkCurrent, resumeCategory);
             if (!choice || !checkCurrent()) return;
-            if (choice !== 'Auto-connect on startup') break;
+            if (choice !== t('menu.connection.autoConnect')) break;
             const revision = this.sessionManager.getAutoConnectRevision();
-            const selected = await ctx.ui.select(`Auto-connect on startup: ${this.sessionManager.getAutoConnect() ? 'On' : 'Off'}`,
-                ['Enabled', 'Disabled', backLabel]);
+            const selected = await ctx.ui.select(t('menu.autoConnect.title', { state: t(this.sessionManager.getAutoConnect() ? 'menu.on' : 'menu.off') }),
+                [t('menu.autoConnect.enabled'), t('menu.autoConnect.disabled'), t('menu.back.connection')]);
             if (!checkCurrent()) return;
-            if (selected === backLabel) { resumeCategory = 'Connection'; continue; }
-            if (selected !== 'Enabled' && selected !== 'Disabled') return;
-            await this.sessionManager.setAutoConnect(selected === 'Enabled', revision, settingsCurrent);
-            ctx.ui.notify("Auto-connect preference saved for future TUI/RPC startups/session loads; current connection unchanged. Shared by this profile's Pi processes; Off persists only in the current process. --whatsapp-ng-online remains an explicit request.", 'info');
+            if (selected === t('menu.back.connection')) { resumeCategory = 'Connection'; continue; }
+            if (selected !== t('menu.autoConnect.enabled') && selected !== t('menu.autoConnect.disabled')) return;
+            await this.sessionManager.setAutoConnect(selected === t('menu.autoConnect.enabled'), revision, settingsCurrent);
+            ctx.ui.notify(t('menu.autoConnect.saved'), 'info');
             return;
         }
 
         switch (choice) {
-            case 'Privacy and logs':
+            case t('menu.advanced.privacy'):
                 ctx.ui.notify(METADATA_LOG_POLICY, 'info');
                 break;
-            case 'Optional outputs':
+            case t('menu.optional.title'):
                 if (await this.settings?.optional?.(ctx, settingsCurrent) === 'back') return this.handleCommand(ctx, 'Replies');
                 break;
             case t('voice.menu'):
@@ -85,7 +84,7 @@ export class MenuHandler {
             case t('voice.owner'):
                 if (await this.settings?.owner(ctx, settingsCurrent) === 'back') return this.handleCommand(ctx, 'Chats / Owner');
                 break;
-            case 'Group replies':
+            case t('menu.groups.replies'):
                 if (await this.manageGroupReplies(ctx, settingsCurrent) === 'back') return this.handleCommand(ctx, 'Groups');
                 break;
             case replyDeliveryLabel: {
@@ -97,17 +96,19 @@ export class MenuHandler {
                 const reportingRevision = this.sessionManager.getReplyReportingRevision();
                 let flags = { changedFiles: false, interimText: false, liveActivity: false };
                 try { flags = this.sessionManager.getReplyReporting(); }
-                catch { ctx.ui.notify('Saved reporting settings are invalid. A reporting choice explicitly replaces them; other choices preserve them.', 'warning'); }
-                const reporting = ([['changedFiles', 'observed file paths'], ['interimText', 'interim assistant text'], ['liveActivity', 'live tool activity']] as const)
-                    .map(([key, label]) => ({ key, label: `${flags[key] ? 'Disable' : 'Enable'} ${label}` }));
-                const selected = await ctx.ui.select(t('menu.replyDelivery.current', { current }) + ` — final stats: ${this.sessionManager.getReplyStats() ? 'On' : 'Off'}; files ${flags.changedFiles ? 'On' : 'Off'}, interim ${flags.interimText ? 'On' : 'Off'}, activity ${flags.liveActivity ? 'On' : 'Off'}`,
-                    [explain, legacy, statsOn, statsOff, ...reporting.map(option => option.label), backLabel]);
-                if (selected === backLabel) return this.handleCommand(ctx, 'Replies');
+                catch { ctx.ui.notify(t('menu.reporting.invalid'), 'warning'); }
+                const reporting = ([['changedFiles', 'files'], ['interimText', 'interim'], ['liveActivity', 'activity']] as const)
+                    .map(([key, label]) => ({ key, label: t(`menu.reporting.${label}.${flags[key] ? 'disable' : 'enable'}`) }));
+                const selected = await ctx.ui.select(t('menu.replyDelivery.status', { base: t('menu.replyDelivery.current', { current }),
+                    stats: t(this.sessionManager.getReplyStats() ? 'menu.on' : 'menu.off'), files: t(flags.changedFiles ? 'menu.on' : 'menu.off'),
+                    interim: t(flags.interimText ? 'menu.on' : 'menu.off'), activity: t(flags.liveActivity ? 'menu.on' : 'menu.off') }),
+                    [explain, legacy, statsOn, statsOff, ...reporting.map(option => option.label), t('menu.back.replies')]);
+                if (selected === t('menu.back.replies')) return this.handleCommand(ctx, 'Replies');
                 const report = reporting.find(option => option.label === selected);
                 if (report) {
                     if (!flags[report.key] && !await ctx.ui.confirm('Enable optional reply reporting?', 'Share observed workspace-relative file paths, completed intermediate assistant text or tool names with allowed WhatsApp chats, according to the selected setting? Never thinking/tool bodies. Applies only to future owned inputs; already-issued sends cannot be recalled.')) break;
                     await this.sessionManager.setReplyReporting({ ...flags, [report.key]: !flags[report.key] }, reportingRevision, settingsCurrent);
-                    ctx.ui.notify('Reply reporting saved for future owned WhatsApp inputs; prior reporting work is withdrawn.', 'info');
+                    ctx.ui.notify(t('menu.reporting.saved'), 'info');
                 } else if (selected === statsOn || selected === statsOff) {
                     await this.sessionManager.setReplyStats(selected === statsOn, () => settingsCurrent() && statsRevision === this.sessionManager.getReplyStatsRevision());
                     ctx.ui.notify(t('menu.replyDelivery.statsSaved'), 'info');
@@ -129,13 +130,13 @@ export class MenuHandler {
                 await this.whatsappService.start();
                 ctx.ui.notify(registered ? t('menu.root.reconnectStarted') : t('menu.root.pairingStarted'), 'info');
                 break;
-            case 'Turn WhatsApp off':
+            case t('menu.connection.turnOff'):
             case disconnectWhatsAppLabel:
                 if (!await ctx.ui.confirm('Turn WhatsApp off?', 'Stop intake, abort shared Pi work and cancel pending WhatsApp output? Login/history are retained; withdrawn WhatsApp inputs are not replayed. Already-issued external effects cannot be recalled.')) break;
                 if (!checkCurrent()) return;
                 if (this.settings?.off) await this.settings.off(ctx);
                 else await this.whatsappService.stop();
-                ctx.ui.notify('WhatsApp is off. Login and history retained; re-enable from Connection.', 'warning');
+                ctx.ui.notify(t('menu.connection.offNotice', { connection: t('menu.category.connection') }), 'warning');
                 break;
             case logoffDeleteSessionLabel: {
                 const confirmLogoff = await ctx.ui.confirm(t('menu.root.logoffTitle'), t('menu.root.logoffConfirmMessage'));
@@ -158,8 +159,8 @@ export class MenuHandler {
                 const scopes = await this.recentsService.getHistoryScopes();
                 const current = t('archive.menu.current');
                 const entries = scopes.map(scope => ({ scope, label: `${scope.profile}: ${scope.account ?? 'legacy-unassigned'} (${scope.id.slice(0, 8)})` }));
-                const selected = await ctx.ui.select(historyScopeLabel, [current, ...entries.map(entry => entry.label), backLabel]);
-                if (selected === backLabel) return this.handleCommand(ctx, 'Advanced');
+                const selected = await ctx.ui.select(historyScopeLabel, [current, ...entries.map(entry => entry.label), t('menu.back.advanced')]);
+                if (selected === t('menu.back.advanced')) return this.handleCommand(ctx, 'Advanced');
                 if (selected) {
                     await this.recentsService.selectHistoryScope(selected === current ? undefined : entries.find(entry => entry.label === selected)?.scope.id);
                     await this.manageRecents(ctx, 'Advanced');
@@ -173,10 +174,10 @@ export class MenuHandler {
         let settings: GroupReplies; let invalid = false;
         try { settings = this.sessionManager.getGroupReplies(); } catch { settings = validateGroupReplies(undefined); invalid = true; }
         const revision = this.sessionManager.getGroupRepliesRevision();
-        const labels: Record<GroupReplyMode, string> = { 'mentions-or-replies': 'Mentions or replies (default)', mentions: 'Mentions only', replies: 'Replies only', all: 'Every allowed group message' };
-        const context = settings.context ? 'Disable preceding text context' : 'Enable preceding text context';
-        const back = t('menu.root.back');
-        const choice = await ctx.ui.select(invalid ? 'Invalid saved group policy; choose explicitly to repair' : `Shared group replies: ${labels[settings.mode]} / preceding context ${settings.context ? 'On' : 'Off'}`,
+        const labels: Record<GroupReplyMode, string> = { 'mentions-or-replies': t('menu.groups.mode.mentions-or-replies'), mentions: t('menu.groups.mode.mentions'), replies: t('menu.groups.mode.replies'), all: t('menu.groups.mode.all') };
+        const context = t(settings.context ? 'menu.groups.contextOff' : 'menu.groups.contextOn');
+        const back = t('menu.back.groups');
+        const choice = await ctx.ui.select(invalid ? t('menu.groups.invalid') : t('menu.groups.title', { mode: labels[settings.mode], state: t(settings.context ? 'menu.on' : 'menu.off') }),
             [...groupReplyModes.map(mode => labels[mode]), context, back]);
         if (choice === back) return 'back';
         if (!choice) return;
@@ -188,14 +189,14 @@ export class MenuHandler {
             settings = { ...settings, mode };
         }
         await this.sessionManager.setGroupReplies(settings, revision, current); this.settings?.groupChanged?.();
-        ctx.ui.notify('Shared group reply policy saved for new requests. Paused chats remain paused; old work is not replayed.', 'info');
+        ctx.ui.notify(t('menu.groups.saved'), 'info');
     }
 
     private async manageAllowList(ctx: ExtensionCommandContext) {
         const list = this.sortContactsAlphabetically(this.sessionManager.getAllowList());
         const title = t('menu.allowed.title');
         const addNumberLabel = t('menu.allowed.addNumber');
-        const backLabel = t('menu.root.back');
+        const backLabel = t('menu.back.chatsOwner');
         const options = [...list.map(contact => this.formatAllowedContactOption(contact)), addNumberLabel, backLabel];
 
         const choice = await ctx.ui.select(title, options);
@@ -237,7 +238,7 @@ export class MenuHandler {
         const removeNumberLabel = t('menu.allowed.contact.removeNumber');
         const addSendNumberLabel = t('menu.allowed.contact.addNumber');
         const removeSendNumberLabel = t('menu.allowed.contact.removeSendNumber');
-        const backLabel = t('menu.allowed.contact.back');
+        const backLabel = t('menu.back.allowedContacts');
         const options = [historyLabel];
         if (contact.sendNumber) {
             options.push(sendMessageLabel);
@@ -283,7 +284,7 @@ export class MenuHandler {
         }
 
         if (choice === historyLabel) {
-            await this.showConversationHistoryForContact(ctx, contact.number, displayName);
+            await this.showConversationHistoryForContact(ctx, contact.number, displayName, 'menu.back.contact');
             await this.manageAllowedContact(ctx, contact);
             return;
         }
@@ -346,7 +347,7 @@ export class MenuHandler {
         const list = this.sortContactsAlphabetically(this.sessionManager.getAllowedGroups());
         const title = t('menu.allowedGroups.title');
         const addGroupLabel = t('menu.allowedGroups.addGroup');
-        const backLabel = t('menu.root.back');
+        const backLabel = t('menu.back.groups');
         const options = [...list.map(group => this.formatAllowedGroupOption(group)), addGroupLabel, backLabel];
 
         const choice = await ctx.ui.select(title, options);
@@ -386,7 +387,7 @@ export class MenuHandler {
         const removeAliasLabel = t('menu.allowedGroups.group.removeAlias');
         const addAliasLabel = t('menu.allowedGroups.group.addAlias');
         const removeGroupLabel = t('menu.allowedGroups.group.removeGroup');
-        const backLabel = t('menu.allowedGroups.group.back');
+        const backLabel = t('menu.back.allowedGroups');
         const options = [historyLabel, sendMessageLabel, printGroupLabel];
         if (group.name) {
             options.push(removeAliasLabel);
@@ -404,7 +405,7 @@ export class MenuHandler {
         }
 
         if (choice === historyLabel) {
-            await this.showConversationHistoryForContact(ctx, group.number, displayName);
+            await this.showConversationHistoryForContact(ctx, group.number, displayName, 'menu.back.group');
             await this.manageAllowedGroup(ctx, group);
             return;
         }
@@ -467,9 +468,9 @@ export class MenuHandler {
         const recentConversations = await this.recentsService.getRecentConversations();
         const groupedEntries = this.groupRecentConversations(recentConversations);
         const title = t('menu.recents.title');
-        const backLabel = t('menu.root.back');
-        const nextLabel = 'Next';
-        const previousLabel = 'Previous';
+        const backLabel = t(parent === 'Advanced' ? 'menu.back.advanced' : 'menu.back.chatsOwner');
+        const nextLabel = t('menu.page.next');
+        const previousLabel = t('menu.page.previous');
         const pageSize = 10;
 
         if (groupedEntries.length === 0) {
@@ -529,7 +530,7 @@ export class MenuHandler {
             ? t('menu.recents.contact.allowGroup')
             : t('menu.recents.contact.allowNumber');
         const removeAliasLabel = t('menu.recents.contact.removeAlias');
-        const backLabel = t('menu.recents.contact.back');
+        const backLabel = t('menu.back.recents');
         const options: string[] = [historyLabel];
 
         if (!allowedContact) {
@@ -630,7 +631,7 @@ export class MenuHandler {
                 });
                 ctx.ui.notify(t('menu.allowed.sendSuccess', { displayName }), 'info');
             } else {
-                ctx.ui.notify(t('menu.allowed.sendFailure', { displayName, error: result.error ?? 'Unknown error' }), 'error');
+                ctx.ui.notify(t('menu.allowed.sendFailure', { displayName, error: result.error ?? t('message.reply.unknownError') }), 'error');
             }
             return;
         }
@@ -641,6 +642,7 @@ export class MenuHandler {
             ctx,
             conversation.senderNumber,
             this.getConversationDisplayName(conversation),
+            'menu.back.conversation',
             conversation.senderName
         );
     }
@@ -649,6 +651,7 @@ export class MenuHandler {
         ctx: ExtensionCommandContext,
         senderNumber: string,
         displayName: string,
+        backKey: 'menu.back.conversation' | 'menu.back.contact' | 'menu.back.group',
         senderName?: string
     ) {
         const archived = this.recentsService.getArchiveState?.()?.enabled;
@@ -663,9 +666,9 @@ export class MenuHandler {
 
         const sortedHistory = this.sortHistoryByMostRecent(history);
         const pageSize = 10;
-        const backLabel = t('menu.root.back');
-        const nextLabel = 'Next';
-        const previousLabel = 'Previous';
+        const backLabel = t(backKey);
+        const nextLabel = t('menu.page.next');
+        const previousLabel = t('menu.page.previous');
 
         for (let page = 0; page * pageSize < sortedHistory.length;) {
             const start = page * pageSize;
@@ -855,7 +858,7 @@ export class MenuHandler {
             ? this.sessionManager.getAllowedGroup(conversation.senderNumber)
             : this.sessionManager.getAllowedContact(conversation.senderNumber);
         const displayName = allowedContact?.name || conversation.senderName;
-        const prefix = isGroup ? '[Group] ' : '';
+        const prefix = isGroup ? `${t('menu.recents.groupPrefix')} ` : '';
         return displayName ? `${prefix}${displayName} (${conversation.senderNumber})` : `${prefix}${conversation.senderNumber}`;
     }
 

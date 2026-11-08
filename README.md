@@ -40,7 +40,7 @@ Check the channel with `npm view whatsapp-ng@latest version`; `next` is independ
 Restart Pi, then:
 
 1. Open `/whatsapp` → **Connection** → **Connect WhatsApp** and scan the QR code.
-2. Add contacts under **Chats / Owner → Allowed Contacts**, or groups under **Groups → Allowed Groups**.
+2. Add contacts under **Chats / Owner → Allowed contacts**, or groups under **Groups → Allowed groups**.
 3. Send a message from an allowed chat. Pi answers in that conversation.
 
 The login is saved. **Connection → Auto-connect on startup → Enabled** saves a default-off preference for TUI/RPC sessions using that profile, including reload/new sessions and extension-enabled subagents. It requires saved credentials and does not immediately connect/disconnect. Print/JSON runs require the explicit online flag.
@@ -135,7 +135,7 @@ Voice settings include per-chat pause controls and a confirmed preview. Speech u
 
 ## Chats and replies
 
-The `/whatsapp` menu groups settings into **Connection**, **Chats / Owner**, **Replies**, **Voice**, **Groups** and **Advanced**. **Back** returns to the parent; cancelling a selection/input/editor closes the settings request without saving that action. Declining a confirmation changes nothing; message-detail overlays retain their own close gesture. See [Off behavior and diagnostic privacy](docs/reference.md#off-and-diagnostics) for shutdown and log retention.
+The `/whatsapp` menu groups settings into **Connection**, **Chats / Owner**, **Replies**, **Voice**, **Groups** and **Advanced**. Child **Back to …** options name their destination; the root has **Close settings**. **Esc closes settings** appears on selection/input/editor titles; cancelling a selection/input/editor closes the settings request without saving that action. Declining a confirmation changes nothing; message-detail overlays retain their own close gesture. See [Off behavior and diagnostic privacy](docs/reference.md#off-and-diagnostics) for shutdown and log retention.
 
 - **Contacts:** add phone numbers in `+E164` format; use aliases to identify them.
 - **Groups:** add the group JID. By default, the agent responds to actual WhatsApp mentions of its account or replies to that account's messages. Change this under **Groups → Group replies**.
@@ -193,7 +193,7 @@ Settings, login, history and downloaded media live under `~/.pi/agent/extensions
 - Allowed chats share model context; routing is not privacy isolation.
 - Images may reach Pi's vision model. Remote transcription and speech send content to the selected service.
 - A successful send means API acceptance, not proof of delivery or reading. An unknown outcome may still arrive; do not automatically resend it.
-- **Connection → Turn WhatsApp off** (or `/off`) keeps your login. **Advanced → Logoff (Delete Session)** resets the current authentication profile. Do not delete login or history to resolve a lock.
+- **Connection → Turn WhatsApp off** (or `/off`) keeps your login. **Advanced → Log out and delete saved login** resets the current authentication profile. Do not delete login or history to resolve a lock.
 - This uses an unofficial WhatsApp transport. Protocol changes or account policies can disrupt it.
 
 See the [operating reference](docs/reference.md) for migration, recovery, media formats, history and diagnostics. [Security reports](SECURITY.md) must not include credentials or private conversation dumps.

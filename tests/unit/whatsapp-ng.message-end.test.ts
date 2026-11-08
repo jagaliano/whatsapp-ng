@@ -703,7 +703,7 @@ describe('whatsapp-ng owned turn delivery', () => {
         expect(mocks.whatsappService.sendMessage).not.toHaveBeenCalled(); expect(mocks.whatsappService.sendContent).not.toHaveBeenCalled();
     });
     const previewMenu = (ctx: ReturnType<typeof createMockContext>) => {
-        ctx.ui.select.mockResolvedValueOnce('Advanced speech settings').mockResolvedValueOnce('Fixed-phrase preview (review & send)')
+        ctx.ui.select.mockResolvedValueOnce('Advanced speech settings').mockResolvedValueOnce('Send fixed-phrase voice preview (review first)')
             .mockImplementationOnce(async (_title, options) => options.find((option: string) => option.includes('5511999998888@s.whatsapp.net')));
         ctx.ui.confirm.mockResolvedValueOnce(true);
     };
@@ -721,9 +721,9 @@ describe('whatsapp-ng owned turn delivery', () => {
     });
     it('sends only the reviewed AI introduction through the normal selected-chat sender', async () => {
         const { ctx } = await setup();
-        ctx.ui.select.mockResolvedValueOnce('Chats: modes, automatic replies and introduction')
+        ctx.ui.select.mockResolvedValueOnce('Chat settings: mode, automatic replies, introduction')
             .mockImplementationOnce(async (_title, options) => options.find((option: string) => option.includes('5511999998888@s.whatsapp.net')))
-            .mockResolvedValueOnce('Introduce the AI assistant (review & send)'); ctx.ui.confirm.mockResolvedValueOnce(true);
+            .mockResolvedValueOnce('Send AI-assistant introduction (review first)'); ctx.ui.confirm.mockResolvedValueOnce(true);
         await mocks.settingsMenus.voice(ctx);
         expect(mocks.whatsappService.sendContent.mock.calls[0][0]).toMatchObject({ recipientJid: '5511999998888@s.whatsapp.net', text: 'This chat is connected to an AI assistant, not the human account owner. Replies may be automated.', options: { brand: false, maxRetries: 1 }, isCurrent: expect.any(Function) });
         expect(mocks.speechPrepare).not.toHaveBeenCalled(); expect(mocks.sessionManager.setSpeechSettings).not.toHaveBeenCalled();

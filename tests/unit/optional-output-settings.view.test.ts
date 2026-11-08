@@ -14,14 +14,14 @@ describe('optional output settings consent', () => {
     const ui = (...choices: string[]) => ({ ui: { select: vi.fn(async () => choices.shift()), confirm: vi.fn(async () => true), notify: vi.fn() } }) as any;
     const actions = () => ({ current: () => true, owner: () => owner, tools: () => ['screenshot', 'read', 'send_wa_media'] });
     it('returns from tool-picker Back to Optional outputs without saving', async () => {
-        const ctx = ui('Choose automatic image tools', 'Back', 'Back');
+        const ctx = ui('Choose automatic image tools', 'Back to Optional outputs', 'Back to Replies');
         expect(await showOptionalOutputSettings(ctx, session, actions())).toBe('back');
         expect(ctx.ui.select).toHaveBeenCalledTimes(3); expect(ctx.ui.confirm).not.toHaveBeenCalled(); expect(ctx.ui.notify).not.toHaveBeenCalled();
         expect(session.getOptionalOutputs()).toEqual({ imageTools: [] });
     });
     it('does not renew owner authority when Back exits the tool picker', async () => {
         const ctx = ui(); ctx.ui.select.mockResolvedValueOnce('Choose automatic image tools').mockImplementationOnce(async () => {
-            await session.setOperatorJid(owner.ownerJid); return 'Back';
+            await session.setOperatorJid(owner.ownerJid); return 'Back to Optional outputs';
         });
         await withSettingsRequest(ctx, () => () => true, async scoped => { await showOptionalOutputSettings(scoped, session, actions()); });
         expect(ctx.ui.select).toHaveBeenCalledTimes(2); expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining('Settings changed'), 'info');

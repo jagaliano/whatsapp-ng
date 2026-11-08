@@ -207,7 +207,7 @@ export class WhatsAppCommandRouter {
                     ...(frame.chat.endsWith('@g.us') && !policy.groupOptIn ? ['This group speech opt-in is missing'] : [])
                 ];
                 if (action.value !== 'text' && missing.length) {
-                    await this.reply(frame, `${missing.join('; ')}. Use terminal /whatsapp > Voice > ${t('voice.setupChat')} and select this chat. Nothing changed; no speech was enabled.`);
+                    await this.reply(frame, `${missing.join('; ')}. Use terminal /whatsapp > ${t('voice.menu')} > ${t('voice.setupChat')} and select this chat. Nothing changed; no speech was enabled.`);
                     return;
                 }
                 await this.ports.session.setSpeechSettings(setChatReplyPreferences(settings, frame.chat, { mode: action.value }, this.ports.canonical), revision, frame.current);

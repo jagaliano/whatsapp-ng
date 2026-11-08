@@ -13,13 +13,13 @@ export interface OptionalOutputSettingsActions {
 export async function showOptionalOutputSettings(ctx: ExtensionCommandContext, session: SessionManager, actions: OptionalOutputSettingsActions, ownerRevision = session.getOperatorRevision()): Promise<SettingsNavigation> {
     let settings: OptionalOutputs;
     try { settings = session.getOptionalOutputs(); }
-    catch { ctx.ui.notify('Invalid optional output settings. An explicit choice will repair them.', 'warning'); settings = validateOptionalOutputs(undefined); }
+    catch { ctx.ui.notify(t('menu.optional.invalid'), 'warning'); settings = validateOptionalOutputs(undefined); }
     const revision = session.getOptionalOutputsRevision();
     const current = () => actions.current() && ownerRevision === session.getOperatorRevision();
-    const back = t('menu.root.back');
-    const images = 'Choose automatic image tools'; const clearImages = 'Disable automatic images';
-    const terminal = settings.terminal ? 'Disable terminal forwarding' : 'Enable terminal forwarding to owner';
-    const choice = await ctx.ui.select(`Optional outputs — image tools: ${settings.imageTools.length}; terminal forwarding: ${settings.terminal ? 'On' : 'Off'}`,
+    const back = t('menu.back.replies');
+    const images = t('menu.optional.chooseImages'); const clearImages = t('menu.optional.clearImages');
+    const terminal = t(settings.terminal ? 'menu.optional.terminalOff' : 'menu.optional.terminalOn');
+    const choice = await ctx.ui.select(t('menu.optional.status', { count: settings.imageTools.length, state: t(settings.terminal ? 'menu.on' : 'menu.off') }),
         [images, clearImages, terminal, back]);
     if (!current()) expireSettingsRequest();
     if (choice === back) return 'back';
@@ -28,9 +28,10 @@ export async function showOptionalOutputSettings(ctx: ExtensionCommandContext, s
         const tools = [...new Set(actions.tools())].filter(name => {
             try { validateOptionalOutputs({ imageTools: [name] }); return true; } catch { return false; }
         }).sort((left, right) => left.localeCompare(right)).slice(0, 256);
-        const entries = tools.map(name => ({ name, label: `${settings.imageTools.includes(name) ? 'Disable' : 'Enable'} ${name}` }));
-        const selected = await ctx.ui.select('Only actual image result blocks from individually selected tools', [...entries.map(entry => entry.label), back]);
-        if (selected === back) {
+        const imageBack = t('menu.back.optionalOutputs');
+        const entries = tools.map(name => ({ name, label: t(settings.imageTools.includes(name) ? 'menu.optional.toolOff' : 'menu.optional.toolOn', { tool: name }) }));
+        const selected = await ctx.ui.select(t('menu.optional.imageTitle'), [...entries.map(entry => entry.label), imageBack]);
+        if (selected === imageBack) {
             if (!current()) expireSettingsRequest();
             return showOptionalOutputSettings(ctx, session, actions, ownerRevision);
         }
@@ -44,7 +45,7 @@ export async function showOptionalOutputSettings(ctx: ExtensionCommandContext, s
         if (settings.terminal) settings = { imageTools: settings.imageTools };
         else {
             const owner = actions.owner();
-            if (!owner) { ctx.ui.notify('Connect WhatsApp and configure an allowed private owner first. Group binding or gateway redirects cannot be bypassed.', 'warning'); return; }
+            if (!owner) { ctx.ui.notify(t('menu.optional.ownerMissing'), 'warning'); return; }
             if (!await ctx.ui.confirm('Forward terminal answers?', `Future terminal/RPC final answers may contain workspace information and will be sent as text to the verified owner ${owner.ownerJid} only. No groups, previous-chat fallback, terminal screenshots or automatic raw thinking/tool-result streams. Sent answers follow normal WhatsApp history retention. Owner/account changes invalidate consent. Existing terminal history is not replayed.`)) return;
             const now = actions.owner();
             if (!now || now.ownerJid !== owner.ownerJid || now.accountScope !== owner.accountScope) expireSettingsRequest();
@@ -53,5 +54,5 @@ export async function showOptionalOutputSettings(ctx: ExtensionCommandContext, s
     } else return;
     if (!current()) expireSettingsRequest();
     await session.setOptionalOutputs(settings, revision, current);
-    ctx.ui.notify('Optional outputs saved for new inputs. Already-running work is not opted in.', 'info');
+    ctx.ui.notify(t('menu.optional.saved'), 'info');
 }

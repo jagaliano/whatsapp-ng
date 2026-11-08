@@ -34,6 +34,7 @@ describe('MessageDetailView', () => {
         expect(output).toContain('line with');
         expect(output).toContain('emojis 🚀');
         expect(output).toContain('Press R to reply');
+        expect(output).toContain('returns to History');
     });
 
     it('opens reply flow when the user presses R', () => {
@@ -78,7 +79,8 @@ describe('MessageDetailView', () => {
 
         view.handleInput('escape');
         view.handleInput('enter');
+        view.handleInput('\u007f');
 
-        expect(onClose).toHaveBeenCalledTimes(2);
+        expect(onClose).toHaveBeenCalledTimes(3);
     });
 });

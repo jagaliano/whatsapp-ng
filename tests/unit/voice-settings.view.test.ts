@@ -8,7 +8,7 @@ import { withSettingsRequest } from '../../src/ui/whatsapp-settings.view.ts';
 const A = '15550000001@s.whatsapp.net'; const G = '120363000000001@g.us';
 const chat = { jid: A, recipientJid: A, label: `Fixture (${A})` }; const group = { jid: G, recipientJid: G, label: `Group (${G})` };
 const remote = { ttsEndpoint: 'https://speech.example.test/v1/audio/speech', ttsModel: 'fixture-model', ttsEnv: 'FIXTURE_TTS_KEY', ttsVoice: 'fixture-voice' };
-const labels = { backend: 'Speech backend / connection', mode: 'Default reply mode (chat overrides remain)', chats: 'Chats: modes, automatic replies and introduction', preview: 'Fixed-phrase preview (review & send)', introduce: 'Introduce the AI assistant (review & send)' };
+const labels = { backend: 'Speech service (Edge or remote)', mode: 'Default reply mode (per-chat modes kept)', chats: 'Chat settings: mode, automatic replies, introduction', preview: 'Send fixed-phrase voice preview (review first)', introduce: 'Send AI-assistant introduction (review first)' };
 function setup(selects: string[], inputs: Array<string | undefined> = [], confirms: Array<boolean | (() => boolean)> = [], initial = speechDefaults()) {
     let settings = structuredClone(initial); let revision = 0; let owner = ''; let current = true;
     const session = { getSpeechSettings: () => structuredClone(settings), getSpeechRevision: () => revision,
@@ -20,9 +20,9 @@ function setup(selects: string[], inputs: Array<string | undefined> = [], confir
         select: vi.fn(async (title: string, _options: string[]) => {
             const choice = selects.shift() ?? 'Back';
             if (title.startsWith('Voice: ') && [labels.backend, labels.mode, labels.preview].includes(choice)) { selects.unshift(choice); return 'Advanced speech settings'; }
-            return choice;
+            return choice === 'Back' ? _options.at(-1) : choice;
         }), input: vi.fn(async () => inputs.shift()),
-        confirm: vi.fn(async () => { const answer = confirms.shift(); return typeof answer === 'function' ? answer() : answer ?? false; }), notify: vi.fn()
+        confirm: vi.fn(async (_title: string, _message: string) => { const answer = confirms.shift(); return typeof answer === 'function' ? answer() : answer ?? false; }), notify: vi.fn()
     } };
     return { session, actions, ctx, settings: () => settings, expire: () => { current = false; }, change: () => { revision++; } };
 }
@@ -61,26 +61,26 @@ describe('terminal Voice/Owner settings', () => {
         await showVoiceSettings(h.ctx as any, h.session as any, h.actions); expect(h.session.setSpeechSettings).not.toHaveBeenCalled(); expect(h.settings()).toEqual(speechDefaults());
     });
     it('returns from remote protocol Back to the backend picker without saving', async () => {
-        const h = setup(['Advanced speech settings', labels.backend, 'Remote speech service', 'Back', 'Back', 'Back', 'Back']);
+        const h = setup(['Advanced speech settings', labels.backend, 'Remote speech service (HTTP API)', 'Back', 'Back', 'Back', 'Back']);
         await showVoiceSettings(h.ctx as any, h.session as any, h.actions);
         expect(h.ctx.ui.select.mock.calls[4][0]).toBe(labels.backend); expect(h.session.setSpeechSettings).not.toHaveBeenCalled();
     });
     it('lets a remote provider switch from built-in to named voice without re-entering the backend', async () => {
         const initial = { ...speechDefaults(), config: { ...remote, ttsVoice: undefined, ttsProtocol: 'openai-compatible' as const, ttsUseServerVoice: true } };
-        const h = setup(['Advanced speech settings', 'Provider voice / existing reference ID', 'Use a named voice / reference ID', 'Back', 'Back'], ['new-voice'], [], initial);
+        const h = setup(['Advanced speech settings', 'Remote voice or reference ID', 'Use a named voice / reference ID', 'Back', 'Back'], ['new-voice'], [], initial);
         await showVoiceSettings(h.ctx as any, h.session as any, h.actions);
         expect(h.settings().config).toMatchObject({ ttsUseServerVoice: false, ttsVoice: 'new-voice' }); expect(h.ctx.ui.confirm).not.toHaveBeenCalled();
     });
     it('does not offer a server-default voice for Fish', async () => {
-        const h = setup(['Advanced speech settings', labels.backend, 'Remote speech service', 'Fish', 'Use a named voice / reference ID', 'Back', 'Back'],
+        const h = setup(['Advanced speech settings', labels.backend, 'Remote speech service (HTTP API)', 'Fish', 'Use a named voice / reference ID', 'Back', 'Back'],
             ['https://api.fish.audio/v1/tts', 's1', 'FIXTURE_TTS_KEY', 'fixture-reference']);
         await showVoiceSettings(h.ctx as any, h.session as any, h.actions);
-        const voices = h.ctx.ui.select.mock.calls.find(([title]) => title === 'Provider voice / existing reference ID')?.[1];
+        const voices = h.ctx.ui.select.mock.calls.find(([title]) => title === 'Remote voice or reference ID')?.[1];
         expect(voices).not.toContain('Use server default voice'); expect(h.settings().config).toMatchObject({ ttsProtocol: 'fish', ttsVoice: 'fixture-reference' });
     });
     it('starts with chat setup and keeps backend controls under Advanced', async () => {
         const h = setup(['Back']); await showVoiceSettings(h.ctx as any, h.session as any, h.actions);
-        expect(h.ctx.ui.select.mock.calls[0][1]).toEqual(['Set up replies for a chat', labels.chats, 'Advanced speech settings', 'Text-only everywhere / revoke speech consent', 'Back']);
+        expect(h.ctx.ui.select.mock.calls[0][1]).toEqual(['Set up replies for a chat', labels.chats, 'Advanced speech settings', 'Turn speech off everywhere (revoke consent)', 'Back to main menu']);
     });
     it('sets up Mirror directly for one chat with explicit shared enablement and no send', async () => {
         const h = setup(['Set up replies for a chat', chat.label, 'Mirror audio input', 'Back'], [], [true]);
@@ -100,10 +100,10 @@ describe('terminal Voice/Owner settings', () => {
     it('shows only the active provider voice editor in Advanced', async () => {
         const h = setup(['Advanced speech settings', 'Back', 'Back']); await showVoiceSettings(h.ctx as any, h.session as any, h.actions);
         const choices = h.ctx.ui.select.mock.calls.find(([title]) => title === 'Advanced speech settings')?.[1];
-        expect(choices).toContain('Edge voice (kept separately)'); expect(choices).not.toContain('Provider voice / existing reference ID');
+        expect(choices).toContain('Edge voice'); expect(choices).not.toContain('Remote voice or reference ID');
     });
     it('configures a compatible built-in server voice atomically without a placeholder', async () => {
-        const h = setup(['Advanced speech settings', labels.backend, 'Remote speech service', 'OpenAI-compatible', 'Use server default voice', 'Back', 'Back'],
+        const h = setup(['Advanced speech settings', labels.backend, 'Remote speech service (HTTP API)', 'OpenAI-compatible', 'Use server default voice', 'Back', 'Back'],
             ['http://127.0.0.1:8098/v1/audio/speech', 'chatterbox', 'FIXTURE_TTS_KEY']);
         await showVoiceSettings(h.ctx as any, h.session as any, h.actions);
         expect(h.settings().config).toMatchObject({ ttsProtocol: 'openai-compatible', ttsUseServerVoice: true, ttsModel: 'chatterbox' });
@@ -123,7 +123,7 @@ describe('terminal Voice/Owner settings', () => {
     });
     it('configures a new remote destination atomically and clears the old approval without invoking speech', async () => {
         const initial = { ...speechDefaults(), config: remote, enabled: true, mode: 'voice' as const, approvedDestinationKey: resolveTtsConfig(remote).destinationKey };
-        const h = setup([labels.backend, 'Remote speech service', 'OpenAI-compatible', 'Use a named voice / reference ID', 'Back'], ['https://new.example.test/speech', '', '', 'new-voice'], [], initial);
+        const h = setup([labels.backend, 'Remote speech service (HTTP API)', 'OpenAI-compatible', 'Use a named voice / reference ID', 'Back'], ['https://new.example.test/speech', '', '', 'new-voice'], [], initial);
         await showVoiceSettings(h.ctx as any, h.session as any, h.actions);
         expect(h.settings().config).toMatchObject({ ...remote, ttsEndpoint: 'https://new.example.test/speech', ttsVoice: 'new-voice' });
         expect(h.settings().approvedDestinationKey).toBeUndefined(); expect(chatReplyPolicy(h.settings(), A, jid => jid).mode).toBe('text'); expect(h.actions.preview).not.toHaveBeenCalled();
@@ -174,7 +174,7 @@ describe('terminal Voice/Owner settings', () => {
     });
     it('text-only everywhere revokes permission and disables existing chat spoken overrides', async () => {
         const initial = { ...speechDefaults(), config: remote, enabled: true, mode: 'voice' as const, approvedDestinationKey: resolveTtsConfig(remote).destinationKey, chats: { [A]: { mode: 'both' as const } } };
-        const h = setup(['Text-only everywhere / revoke speech consent', 'Back'], [], [], initial);
+        const h = setup(['Turn speech off everywhere (revoke consent)', 'Back'], [], [], initial);
         await showVoiceSettings(h.ctx as any, h.session as any, h.actions); expect(chatReplyPolicy(h.settings(), A, jid => jid).mode).toBe('text'); expect(h.settings().approvedDestinationKey).toBeUndefined();
     });
     it('rejects an expired settings dialog instead of applying it to a replacement session', async () => {
@@ -184,13 +184,13 @@ describe('terminal Voice/Owner settings', () => {
         }); expect(h.settings()).toEqual(speechDefaults());
     });
     it.each(['90000000001', '15550000001', '+000000', '+1234567890123456'])('rejects ambiguous or invalid manual phone owner input %s without changing authority', async value => {
-        const h = setup(['Enter a person number / JID'], [value], [true]);
+        const h = setup(['Enter phone number or person JID'], [value], [true]);
         await showOwnerSettings(h.ctx as any, h.session as any, h.actions);
         expect(h.session.setOperatorJid).not.toHaveBeenCalled(); expect(h.ctx.ui.confirm).not.toHaveBeenCalled();
         expect(h.ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining('+E164'), 'error');
     });
     it.each([['+15550000001', A], ['90000000001@lid', '90000000001@lid'], [A, A]])('keeps explicit manual person identity %s typed', async (input, expected) => {
-        const h = setup(['Enter a person number / JID'], [input], [true]); await showOwnerSettings(h.ctx as any, h.session as any, h.actions);
+        const h = setup(['Enter phone number or person JID'], [input], [true]); await showOwnerSettings(h.ctx as any, h.session as any, h.actions);
         expect(h.session.setOperatorJid).toHaveBeenCalledExactlyOnceWith(expected, h.actions.current);
     });
     it('preserves a selected LID in both the voice picker and owner picker without guessing a phone alias', async () => {
@@ -203,7 +203,7 @@ describe('terminal Voice/Owner settings', () => {
     it('selects or clears the phone owner only after explicit review', async () => {
         const h = setup([chat.label], [], [true]); await showOwnerSettings(h.ctx as any, h.session as any, h.actions);
         expect(h.session.setOperatorJid).toHaveBeenCalledWith(A, h.actions.current);
-        const cancelled = setup(['Enter a person number / JID'], ['+15550000001'], [false]); await showOwnerSettings(cancelled.ctx as any, cancelled.session as any, cancelled.actions);
+        const cancelled = setup(['Enter phone number or person JID'], ['+15550000001'], [false]); await showOwnerSettings(cancelled.ctx as any, cancelled.session as any, cancelled.actions);
         expect(cancelled.session.setOperatorJid).not.toHaveBeenCalled();
     });
 });

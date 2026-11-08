@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { supportedThinking, WhatsAppCommandRouter, type PhoneControlPorts } from '../../src/services/whatsapp-command.router.ts';
 import { speechDefaults } from '../../src/services/speech-settings.ts';
 import { resolveTtsConfig } from '../../src/services/tts-config.ts';
+import { initI18n, resetI18n, t } from '../../src/i18n.ts';
 import { getSupportedThinkingLevels } from '@earendil-works/pi-ai';
 
 const owner = '15550000001@s.whatsapp.net'; const other = '15550000002@s.whatsapp.net'; const group = '120363000000@g.us';
@@ -31,8 +32,14 @@ function fixture() {
     return { router, ports, ctx, sent, handle, busy: () => { idle = false; }, queued: () => { pending = true; }, revoke: () => { revision++; }, replace: () => { scope = 'account:2/session:2'; },
         deny: () => { allowed = false; }, changeStats: () => { statsRevision++; }, changeReporting: () => { reportingRevision++; }, settings: () => settings, enableSpeech: () => { settings.enabled = true; settings.approvedDestinationKey = resolveTtsConfig(settings.config).destinationKey; } };
 }
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); resetI18n(); });
 describe('exact owner phone controls', () => {
+    it.each(['en', 'pt-BR', 'es', 'fr'])('quotes the localized terminal setup path without changing phone prose (%s)', async locale => {
+        vi.stubEnv('WHATSAPP_NG_LOCALE', locale); initI18n(undefined);
+        const h = fixture(); await h.handle('/voice mirror');
+        expect(h.sent.at(-1)).toBe(`Speech is disabled; Speech destination is not approved. Use terminal /whatsapp > ${t('voice.menu')} > ${t('voice.setupChat')} and select this chat. Nothing changed; no speech was enabled.`);
+        expect(h.ports.session.setSpeechSettings).not.toHaveBeenCalled();
+    });
     it('distinguishes unapproved destination from disabled shared speech without granting either', async () => {
         const h = fixture(); await h.handle('/voice mirror');
         expect(h.sent.at(-1)).toContain('destination is not approved'); expect(h.sent.at(-1)).toContain('Set up replies for a chat');

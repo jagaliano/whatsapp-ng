@@ -291,7 +291,7 @@ After interruption/cache errors, follow upstream recovery guidance; do not assum
 
 Save the exports in a file and load it with `source /absolute/path/to/crispasr-env.sh`, **not `cd`**. For persistence, source it from shell startup configuration, with secure credential loading. These are launch-environment variables, not Pi `settings.json` entries. Restart Pi normally from that terminal after changing them; `/reload` updates code, not shell environment. Do not start a second same-profile owner.
 
-For a manual test before automatic speech resumes, first choose `/whatsapp` → **Voice → Text-only everywhere / revoke speech consent**. Otherwise, approval for the same endpoint/protocol/credential-variable identity survives model/voice changes.
+For a manual test before automatic speech resumes, first choose `/whatsapp` → **Voice → Turn speech off everywhere (revoke consent)**. Otherwise, approval for the same endpoint/protocol/credential-variable identity survives model/voice changes.
 
 Inside Pi, ask the agent to call these tools; they are **not shell commands**:
 

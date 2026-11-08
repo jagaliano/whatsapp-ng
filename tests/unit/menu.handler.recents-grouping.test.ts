@@ -203,7 +203,7 @@ describe('MenuHandler — recents grouping helpers', () => {
             const senderNumber = '+5511999998888';
             const conv = makeConversation({ senderNumber, senderName: 'Alice', isAllowed: false });
 
-            const allowLabel = 'Allow Contact';
+            const allowLabel = 'Allow contact';
             const backLabel = 'Back';
 
             const mockCtx = {

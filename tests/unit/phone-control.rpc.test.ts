@@ -4,13 +4,18 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { initI18n, resetI18n, t } from '../../src/i18n.ts';
 import { initAuthCreds, BufferJSON } from 'baileys';
 import { resolveTtsConfig } from '../../src/services/tts-config.ts';
 
+afterEach(() => { vi.unstubAllEnvs(); resetI18n(); });
+
 /** Real Pi command context/lifecycle; WhatsApp transport and fixture model streams are synthetic. */
 describe('production phone-control Pi RPC gateway', () => {
-    it.each(['direct', 'owner-guidance', 'menu-ui', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard', 'autoconnect', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async mode => {
+    it.each(['menu-polish:en', 'menu-polish:pt-BR', 'menu-polish:es', 'menu-polish:fr', 'direct', 'owner-guidance', 'menu-ui', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard', 'autoconnect', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async scenario => {
+        const [mode, locale = 'en'] = scenario.split(':');
+        vi.stubEnv('WHATSAPP_NG_LOCALE', locale); initI18n(undefined);
         const root = await mkdtemp(join(tmpdir(), 'wa-phone-rpc-')); const home = join(root, 'home'); const workspace = join(root, 'workspace');
         const data = join(home, '.pi/agent/extensions/whatsapp-ng'); const metricsPath = join(root, 'metrics.json'); const networkPath = join(root, 'network.json');
         await mkdir(join(data, 'auth'), { recursive: true }); await mkdir(workspace);
@@ -39,7 +44,7 @@ describe('production phone-control Pi RPC gateway', () => {
         const repo = fileURLToPath(new URL('../..', import.meta.url));
         const cli = fileURLToPath(new URL('./cli.js', import.meta.resolve('@mariozechner/pi-coding-agent')));
         const env = Object.fromEntries(['PATH', 'TMPDIR', 'LANG'].flatMap(key => process.env[key] ? [[key, process.env[key]!]] : []));
-        Object.assign(env, { HOME: home, PI_CODING_AGENT_DIR: join(root, 'agent'), PI_OFFLINE: '1', WHATSAPP_NG_LOCALE: 'en',
+        Object.assign(env, { HOME: home, PI_CODING_AGENT_DIR: join(root, 'agent'), PI_OFFLINE: '1', WHATSAPP_NG_LOCALE: locale,
             WA_PHONE_RPC_METRICS: metricsPath, WA_PHONE_RPC_CONFIG: join(data, 'config.json'), WA_PHONE_RPC_SELF_LID: selfChat ? '1' : '0', WA_PHONE_RPC_STATS: mode === 'stats' ? '1' : '0',
             WA_PHONE_RPC_GROUPS: ['groups', 'settings'].includes(mode) ? '1' : '0', WA_PHONE_RPC_SELF_AUTO: mode === 'self-auto' ? '1' : '0', WA_PHONE_RPC_MODELS: mode === 'models' ? '1' : '0',
             WA_PHONE_RPC_OPTIONAL: ['images', 'terminal'].includes(mode) ? mode : '', WA_PHONE_RPC_REPORTING: mode === 'reporting' ? '1' : '0', WA_PHONE_RPC_SERVER_VOICE: mode === 'server-voice' ? '1' : '0', WA_PHONE_RPC_SPOKEN_GUARD: mode === 'spoken-guard' ? '1' : '0',
@@ -51,7 +56,7 @@ describe('production phone-control Pi RPC gateway', () => {
             '--provider', modelFixture ? 'fixture-phone' : 'openai', '--model', modelFixture ? 'model-01' : 'gpt-4o-mini',
             ...(modelFixture ? ['-e', join(repo, 'whatsapp-ng.ts'), '-e', join(repo, 'tests/fixtures/phone-control-rpc.extension.ts')]
                 : ['-e', join(repo, 'tests/fixtures/phone-control-rpc.extension.ts'), '-e', join(repo, 'whatsapp-ng.ts')]),
-            ...(automatic || managed ? [] : ['--whatsapp-ng-online']), ...(mode === 'self-lid' ? ['--whatsapp-ng-native-polls'] : [])],
+            ...(automatic || managed || mode === 'menu-polish' ? [] : ['--whatsapp-ng-online']), ...(mode === 'self-lid' ? ['--whatsapp-ng-native-polls'] : [])],
             { cwd: workspace, env, stdio: ['pipe', 'pipe', 'pipe'] });
         const waiters = new Map<string, (record: any) => void>(); const records: any[] = []; let buffer = ''; let stderr = ''; let serial = 0;
         child.stderr.on('data', value => { stderr = (stderr + value).slice(-4000); });
@@ -74,10 +79,10 @@ describe('production phone-control Pi RPC gateway', () => {
             let dialog: any;
             await expect.poll(() => {
                 dialog = records.find(record => record.type === 'extension_ui_request' && record.method === 'select'
-                    && record.options?.includes(choice) && !answered.has(record.id));
+                    && (choice === 'Back' ? /^(Back to |Close settings)/.test(record.options?.at(-1) ?? '') : record.options?.includes(choice)) && !answered.has(record.id));
                 return !!dialog;
             }, { timeout: 10_000 }).toBe(true);
-            answered.add(dialog.id); child.stdin.write(JSON.stringify({ type: 'extension_ui_response', id: dialog.id, value: choice }) + '\n');
+            answered.add(dialog.id); child.stdin.write(JSON.stringify({ type: 'extension_ui_response', id: dialog.id, value: choice === 'Back' ? dialog.options.at(-1) : choice }) + '\n');
             return dialog;
         };
         const confirm = async () => {
@@ -119,13 +124,34 @@ describe('production phone-control Pi RPC gateway', () => {
                 expect((await metrics()).modelStarts).toBe(4); expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
                 expect(records.filter(record => record.type === 'extension_error')).toEqual([]); return;
             }
+            if (mode === 'menu-polish') {
+                const before = await readFile(join(data, 'config.json'), 'utf8');
+                const menu = prompt('/whatsapp');
+                for (const key of ['menu.category.connection', 'menu.category.chatsOwner', 'menu.category.replies', 'voice.menu', 'menu.category.groups', 'menu.category.advanced'] as const) {
+                    const root = await select(t(key)); expect(root.title).toContain(t('menu.state.enabled'));
+                    const panel = await select(t('menu.back.main')); expect(panel.title).toContain(t('menu.hint.esc'));
+                }
+                await select(t('menu.close')); await menu;
+                const auto = prompt('/whatsapp'); await select(t('menu.category.connection')); await select(t('menu.connection.autoConnect'));
+                expect((await select(t('menu.back.connection'))).title).toContain(t('menu.autoConnect.title', { state: t('menu.off') }));
+                await select(t('menu.back.main')); await select(t('menu.close')); await auto;
+                const cancelled = prompt('/whatsapp'); await select(t('menu.category.chatsOwner')); await select(t('voice.owner')); await select(t('voice.enterOwner'));
+                let input: any;
+                await expect.poll(() => { input = records.find(r => r.type === 'extension_ui_request' && r.method === 'input' && !answered.has(r.id)); return !!input; }, { timeout: 10_000 }).toBe(true);
+                expect(input.title).toContain(t('menu.hint.esc')); answered.add(input.id);
+                child.stdin.write(JSON.stringify({ type: 'extension_ui_response', id: input.id }) + '\n'); await cancelled;
+                expect(await readFile(join(data, 'config.json'), 'utf8')).toBe(before);
+                expect((await metrics()).socketStarts).toBe(0); expect((await metrics()).modelStarts).toBe(0);
+                expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
+                expect(records.filter(r => r.type === 'extension_error')).toEqual([]); return;
+            }
             if (mode === 'autoconnect') {
                 expect((await metrics()).socketStarts).toBe(1);
                 await expect.poll(async () => JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).status, { timeout: 10_000 }).toBe('connected');
                 const beforeBack = await readFile(join(data, 'config.json'), 'utf8');
                 const backMenu = prompt('/whatsapp'); await select('Connection'); await select('Auto-connect on startup');
                 expect((await select('Back')).title).toContain('Auto-connect on startup: On');
-                expect((await select('Back')).title).toBe('Connection');
+                expect((await select('Back')).title).toBe('Connection\nEsc closes settings');
                 expect((await select('Back')).title).toMatch(/^WhatsApp — /); await backMenu;
                 expect(await readFile(join(data, 'config.json'), 'utf8')).toBe(beforeBack); expect((await metrics()).socketStarts).toBe(1);
                 const preference = async (value: 'Enabled' | 'Disabled') => {
@@ -154,7 +180,7 @@ describe('production phone-control Pi RPC gateway', () => {
                 expect((await metrics()).messages.at(-1)).toContain('Set up replies for a chat');
                 const before = await readFile(join(data, 'config.json'), 'utf8');
                 const cancelled = prompt('/whatsapp'); await select('Voice'); await select('Advanced speech settings');
-                await select('Speech backend / connection'); await select('Remote speech service'); await select('OpenAI-compatible');
+                await select('Speech service (Edge or remote)'); await select('Remote speech service (HTTP API)'); await select('OpenAI-compatible');
                 let input: any;
                 await expect.poll(() => { input = records.find(record => record.type === 'extension_ui_request' && record.method === 'input' && !answered.has(record.id)); return !!input; }, { timeout: 10_000 }).toBe(true);
                 answered.add(input.id); child.stdin.write(JSON.stringify({ type: 'extension_ui_response', id: input.id }) + '\n');
@@ -167,7 +193,7 @@ describe('production phone-control Pi RPC gateway', () => {
                 await prompt('/phone-fixture voice-mirror'); expect((await metrics()).messages.at(-1)).toContain('reply mode: mirror');
                 const back = prompt('/whatsapp'); await select('Replies'); await select('Optional outputs');
                 await select('Choose automatic image tools'); expect((await select('Back')).title).toContain('actual image result blocks');
-                expect((await select('Back')).title).toContain('Optional outputs'); expect((await select('Back')).title).toBe('Replies');
+                expect((await select('Back')).title).toContain('Optional outputs'); expect((await select('Back')).title).toBe('Replies\nEsc closes settings');
                 expect((await select('Back')).title).toMatch(/^WhatsApp — /); await back;
                 expect((await metrics()).messages).toHaveLength(2); expect((await metrics()).modelStarts).toBe(0);
                 expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
@@ -179,8 +205,8 @@ describe('production phone-control Pi RPC gateway', () => {
                 await prompt('/phone-fixture voice-mirror');
                 expect((await metrics()).messages.at(-1)).toContain('/whatsapp > Chats / Owner > Owner');
                 const menu = prompt('/whatsapp'); await select('Chats / Owner'); await select('Owner');
-                expect((await select('Back')).title).toBe('Phone settings owner: not configured');
-                expect((await select('Back')).title).toBe('Chats / Owner'); expect((await select('Back')).title).toMatch(/^WhatsApp — /); await menu;
+                expect((await select('Back')).title).toBe('Phone settings owner: not configured\nEsc closes settings');
+                expect((await select('Back')).title).toBe('Chats / Owner\nEsc closes settings'); expect((await select('Back')).title).toMatch(/^WhatsApp — /); await menu;
                 const after = JSON.parse(await readFile(join(data, 'config.json'), 'utf8'));
                 expect(after.operatorJid).toBe(before.operatorJid); expect(after.operatorJid).toBe('');
                 expect(after.voicePreferences).toEqual(before.voicePreferences);
@@ -281,7 +307,7 @@ describe('production phone-control Pi RPC gateway', () => {
                 const local = prompt('/whatsapp'); await select('Advanced'); await select('Privacy and logs'); await local;
                 const offMenu = prompt('/whatsapp'); await select('Connection');
                 let offDialog: any; await expect.poll(() => {
-                    offDialog = records.find(record => record.type === 'extension_ui_request' && record.method === 'select' && record.title === 'Connection' && !answered.has(record.id)); return !!offDialog;
+                    offDialog = records.find(record => record.type === 'extension_ui_request' && record.method === 'select' && record.title === 'Connection\nEsc closes settings' && !answered.has(record.id)); return !!offDialog;
                 }, { timeout: 10_000 }).toBe(true);
                 try { expect(offDialog?.options).toContain('Connect WhatsApp'); expect(offDialog?.options).not.toContain('Turn WhatsApp off'); }
                 finally { await select('Back'); await select('Back'); await offMenu; }

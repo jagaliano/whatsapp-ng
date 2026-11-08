@@ -17,7 +17,7 @@ export async function withSettingsRequest(ctx: ExtensionCommandContext, capture:
     run: (ctx: ExtensionCommandContext, current: () => boolean) => Promise<void>): Promise<void> {
     const retained = requests.get(ctx);
     const request = retained ?? { current: capture(), closed: false, notifyExpired: () => {
-        try { ctx.ui.notify('Settings changed while this menu was open. Reopen /whatsapp.', 'info'); }
+        try { ctx.ui.notify(t('menu.expired'), 'info'); }
         catch { /* Pi may already have retired its lazy UI context. */ }
     } };
     const check = () => {
@@ -34,9 +34,9 @@ export async function withSettingsRequest(ctx: ExtensionCommandContext, capture:
         return value;
     };
     const dialogs: Partial<ExtensionCommandContext['ui']> = {
-        select: async (...args) => { check(); return answer(await ctx.ui.select(...args)); },
-        input: async (...args) => { check(); return answer(await ctx.ui.input(...args)); },
-        editor: async (...args) => { check(); return answer(await ctx.ui.editor(...args)); },
+        select: async (title, ...args) => { check(); return answer(await ctx.ui.select(`${title}\n${t('menu.hint.esc')}`, ...args)); },
+        input: async (title, ...args) => { check(); return answer(await ctx.ui.input(`${title}\n${t('menu.hint.esc')}`, ...args)); },
+        editor: async (title, ...args) => { check(); return answer(await ctx.ui.editor(`${title}\n${t('menu.hint.esc')}`, ...args)); },
         // Detail overlays use the same close result for Enter and Esc; preserve
         // that local close gesture, but never accept an expired overlay result.
         custom: async (...args) => { check(); const result = await ctx.ui.custom(...args); check(); return result; },
@@ -62,36 +62,44 @@ export async function withSettingsRequest(ctx: ExtensionCommandContext, capture:
 }
 /** Navigation only: existing menu/controller views retain all mutations and history handling. */
 export async function chooseWhatsAppSetting(ctx: ExtensionCommandContext, getState: () => SettingsState, current: () => boolean, resumeCategory?: SettingsCategory): Promise<string | undefined> {
-    let category: string | undefined = resumeCategory;
-    const back = t('menu.root.back');
-    const categories = ['Connection', 'Chats / Owner', 'Replies', 'Voice', 'Groups', 'Advanced', back];
+    let category: SettingsCategory | undefined = resumeCategory;
+    const back = t('menu.back.main'); const close = t('menu.close');
+    const labels: Record<SettingsCategory | 'Voice', string> = {
+        Connection: t('menu.category.connection'), 'Chats / Owner': t('menu.category.chatsOwner'),
+        Replies: t('menu.category.replies'), Voice: t('voice.menu'), Groups: t('menu.category.groups'), Advanced: t('menu.category.advanced')
+    };
+    const categories = [...Object.values(labels), close];
+    const statuses: Record<string, Parameters<typeof t>[0]> = { connected: 'menu.status.connected', disconnected: 'menu.status.disconnected', pairing: 'menu.status.pairing', 'logged-out': 'menu.status.logged-out' };
     const choices = (state: SettingsState): Record<string, string[]> => ({
-        Connection: [...(state.status !== 'connected' || !state.enabled ? [t('menu.root.connectWhatsApp')] : []), ...(state.enabled ? ['Turn WhatsApp off'] : []), 'Auto-connect on startup', back],
+        Connection: [...(state.status !== 'connected' || !state.enabled ? [t('menu.root.connectWhatsApp')] : []), ...(state.enabled ? [t('menu.connection.turnOff')] : []), t('menu.connection.autoConnect'), back],
         'Chats / Owner': [t('menu.root.recents'), t('menu.root.allowedNumbers'), ...(state.owner ? [t('voice.owner')] : []), back],
-        Replies: [t('menu.replyDelivery.title'), ...(state.optional ? ['Optional outputs'] : []), back],
-        Groups: [t('menu.root.allowedGroups'), 'Group replies', back],
-        Advanced: ['Privacy and logs', ...(state.archive ? [t('archive.menu.scope')] : []), ...(state.registered ? [t('menu.root.logoffDeleteSession')] : []), back]
+        Replies: [t('menu.replyDelivery.title'), ...(state.optional ? [t('menu.optional.title')] : []), back],
+        Groups: [t('menu.root.allowedGroups'), t('menu.groups.replies'), back],
+        Advanced: [t('menu.advanced.privacy'), ...(state.archive ? [t('archive.menu.scope')] : []), ...(state.registered ? [t('menu.root.logoffDeleteSession')] : []), back]
     });
     for (;;) {
         if (!current()) return;
         if (!category) {
             const state = getState();
-            const choice = await ctx.ui.select(`WhatsApp — ${state.enabled ? 'Enabled' : 'Off'} (transport: ${state.status})`, categories);
-            if (!choice || choice === back) return;
+            const statusKey = statuses[state.status];
+            const choice = await ctx.ui.select(t('menu.root.title', { state: t(state.enabled ? 'menu.state.enabled' : 'menu.state.off'),
+                status: statusKey ? t(statusKey) : state.status }), categories);
+            if (!choice || choice === close) return;
             if (!current()) return;
-            if (choice === 'Voice') return t('voice.menu');
-            category = choice;
+            if (choice === labels.Voice) return t('voice.menu');
+            category = (Object.keys(labels) as Array<SettingsCategory | 'Voice'>).find(id => id !== 'Voice' && labels[id] === choice) as SettingsCategory | undefined;
+            if (!category) return;
         }
         const available = choices(getState());
         if (!Object.hasOwn(available, category)) return;
-        const selected = await ctx.ui.select(category, available[category]);
+        const selected = await ctx.ui.select(labels[category], available[category]);
         if (!selected) return;
         if (!current()) return;
         if (selected === back) { category = undefined; continue; }
         // Transport changes can keep the same account/session scope. Recheck
         // the offered action without rebinding an expired dialog's authority.
         if (!choices(getState())[category]?.includes(selected)) {
-            ctx.ui.notify('Settings options changed. Choose again.', 'info');
+            ctx.ui.notify(t('menu.optionsChanged'), 'info');
             category = undefined;
             continue;
         }

@@ -47,10 +47,12 @@ export class MessageDetailView {
             `${t('message.detail.direction')}: ${this.formatDirection()} • ${t('message.detail.time')}: ${this.formatTimestamp(this.props.timestamp)}`
         ];
 
+        const hint = this.props.onReply && this.props.quoteAvailable !== false
+            ? t('message.detail.hint.replyOrClose') : t('message.detail.hint.close');
         const contentWidth = Math.min(
             availableWidth,
             Math.max(
-                visibleWidth(t('message.detail.hint.close')),
+                visibleWidth(hint),
                 ...rawHeaderLines.map(line => visibleWidth(line)),
                 ...wrapTextWithAnsi(bodyText, availableWidth).map(line => visibleWidth(line))
             )
@@ -70,9 +72,7 @@ export class MessageDetailView {
         const separator = `├${'─'.repeat(boxWidth - 2)}┤`;
         const bottomBorder = `╰${'─'.repeat(boxWidth - 2)}╯`;
         const bodyLines = wrapTextWithAnsi(bodyText, wrapWidth).filter(line => line.length > 0 || bodyText.length === 0);
-        const exitHint = this.props.onReply && this.props.quoteAvailable !== false
-            ? `\x1b[90m${t('message.detail.hint.replyOrClose')}\x1b[39m`
-            : `\x1b[90m${t('message.detail.hint.close')}\x1b[39m`;
+        const exitHint = `\x1b[90m${hint}\x1b[39m`;
 
         return [
             topBorder,

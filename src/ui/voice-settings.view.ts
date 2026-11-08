@@ -30,7 +30,7 @@ function consentMessage(config: TtsConfig): string {
 
 /** Only invoked by the explicit extension command, never from a model tool. */
 export async function showVoiceSettings(ctx: ExtensionCommandContext, session: SessionManager, actions: VoiceSettingsActions): Promise<SettingsNavigation> {
-    const back = t('menu.root.back');
+    const advancedBack = t('menu.back.voiceAdvanced');
     const apply = async (settings: SpeechSettings, revision: number) => {
         let previousDestination: string | undefined;
         try { previousDestination = resolveTtsConfig(session.getSpeechSettings().config).destinationKey; } catch { /* Explicit repair may replace invalid settings. */ }
@@ -58,10 +58,10 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
     };
     const chooseMode = async (): Promise<ReplyOutputMode | undefined> => {
         const modes = ['text', 'voice', 'both', 'mirror'] as const;
-        const selected = await ctx.ui.select(t('voice.defaultMode'), [...modes.map(modeLabel), back]);
+        const selected = await ctx.ui.select(t('voice.defaultMode'), [...modes.map(modeLabel), advancedBack]);
         return modes.find(mode => modeLabel(mode) === selected);
     };
-    const remoteVoice = async (config: TtsConfig, protocol: 'fish' | 'openai-compatible'): Promise<TtsUpdates | 'back' | undefined> => {
+    const remoteVoice = async (config: TtsConfig, protocol: 'fish' | 'openai-compatible', back: string): Promise<TtsUpdates | 'back' | undefined> => {
         const named = t('voice.namedVoice'); const server = t('voice.serverVoice');
         const choice = await ctx.ui.select(t('voice.providerVoice'), [named, ...(protocol === 'openai-compatible' ? [server] : []), back]);
         if (choice === server && protocol === 'openai-compatible') return { ttsProtocol: protocol, ttsUseServerVoice: true, ttsVoice: null };
@@ -76,13 +76,13 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
         const settings = session.getSpeechSettings(); const revision = session.getSpeechRevision();
         const edge = t('voice.edge'); const remote = t('voice.remote');
         for (;;) {
-            const selected = await ctx.ui.select(t('voice.backend'), [edge, remote, back]);
+            const selected = await ctx.ui.select(t('voice.backend'), [edge, remote, advancedBack]);
             if (selected === edge) { await apply({ ...settings, config: updateTtsConfig(settings.config, {}) }, revision); return; }
             if (selected !== remote) return;
             const openai = 'OpenAI-compatible'; const fish = 'Fish';
             for (;;) {
-                const selectedProtocol = await ctx.ui.select(t('voice.protocol'), [openai, fish, back]);
-                if (selectedProtocol === back) break;
+                const selectedProtocol = await ctx.ui.select(t('voice.protocol'), [openai, fish, t('menu.back.voiceBackend')]);
+                if (selectedProtocol === t('menu.back.voiceBackend')) break;
                 if (selectedProtocol !== openai && selectedProtocol !== fish) return;
                 const protocol = selectedProtocol === openai ? 'openai-compatible' : 'fish';
                 const updates: TtsUpdates = { ttsProtocol: protocol };
@@ -91,7 +91,7 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
                     if (value === undefined) return;
                     if (value.trim()) updates[field] = value.trim();
                 }
-                const voice = await remoteVoice(settings.config, protocol);
+                const voice = await remoteVoice(settings.config, protocol, t('menu.back.voiceProtocol'));
                 if (voice === 'back') continue;
                 if (!voice) return;
                 const config = updateTtsConfig(settings.config, { ...updates, ...voice });
@@ -106,7 +106,7 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
         if (!edge) {
             const resolved = resolveTtsConfig(settings.config);
             if (resolved.provider === 'edge') return;
-            const updates = await remoteVoice(settings.config, resolved.provider);
+            const updates = await remoteVoice(settings.config, resolved.provider, advancedBack);
             if (updates && updates !== 'back') await apply({ ...settings, config: updateTtsConfig(settings.config, updates) }, revision);
             return;
         }
@@ -117,16 +117,17 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
         const updates: TtsUpdates = { edgeVoice: value.trim(), edgeLocale: locale.trim() || value.trim().split('-').slice(0, 2).join('-') };
         await apply({ ...settings, config: updateTtsConfig(settings.config, updates) }, revision);
     };
-    const selectChat = async (): Promise<VoiceChat | undefined> => {
+    const selectChat = async (back: string): Promise<VoiceChat | undefined> => {
         const chats = actions.chats();
         if (!chats.length) { ctx.ui.notify(t('voice.noChats'), 'warning'); return; }
-        const selected = await ctx.ui.select(t('voice.chats'), [...chats.map(chat => chat.label), back]);
+        const selected = await ctx.ui.select(t('voice.chooseChat'), [...chats.map(chat => chat.label), back]);
         return chats.find(chat => chat.label === selected);
     };
     const setupChat = async () => {
         const settings = session.getSpeechSettings(); const revision = session.getSpeechRevision();
         for (;;) {
-            const chat = await selectChat(); if (!chat) return;
+            const chat = await selectChat(t('menu.back.voice')); if (!chat) return;
+            const back = t('menu.back.chatList');
             const modes = ['text', 'voice', 'both', 'mirror'] as const;
             const selected = await ctx.ui.select(`${t('voice.chatMode')} — ${chat.label}`, [...modes.map(modeLabel), back]);
             if (selected === back) continue;
@@ -143,7 +144,8 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
         }
     };
     const editChat = async () => {
-        const chat = await selectChat(); if (!chat) return;
+        const chat = await selectChat(t('menu.back.voice')); if (!chat) return;
+        const back = t('menu.back.voice');
         while (actions.current()) {
             const settings = session.getSpeechSettings(); const revision = session.getSpeechRevision();
             const policy = chatReplyPolicy(settings, chat.jid, actions.canonical);
@@ -155,7 +157,7 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
             } else if (selected === mode) {
                 const inherit = t('voice.inherit');
                 const modes = ['text', 'voice', 'both', 'mirror'] as const;
-                const selectedLabel = await ctx.ui.select(t('voice.chatMode'), [inherit, ...modes.map(modeLabel), back]);
+                const selectedLabel = await ctx.ui.select(t('voice.chatMode'), [inherit, ...modes.map(modeLabel), t('menu.back.chatSettings')]);
                 if (selectedLabel === inherit) { await apply(setChatReplyPreferences(settings, chat.jid, { mode: undefined }, actions.canonical), revision); continue; }
                 const selectedMode = modes.find(mode => modeLabel(mode) === selectedLabel); if (!selectedMode) continue;
                 if (selectedMode !== 'text') {
@@ -166,7 +168,7 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
                     ...(chat.jid.endsWith('@g.us') ? { groupSpeech: selectedMode !== 'text' } : {}) }, actions.canonical), revision);
             } else if (selected === introduce) {
                 const text = t('voice.disclosureText');
-                if (await ctx.ui.confirm(t('voice.introduce'), t('voice.reviewSend', { chat: chat.label, recipient: chat.recipientJid, text }))) outcome(ctx, await actions.disclose(chat, text, revision));
+                if (await ctx.ui.confirm(t('voice.introduceConfirmTitle'), t('voice.reviewSend', { chat: chat.label, recipient: chat.recipientJid, text }))) outcome(ctx, await actions.disclose(chat, text, revision));
             } else return;
         }
     };
@@ -175,7 +177,7 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
         let settings: SpeechSettings;
         try { settings = session.getSpeechSettings(); }
         catch {
-            const reset = t('voice.reset');
+            const reset = t('voice.reset'); const back = t('menu.back.main');
             const selected = await ctx.ui.select(t('voice.invalidSaved'), [reset, back]);
             if (selected === back) return 'back';
             if (selected === reset && await ctx.ui.confirm(reset, t('voice.resetMessage'))) {
@@ -185,11 +187,12 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
         }
         const revision = session.getSpeechRevision();
         const resolved = resolveTtsConfig(settings.config);
+        const back = advanced ? t('menu.back.voice') : t('menu.back.main');
         const labels = advanced
             ? [t('voice.backend'), t(resolved.provider === 'edge' ? 'voice.edgeVoice' : 'voice.providerVoice'), t('voice.speed'), ...(resolved.provider === 'edge' ? [] : [t('voice.format')]), t('voice.defaultMode'), t('voice.preview'), back]
             : [t('voice.setupChat'), t('voice.chats'), t('voice.advanced'), t('voice.disable'), back];
         const destination = describeSpeechDestination(settings.config);
-        const selected = await ctx.ui.select(advanced ? t('voice.advanced') : t('voice.title', { destination: `${destination.service} (${destination.host})`, mode: modeLabel(settings.mode), enabled: settings.enabled ? t('voice.on') : t('voice.off'), approved: settings.approvedDestinationKey ? t('voice.yes') : t('voice.no') }), labels);
+        const selected = await ctx.ui.select(advanced ? t('voice.advanced') : t('voice.title', { destination: `${resolved.provider === 'edge' ? t('voice.edge') : destination.service} (${destination.host})`, mode: modeLabel(settings.mode), enabled: settings.enabled ? t('voice.on') : t('voice.off'), approved: settings.approvedDestinationKey ? t('voice.yes') : t('voice.no') }), labels);
         try {
             if (selected === back) { if (advanced) { advanced = false; continue; } return 'back'; }
             if (selected === t('voice.setupChat')) await setupChat();
@@ -203,15 +206,15 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
                 if (value !== undefined && value.trim()) await apply({ ...settings, config: updateTtsConfig(settings.config, resolved.provider === 'edge' ? { edgeSpeed: Number(value) } : { ttsSpeed: Number(value) }) }, revision);
             } else if (selected === t('voice.format')) {
                 if (resolveTtsConfig(settings.config).provider === 'edge') { ctx.ui.notify(t('voice.edgeFormat'), 'info'); continue; }
-                const format = await ctx.ui.select(t('voice.format'), ['mp3', 'wav', 'opus', back]);
+                const format = await ctx.ui.select(t('voice.format'), ['mp3', 'wav', 'opus', advancedBack]);
                 if (format === 'mp3' || format === 'wav' || format === 'opus') await apply({ ...settings, config: updateTtsConfig(settings.config, { ttsFormat: format }) }, revision);
             } else if (selected === t('voice.defaultMode')) {
                 const mode = await chooseMode();
                 if (mode && (mode === 'text' || await approveForMode(settings))) await apply({ ...settings, mode }, revision);
             } else if (selected === t('voice.chats')) await editChat();
             else if (selected === t('voice.preview')) {
-                const chat = await selectChat();
-                if (chat && await ctx.ui.confirm(t('voice.preview'), `${destination.service}\n${resolveTtsConfig(settings.config).endpoint ?? EDGE_TTS_ENDPOINT}\n${resolveTtsConfig(settings.config).model ?? resolveTtsConfig(settings.config).voice}\n\n${t('voice.previewMessage', { chat: chat.label, recipient: chat.recipientJid, text: VOICE_PREVIEW_PHRASE })}`)) {
+                const chat = await selectChat(advancedBack);
+                if (chat && await ctx.ui.confirm(t('voice.previewConfirmTitle'), `${destination.service}\n${resolveTtsConfig(settings.config).endpoint ?? EDGE_TTS_ENDPOINT}\n${resolveTtsConfig(settings.config).model ?? resolveTtsConfig(settings.config).voice}\n\n${t('voice.previewMessage', { chat: chat.label, recipient: chat.recipientJid, text: VOICE_PREVIEW_PHRASE })}`)) {
                     outcome(ctx, await actions.preview(chat, settings.config, destination.destinationKey, revision, ctx.cwd));
                 }
             } else if (selected === t('voice.disable')) {
@@ -222,7 +225,7 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
 }
 
 export async function showOwnerSettings(ctx: ExtensionCommandContext, session: SessionManager, actions: Pick<VoiceSettingsActions, 'current' | 'chats'>): Promise<SettingsNavigation> {
-    const enter = t('voice.enterOwner'); const clear = t('voice.clearOwner'); const back = t('menu.root.back');
+    const enter = t('voice.enterOwner'); const clear = t('voice.clearOwner'); const back = t('menu.back.chatsOwner');
     const people = actions.chats().filter(chat => !chat.jid.endsWith('@g.us'));
     const selected = await ctx.ui.select(t('voice.ownerTitle', { owner: session.getOperatorJid() || t('voice.unset') }), [...people.map(chat => chat.label), enter, clear, back]);
     if (selected === back) return 'back';

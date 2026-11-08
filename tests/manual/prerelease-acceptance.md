@@ -24,7 +24,7 @@ Previous source validation: 585 tests/58 files passed with lint/typecheck, inclu
 2. Choose a separate recipient account, not self-chat. A second independent contact is needed for cross-chat routing tests. Use only observed/known transport JIDs; do not manufacture them from displayed phone numbers. A dedicated group must contain only consenting, mutually trusted testers.
 3. Agree on each batch's maximum extension-originated messages, reactions, attachment uploads and network history requests. Incoming test prompts can cause automatic replies; those replies count toward the budget. Groq/remote-STT uploads need separate approval because audio leaves the machine and can incur charges.
 4. Note existing non-secret settings: allowed-contact/group counts, aliases, send-number overrides, selected history scope, and STT endpoint/model/environment-variable **name**. Keep unrelated entries intact. Never record the API-key value.
-5. Load changed dependencies/code in a fresh owning Pi process. Save work, use `/whatsapp > Connection > Turn WhatsApp off` only after approving its shared-work cancellation, and close the old process gracefully before starting another same-profile owner. Do not choose **Logoff (Delete Session)**, unlink the device, remove locks or delete data. This walkthrough does not authorize forced termination.
+5. Load changed dependencies/code in a fresh owning Pi process. Save work, use `/whatsapp > Connection > Turn WhatsApp off` only after approving its shared-work cancellation, and close the old process gracefully before starting another same-profile owner. Do not choose **Log out and delete saved login**, unlink the device, remove locks or delete data. This walkthrough does not authorize forced termination.
 6. For checkout testing, after the prior owner exits, start from the repository:
 
    ```bash
@@ -57,7 +57,7 @@ Approve these setting/lifecycle changes separately, close other same-profile own
 
 | Case | Operator action | Expected result |
 | --- | --- | --- |
-| Back navigation | Open Connection → Auto-connect on startup → Back, then Back again. | First returns to Connection, second to the main menu; no preference/transport change. |
+| Back navigation | Open Connection → Auto-connect on startup → Back to Connection, then Back to main menu. | First returns to Connection, second to the main menu; no preference/transport change. |
 | Enabled startup | Enable the preference, confirm the current connection is unchanged, close the owner gracefully, then start a fresh TUI without the online flag. | Existing credentials connect automatically; no manual Connect/QR or credential reset. |
 | Disabled startup | Disable while connected, then start a fresh owner without the flag. | Saving does not immediately disconnect; fresh startup stays disconnected. |
 | Process-local Off | With saved Enabled, explicitly turn Off and reload/replace the session in the same process. | Stays Off. Saving Enabled does not clear deliberate Off; explicit terminal Connect can restore it. |

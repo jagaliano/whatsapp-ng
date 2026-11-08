@@ -32,16 +32,17 @@ const createContext = (choices: {
             select: vi.fn(async (title: string, options: string[]) => {
                 const choice = selects.shift();
                 if (typeof choice === 'function') {
-                    return choice(title, options);
+                    const selected = choice(title, options);
+                    return selected === 'Back' ? options.at(-1) : selected;
                 }
                 if (choice && title.startsWith('WhatsApp — ') && !options.includes(choice)) {
                     const category: Record<string, string> = { 'Connect WhatsApp': 'Connection', 'Disconnect WhatsApp': 'Connection',
-                        Recents: 'Chats / Owner', 'Allowed Contacts': 'Chats / Owner', Owner: 'Chats / Owner',
-                        'Reply delivery': 'Replies', 'Optional outputs': 'Replies', 'Allowed Groups': 'Groups', 'Group replies': 'Groups',
-                        'Local history scope': 'Advanced', 'Logoff (Delete Session)': 'Advanced' };
+                        Recents: 'Chats / Owner', 'Allowed contacts': 'Chats / Owner', Owner: 'Chats / Owner',
+                        'Reply delivery': 'Replies', 'Optional outputs': 'Replies', 'Allowed groups': 'Groups', 'Group replies': 'Groups',
+                        'Local history scope': 'Advanced', 'Log out and delete saved login': 'Advanced' };
                     if (category[choice]) { selects.unshift(choice); return category[choice]; }
                 }
-                return choice ?? 'Back';
+                return !choice || choice === 'Back' ? options.at(-1) : choice;
             }),
             input: vi.fn(async () => inputs.shift() ?? ''),
             confirm: vi.fn(async () => confirms.shift() ?? false),
@@ -106,14 +107,14 @@ describe('MenuHandler', () => {
             getHistoryScopes: vi.fn().mockResolvedValue([]), selectHistoryScope: vi.fn().mockResolvedValue(undefined) });
         h.recentsService.getRecentConversations.mockResolvedValue(populated ? [{ senderNumber: '+15550000001', lastMessagePreview: 'Fixture', lastMessageTime: 1111, lastMessageDirection: 'incoming' }] as any : []);
         const ctx = createContext({ selects: ['Advanced', 'Local history scope', 'Current verified account (or unassigned legacy)', ...(populated ? ['Back'] : []),
-            (title) => { expect(title).toBe('Advanced'); return 'Back'; }, 'Back'] });
+            (title) => { expect(title).toBe('Advanced\nEsc closes settings'); return 'Back'; }, 'Back'] });
         const captureCurrent = vi.fn(() => () => true);
         await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any, { voice: vi.fn(), owner: vi.fn(), captureCurrent }).handleCommand(ctx as any);
         expect(captureCurrent).toHaveBeenCalledOnce(); expect(h.whatsappService.sendMenuMessage).not.toHaveBeenCalled();
     });
     it('cancels manual composition once without a retry or send', async () => {
         const h = createServices(); h.sessionManager.getAllowList.mockReturnValue([{ number: '+15550000001', sendNumber: '+15550000001' }] as any);
-        const ctx = createContext({ selects: ['Allowed Contacts', (_title, options) => options[0], 'Send Message'] }); ctx.ui.input.mockResolvedValueOnce(undefined as any);
+        const ctx = createContext({ selects: ['Allowed contacts', (_title, options) => options[0], 'Send message'] }); ctx.ui.input.mockResolvedValueOnce(undefined as any);
         await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any).handleCommand(ctx as any);
         expect(ctx.ui.input).toHaveBeenCalledOnce(); expect(ctx.ui.select).toHaveBeenCalledTimes(4); expect(ctx.ui.notify).not.toHaveBeenCalled();
         expect(h.whatsappService.sendMenuMessage).not.toHaveBeenCalled(); expect(h.recentsService.recordMessage).not.toHaveBeenCalled();
@@ -125,25 +126,25 @@ describe('MenuHandler', () => {
         expect(ctx.ui.select).toHaveBeenCalledTimes(2); expect(captureCurrent).toHaveBeenCalledOnce();
     });
     it('keeps original authority when returning from the contact list', async () => {
-        const h = createServices(); const ctx = createContext({ selects: ['Allowed Contacts', 'Back', 'Back', 'Back'] }); const captureCurrent = vi.fn(() => () => true);
+        const h = createServices(); const ctx = createContext({ selects: ['Allowed contacts', 'Back', 'Back', 'Back'] }); const captureCurrent = vi.fn(() => () => true);
         await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any, { voice: vi.fn(), owner: vi.fn(), captureCurrent }).handleCommand(ctx as any);
-        expect(captureCurrent).toHaveBeenCalledOnce(); expect(ctx.ui.select.mock.calls[3][0]).toBe('Chats / Owner');
+        expect(captureCurrent).toHaveBeenCalledOnce(); expect(ctx.ui.select.mock.calls[3][0]).toBe('Chats / Owner\nEsc closes settings');
     });
     it('closes a cancelled contact input silently instead of reopening or reporting invalid data', async () => {
-        const h = createServices(); const ctx = createContext({ selects: ['Allowed Contacts', 'Add Contact'] }); ctx.ui.input.mockResolvedValueOnce(undefined as any);
+        const h = createServices(); const ctx = createContext({ selects: ['Allowed contacts', 'Add contact'] }); ctx.ui.input.mockResolvedValueOnce(undefined as any);
         await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any).handleCommand(ctx as any);
         expect(ctx.ui.select).toHaveBeenCalledTimes(3); expect(ctx.ui.notify).not.toHaveBeenCalled(); expect(h.sessionManager.addNumber).not.toHaveBeenCalled();
     });
     it('does not accept a contact dialog after its original request expires', async () => {
         const h = createServices(); let current = true;
-        const ctx = createContext({ selects: ['Allowed Contacts', () => { current = false; return 'Add Contact'; }], inputs: ['+15550000001'] });
+        const ctx = createContext({ selects: ['Allowed contacts', () => { current = false; return 'Add contact'; }], inputs: ['+15550000001'] });
         await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any,
             { voice: vi.fn(), owner: vi.fn(), captureCurrent: () => () => current }).handleCommand(ctx as any);
         expect(ctx.ui.input).not.toHaveBeenCalled(); expect(h.sessionManager.addNumber).not.toHaveBeenCalled();
     });
     it.each([['Enabled', true], ['Disabled', false]] as const)('saves auto-connect %s without connecting, stopping or changing Off', async (choice, enabled) => {
         const h = createServices(); const ctx = createContext({ selects: ['Connection', 'Auto-connect on startup', (title, options) => {
-            expect(title).toContain('Auto-connect on startup: Off'); expect(options).toEqual(['Enabled', 'Disabled', 'Back']); return choice;
+            expect(title).toContain('Auto-connect on startup: Off'); expect(options).toEqual(['Enabled', 'Disabled', 'Back to Connection']); return choice;
         }] }); const connect = vi.fn(); const off = vi.fn();
         await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any,
             { voice: vi.fn(), owner: vi.fn(), connect, off, enabled: () => false }).handleCommand(ctx as any);
@@ -155,8 +156,8 @@ describe('MenuHandler', () => {
         const h = createServices(); h.sessionManager.getAutoConnect.mockReturnValue(true);
         const ctx = createContext({ selects: ['Connection', 'Auto-connect on startup', (title) => {
             expect(title).toContain(': On'); h.whatsappService.getEffectiveStatus.mockReturnValue('disconnected'); return 'Back';
-        }, (title, options) => { expect(title).toBe('Connection'); expect(options).toContain('Connect WhatsApp'); return 'Back'; }, (title) => {
-            expect(title).toBe('WhatsApp — Enabled (transport: disconnected)'); return 'Back';
+        }, (title, options) => { expect(title).toBe('Connection\nEsc closes settings'); expect(options).toContain('Connect WhatsApp'); return 'Back'; }, (title) => {
+            expect(title).toBe('WhatsApp — Enabled (transport: disconnected)\nEsc closes settings'); return 'Back';
         }] });
         await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any).handleCommand(ctx as any);
         expect(ctx.ui.select).toHaveBeenCalledTimes(5); expect(h.sessionManager.setAutoConnect).not.toHaveBeenCalled();
@@ -213,7 +214,7 @@ describe('MenuHandler', () => {
     it('groups the root into six focused settings categories', async () => {
         const h = createServices(); const ctx = createContext({ selects: ['Back'] });
         await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any).handleCommand(ctx as any);
-        expect(ctx.ui.select).toHaveBeenCalledWith(expect.any(String), ['Connection', 'Chats / Owner', 'Replies', 'Voice', 'Groups', 'Advanced', 'Back']);
+        expect(ctx.ui.select).toHaveBeenCalledWith(expect.any(String), ['Connection', 'Chats / Owner', 'Replies', 'Voice', 'Groups', 'Advanced', 'Close settings']);
     });
     it.each([true, false])('uses the shared deliberate-Off lifecycle only after confirmation (%s)', async confirmed => {
         const h = createServices(); const ctx = createContext({ selects: ['Connection', 'Turn WhatsApp off'], confirms: [confirmed] });
@@ -234,7 +235,7 @@ describe('MenuHandler', () => {
     it('refreshes the heading and connection options after Back', async () => {
         const h = createServices(); const ctx = createContext({ selects: ['Connection', (_title, options) => {
             expect(options).not.toContain('Connect WhatsApp'); h.whatsappService.getEffectiveStatus.mockReturnValue('disconnected'); return 'Back';
-        }, (title) => { expect(title).toBe('WhatsApp — Enabled (transport: disconnected)'); return 'Connection'; }, (_title, options) => {
+        }, (title) => { expect(title).toBe('WhatsApp — Enabled (transport: disconnected)\nEsc closes settings'); return 'Connection'; }, (_title, options) => {
             expect(options).toContain('Connect WhatsApp'); return 'Connect WhatsApp';
         }] });
         await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any).handleCommand(ctx as any);
@@ -277,7 +278,7 @@ describe('MenuHandler', () => {
         const h = createServices(); h.whatsappService.getEffectiveStatus.mockReturnValue('disconnected');
         const ctx = createContext({ selects: ['Chats / Owner', 'Owner'] }); const owner = vi.fn(async () => {});
         await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any, { voice: vi.fn(), owner, enabled: () => false }).handleCommand(ctx as any);
-        expect(ctx.ui.select.mock.calls[1][1]).toEqual(expect.arrayContaining(['Recents', 'Allowed Contacts', 'Owner']));
+        expect(ctx.ui.select.mock.calls[1][1]).toEqual(expect.arrayContaining(['Recents', 'Allowed contacts', 'Owner']));
         expect(owner).toHaveBeenCalledOnce(); expect(h.whatsappService.start).not.toHaveBeenCalled();
     });
     it('shows a fixed metadata-log policy without reading or deleting logs', async () => {
@@ -317,7 +318,7 @@ describe('MenuHandler', () => {
 
         expect(whatsappService.setQRCodeCallback).toHaveBeenCalledOnce();
         expect(whatsappService.start).toHaveBeenCalledOnce();
-        expect(ctx.ui.notify).toHaveBeenCalledWith('WhatsApp Pairing Started', 'info');
+        expect(ctx.ui.notify).toHaveBeenCalledWith('WhatsApp pairing started', 'info');
     });
 
     it('uses effective WhatsApp status instead of persisted session status', async () => {
@@ -329,8 +330,8 @@ describe('MenuHandler', () => {
 
         await handler.handleCommand(ctx as any);
 
-        expect(ctx.ui.select).toHaveBeenCalledWith('WhatsApp — Enabled (transport: disconnected)', [
-            'Connection', 'Chats / Owner', 'Replies', 'Voice', 'Groups', 'Advanced', 'Back'
+        expect(ctx.ui.select).toHaveBeenCalledWith('WhatsApp — Enabled (transport: disconnected)\nEsc closes settings', [
+            'Connection', 'Chats / Owner', 'Replies', 'Voice', 'Groups', 'Advanced', 'Close settings'
         ]);
     });
 
@@ -387,14 +388,14 @@ describe('MenuHandler', () => {
         const { whatsappService, sessionManager, recentsService } = createServices();
         sessionManager.isRegistered.mockResolvedValue(true);
         const ctx = createContext({
-            selects: ['Logoff (Delete Session)'],
+            selects: ['Log out and delete saved login'],
             confirms: [true]
         });
         const handler = new MenuHandler(whatsappService as any, sessionManager as any, recentsService as any);
 
         await handler.handleCommand(ctx as any);
 
-        expect(ctx.ui.confirm).toHaveBeenCalledWith('Logoff', 'Delete all credentials?');
+        expect(ctx.ui.confirm).toHaveBeenCalledWith('Log out and delete saved login?', 'Delete all credentials?');
         expect(whatsappService.logout).toHaveBeenCalledOnce();
         expect(ctx.ui.notify).toHaveBeenCalledWith('Logged off and credentials deleted', 'info');
     });
@@ -406,18 +407,18 @@ describe('MenuHandler', () => {
             { number: '+1', name: 'Ana' }
         ]);
         const ctx = createContext({
-            selects: ['Allowed Contacts', 'Add Contact', 'Back', 'Back'],
+            selects: ['Allowed contacts', 'Add contact', 'Back', 'Back'],
             inputs: ['+5511999998888']
         });
         const handler = new MenuHandler(whatsappService as any, sessionManager as any, recentsService as any);
 
         await handler.handleCommand(ctx as any);
 
-        expect(ctx.ui.select).toHaveBeenCalledWith('Allowed Contacts', [
+        expect(ctx.ui.select).toHaveBeenCalledWith('Allowed contacts\nEsc closes settings', [
             'Ana [+1]',
             'Zoey [+2]',
-            'Add Contact',
-            'Back'
+            'Add contact',
+            'Back to Chats / Owner'
         ]);
         expect(sessionManager.addNumber).toHaveBeenCalledWith('+5511999998888');
         expect(ctx.ui.notify).toHaveBeenCalledWith('Added +5511999998888 to the allow list', 'info');
@@ -427,7 +428,7 @@ describe('MenuHandler', () => {
         const { whatsappService, sessionManager, recentsService } = createServices();
         sessionManager.getAllowList.mockReturnValue([{ number: '+5511999998888', name: 'Ana', sendNumber: '+5511999998888' }]);
         const ctx = createContext({
-            selects: ['Allowed Contacts', 'Ana [+5511999998888] (+5511999998888)', 'Send Message', 'Back', 'Back', 'Back'],
+            selects: ['Allowed contacts', 'Ana [+5511999998888] (+5511999998888)', 'Send message', 'Back', 'Back', 'Back'],
             inputs: ['', 'Oi']
         });
         const handler = new MenuHandler(whatsappService as any, sessionManager as any, recentsService as any);
@@ -458,12 +459,12 @@ describe('MenuHandler', () => {
         ]);
         const ctx = createContext({
             selects: [
-                'Allowed Contacts',
+                'Allowed contacts',
                 'Ana [+5511999998888]',
-                'Print Contact',
+                'Show phone number',
                 'Back',
                 'Dani [+553291297719]',
-                'Print Contact',
+                'Show phone number',
                 'Back',
                 'Back',
                 'Back'
@@ -473,13 +474,13 @@ describe('MenuHandler', () => {
 
         await handler.handleCommand(ctx as any);
 
-        expect(ctx.ui.select).toHaveBeenCalledWith('Allowed Contact • Ana [+5511999998888]', [
+        expect(ctx.ui.select).toHaveBeenCalledWith('Allowed contact • Ana [+5511999998888]\nEsc closes settings', [
             'History',
-            'Add Number',
-            'Print Contact',
-            'Remove Alias',
-            'Remove Contact',
-            'Back'
+            'Set sending number',
+            'Show phone number',
+            'Remove alias',
+            'Remove from allowed contacts',
+            'Back to Allowed contacts'
         ]);
         expect(ctx.ui.notify).toHaveBeenCalledWith('+5511999998888', 'info');
         expect(ctx.ui.notify).toHaveBeenCalledWith('+5511999998888\n+553291297719', 'info');
@@ -494,18 +495,18 @@ describe('MenuHandler', () => {
             { number: '120363111@g.us', name: 'Alpha' }
         ]);
         const ctx = createContext({
-            selects: ['Allowed Groups', 'Add Group', 'Back', 'Back'],
+            selects: ['Allowed groups', 'Add group', 'Back', 'Back'],
             inputs: ['120363999@g.us']
         });
         const handler = new MenuHandler(whatsappService as any, sessionManager as any, recentsService as any);
 
         await handler.handleCommand(ctx as any);
 
-        expect(ctx.ui.select).toHaveBeenCalledWith('Allowed Groups', [
+        expect(ctx.ui.select).toHaveBeenCalledWith('Allowed groups\nEsc closes settings', [
             'Alpha (120363111@g.us)',
             'Zeta (120363222@g.us)',
-            'Add Group',
-            'Back'
+            'Add group',
+            'Back to Groups'
         ]);
         expect(sessionManager.addAllowedGroup).toHaveBeenCalledWith('120363999@g.us');
         expect(ctx.ui.notify).toHaveBeenCalledWith('Added 120363999@g.us to the allowed groups list', 'info');
@@ -519,7 +520,7 @@ describe('MenuHandler', () => {
         ]);
         const ctx = createContext({
             selects: [
-                'Allowed Groups',
+                'Allowed groups',
                 'Alpha (120363111@g.us)',
                 'Back',
                 'Back',
@@ -530,13 +531,13 @@ describe('MenuHandler', () => {
 
         await handler.handleCommand(ctx as any);
 
-        expect(ctx.ui.select).toHaveBeenCalledWith('Allowed Group • Alpha (120363111@g.us)', [
+        expect(ctx.ui.select).toHaveBeenCalledWith('Allowed group • Alpha (120363111@g.us)\nEsc closes settings', [
             'History',
-            'Send Message',
-            'Print Group JID',
-            'Remove Alias',
-            'Remove Group',
-            'Back'
+            'Send message',
+            'Show group JID',
+            'Remove alias',
+            'Remove from allowed groups',
+            'Back to Allowed groups'
         ]);
         expect(sessionManager.setAllowedGroupReactionMode).not.toHaveBeenCalled();
     });
@@ -649,15 +650,15 @@ describe('MenuHandler', () => {
                 'Recents',
                 (_title, options) => {
                     expect(options).toHaveLength(12);
-                    expect(options.at(-2)).toBe('Next');
-                    expect(options.at(-1)).toBe('Back');
-                    return 'Next';
+                    expect(options.at(-2)).toBe('Next page');
+                    expect(options.at(-1)).toMatch(/^Back to /);
+                    return 'Next page';
                 },
                 (_title, options) => {
                     expect(options).toHaveLength(3);
                     expect(options[0]).toContain('Contact 1');
-                    expect(options).toContain('Previous');
-                    expect(options).toContain('Back');
+                    expect(options).toContain('Previous page');
+                    expect(options.at(-1)).toMatch(/^Back to /);
                     return 'Back';
                 },
                 'Back'
@@ -694,10 +695,10 @@ describe('MenuHandler', () => {
 
         await handler.handleCommand(ctx as any);
 
-        expect(ctx.ui.select).toHaveBeenCalledWith('Recents • Ana (+5511999998888)', [
+        expect(ctx.ui.select).toHaveBeenCalledWith('Recents • Ana (+5511999998888)\nEsc closes settings', [
             'History',
-            'Allow Contact',
-            'Back'
+            'Allow contact',
+            'Back to Recents'
         ]);
     });
 
@@ -727,14 +728,14 @@ describe('MenuHandler', () => {
                 'History',
                 (_title, options) => {
                     expect(options).toHaveLength(12);
-                    expect(options.at(-2)).toBe('Next');
-                    expect(options.at(-1)).toBe('Back');
-                    return 'Next';
+                    expect(options.at(-2)).toBe('Next page');
+                    expect(options.at(-1)).toBe('Back to conversation');
+                    return 'Next page';
                 },
                 (_title, options) => {
                     expect(options).toHaveLength(3);
-                    expect(options).toContain('Previous');
-                    expect(options).toContain('Back');
+                    expect(options).toContain('Previous page');
+                    expect(options.at(-1)).toBe('Back to conversation');
                     return 'Back';
                 },
                 'Back',
@@ -807,7 +808,7 @@ describe('MenuHandler', () => {
                 expect.stringContaining('Received'),
                 expect.stringContaining('Received'),
                 expect.stringContaining('Sent'),
-                'Back'
+                'Back to conversation'
             ]
         );
         const historyOptions = ctx.ui.select.mock.calls.find(([title]) =>

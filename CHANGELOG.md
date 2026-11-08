@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Polish terminal `/whatsapp` wording and translations (English, pt-BR, Spanish and French): distinguish sending-number edits from contact removal, name identifiers and saved-login deletion, use **Close settings** at the root and contextual **Back to …** exits, and explain Esc on menu/input/editor headings. Keep hierarchy, eligibility, actions, authority and save/close outcomes unchanged; retain consent/disclosure text and the privacy notice. Align only terminal-path citations in phone guidance and the pairing welcome with localized labels. Validated with source tests, lint/typecheck and synthetic four-locale production-entry RPC; visual/live acceptance remains separate.
+
 - Make release preparation accurate after a version is published: prove version absence with an `E404`-only registry lookup, run the publish dry-run only while the version is absent, and record `dryRun: verified|skipped-existing-version` in the prepared receipt. Every other preparation gate, and publication's own absence proof, is unchanged; a CI push or release-tag run at an already-published version no longer fails on npm's immutability error.
 
 - Fold the release-gate decision record into the release procedure: the conditional dry-run, its receipt field and the dated `v1.1.5` tag-immutability exception are recorded in `docs/releases.md`, with regression coverage in `tests/unit/release-script.test.ts`.

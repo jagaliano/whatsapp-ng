@@ -11,6 +11,25 @@ function fixture(choices: Array<string | undefined> = []) {
     return { ctx, session, actions };
 }
 describe('settings request public UI ports', () => {
+    it('hints select, input and editor titles without changing confirmations or overlay close', async () => {
+        const h = fixture(['chosen']);
+        h.ctx.ui.input.mockResolvedValueOnce('value' as never);
+        h.ctx.ui.editor.mockResolvedValueOnce('text' as never);
+        const confirm = vi.fn(async () => false); const custom = vi.fn(async () => undefined);
+        const ctx = { ...h.ctx, ui: { ...h.ctx.ui, confirm, custom } };
+        await withSettingsRequest(ctx as any, () => () => true, async scoped => {
+            await scoped.ui.select('Select', ['chosen']);
+            await scoped.ui.input('Input', 'placeholder');
+            await scoped.ui.editor('Editor', 'prefill');
+            expect(await scoped.ui.confirm('Confirm', 'unchanged')).toBe(false);
+            expect(await scoped.ui.custom(() => ({ render: () => [], invalidate: () => {} }))).toBeUndefined();
+        });
+        expect(h.ctx.ui.select).toHaveBeenCalledWith('Select\nEsc closes settings', ['chosen']);
+        expect(h.ctx.ui.input).toHaveBeenCalledWith('Input\nEsc closes settings', 'placeholder');
+        expect(h.ctx.ui.editor).toHaveBeenCalledWith('Editor\nEsc closes settings', 'prefill');
+        expect(confirm).toHaveBeenCalledWith('Confirm', 'unchanged');
+        expect(custom).toHaveBeenCalledOnce();
+    });
     it('fences custom overlay results while retaining their local close behavior', async () => {
         const h = fixture(); let current = true; const custom = vi.fn(async () => { current = false; return 'reply'; });
         const ctx = { ...h.ctx, ui: { ...h.ctx.ui, custom } };
@@ -44,7 +63,7 @@ describe('settings request public UI ports', () => {
         expect(capture).toHaveBeenCalledTimes(2); expect(h.ctx.ui.notify).not.toHaveBeenCalled();
     });
     it('unwinds Esc from inside the Voice catch without a failure notice or another dialog', async () => {
-        const h = fixture(['Advanced speech settings', 'Speech backend / connection', 'Remote speech service', 'OpenAI-compatible']);
+        const h = fixture(['Advanced speech settings', 'Speech service (Edge or remote)', 'Remote speech service (HTTP API)', 'OpenAI-compatible']);
         await withSettingsRequest(h.ctx as any, () => () => true, async (scoped, current) => {
             await showVoiceSettings(scoped, h.session as any, { ...h.actions, current });
         });
