@@ -74,6 +74,7 @@ export default function (pi: ExtensionAPI) {
         else if (args === 'off') { await state.deliver('/off', menuResponses); await state.deliver('2'); }
         else if (args === 'status') await state.deliver('/status');
         else if (args === 'voice-mirror') await state.deliver('/voice mirror');
+        else if (process.env.WA_PHONE_RPC_POLISH === '1' && args.startsWith('polish ')) await state.deliver(args.slice(7));
         else if (process.env.WA_PHONE_RPC_MANAGED === '1' && args === 'managed-stop') await state.deliver('/stop');
         else if (args === 'poll-next') { await state.deliver('/model', 2); await state.voteNext(); }
         else if (search && args === 'models-search') await state.deliver('/model fxtr-phn/mdl');

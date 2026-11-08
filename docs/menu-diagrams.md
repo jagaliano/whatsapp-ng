@@ -279,17 +279,18 @@ Saving a policy ends the settings request; paused chats remain paused. Trigger p
 
 ## 10. WhatsApp phone menus: a separate surface
 
-Phone slash commands do not open the terminal `/whatsapp` hierarchy. State-changing commands require the configured, verified owner in an allowed chat; `/help` and `/status` are available to admitted non-owner actors too.
+Phone presentation aligned on 2026-11-08 with the 042 working tree based on `4f5388a`; this remains a source-coherence map, not live-client evidence. Phone slash commands do not open the terminal `/whatsapp` hierarchy. State-changing commands require the configured, verified owner in an allowed chat; `/help` and `/status` are available to admitted non-owner actors too.
 
 ```mermaid
 flowchart TB
     Phone["Allowed chat: phone slash commands"]
-    Phone --> Help["/help or /status: information only"]
+    Phone --> Help["/help: grouped commands with explanations"]
+    Phone --> Status["/status: Shared Pi and WhatsApp / This chat"]
     Phone --> Owner["Verified owner required for other commands"]
     Owner --> Models["/model: authenticated model picker"]
     Models --> Pages["Ten models per page; Previous page / Next page"]
     Owner --> Think["/think: supported thinking levels"]
-    Owner --> Voice["/voice: text / voice / both / mirror"]
+    Owner --> Voice["/voice: Text only / Voice / Voice + text / Mirror audio input"]
     Owner --> Replies["/replies: shared attachment policy, stats and reporting"]
     Owner --> Confirm["/new, /off, /quit: Cancel / Confirm menu"]
     Owner --> Direct["/stop or /abort; /compact with optional focus"]
@@ -304,7 +305,9 @@ flowchart TB
 
 - `/model search` opens filtered choices; only a typed exact authenticated `provider/model` selects directly. `/think level` and `/voice mode` also accept direct values. No generic phone Back action is invented here.
 - Numbered menus expire after five minutes and bind to the requesting actor/chat/account. Group numbered replies must quote the active menu. Ordinary text cancels the pending menu. Native polls are an optional, default-off alternative; the numbered menu remains available.
-- Phone `/voice` never enables shared speech, approves a destination or opts a group in; missing permissions point back to terminal chat setup. Phone `/replies` includes disclosure in its menu rather than using the terminal's additional confirmation dialog.
+- Phone `/voice` never enables shared speech, approves a destination or opts a group in; missing permissions point back to terminal chat setup. Phone `/replies` keeps its full disclosure (including the invalid-settings note) in the numbered text message’s body, never in a truncated title or poll name; it does not add the terminal’s additional confirmation dialog.
+- `/help` groups Information, Shared Pi session (including `/replies`), This chat (`/voice`), and WhatsApp and process. `/status` retains every field under the two shown sections. Known exclusive choices carry a localized `(current)` suffix; independent reporting toggles show their state. Shared-session guidance is in the message body, with a short title used by the optional poll.
+- The same existing locale override selects English, pt-BR, Spanish or French for all phone presentation. Commands/arguments and model IDs are not translated; no per-chat language setting is added.
 - State-changing selections normally require idle shared Pi work; model pagination is navigation, not selection. `/stop` explicitly cancels work, and confirmed `/off`/`/quit` are separate lifecycle actions. `/off` requires the terminal to turn WhatsApp on again. `/quit` shuts down Pi, not just WhatsApp.
 
 ## Coherence review

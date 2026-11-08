@@ -34,21 +34,30 @@ function fixture() {
 }
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); resetI18n(); });
 describe('exact owner phone controls', () => {
-    it.each(['en', 'pt-BR', 'es', 'fr'])('quotes the localized terminal setup path without changing phone prose (%s)', async locale => {
+    it.each(['en', 'pt-BR', 'es', 'fr'])('localizes the phone refusal while preserving the exact terminal setup path (%s)', async locale => {
         vi.stubEnv('WHATSAPP_NG_LOCALE', locale); initI18n(undefined);
         const h = fixture(); await h.handle('/voice mirror');
-        expect(h.sent.at(-1)).toBe(`Speech is disabled; Speech destination is not approved. Use terminal /whatsapp > ${t('voice.menu')} > ${t('voice.setupChat')} and select this chat. Nothing changed; no speech was enabled.`);
+        expect(h.sent.at(-1)).toBe(t('phone.voice.setup', { missing: `${t('phone.voice.disabled')}; ${t('phone.voice.unapproved')}`, voice: t('voice.menu'), setup: t('voice.setupChat') }));
+        expect(h.sent.at(-1)).toContain(`/whatsapp > ${t('voice.menu')} > ${t('voice.setupChat')}`);
         expect(h.ports.session.setSpeechSettings).not.toHaveBeenCalled();
+    });
+    it.each(['en', 'pt-BR', 'es', 'fr'])('preserves owner and busy guards in %s', async locale => {
+        vi.stubEnv('WHATSAPP_NG_LOCALE', locale); initI18n(undefined); const h = fixture();
+        await h.handle('/voice text', other);
+        expect(h.sent.at(-1)).toBe(t('phone.denied', { chatsOwner: t('menu.category.chatsOwner'), owner: t('voice.owner') }));
+        if (locale !== 'en') expect(h.sent.at(-1)).not.toContain('Owner authorization required.');
+        expect(h.ports.session.setSpeechSettings).not.toHaveBeenCalled(); h.busy(); await h.handle('/think high');
+        expect(h.sent.at(-1)).toBe(t('phone.busy')); expect(h.ports.pi.setThinkingLevel).not.toHaveBeenCalled();
     });
     it('distinguishes unapproved destination from disabled shared speech without granting either', async () => {
         const h = fixture(); await h.handle('/voice mirror');
-        expect(h.sent.at(-1)).toContain('destination is not approved'); expect(h.sent.at(-1)).toContain('Set up replies for a chat');
+        expect(h.sent.at(-1)).toContain(t('phone.voice.unapproved')); expect(h.sent.at(-1)).toContain(t('voice.setupChat'));
         h.enableSpeech(); h.settings().enabled = false; await h.handle('/voice mirror');
-        expect(h.sent.at(-1)).toContain('Speech is disabled'); expect(h.ports.session.setSpeechSettings).not.toHaveBeenCalled();
+        expect(h.sent.at(-1)).toContain(t('phone.voice.disabled')); expect(h.ports.session.setSpeechSettings).not.toHaveBeenCalled();
     });
     it('identifies missing group opt-in independently of shared speech approval', async () => {
         const h = fixture(); h.enableSpeech(); await h.handle('/voice mirror', owner, group);
-        expect(h.sent.at(-1)).toContain('group speech opt-in'); expect(h.ports.session.setSpeechSettings).not.toHaveBeenCalled();
+        expect(h.sent.at(-1)).toContain(t('phone.voice.groupMissing')); expect(h.ports.session.setSpeechSettings).not.toHaveBeenCalled();
     });
     it('preserves existing phone reply/stat controls when saved optional reporting is malformed', async () => {
         const h = fixture(); h.ports.session.getReplyReporting.mockImplementation(() => { throw new Error('Invalid saved reporting'); });

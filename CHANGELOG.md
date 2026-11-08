@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Polish WhatsApp phone presentation in English, pt-BR, Spanish and French: group `/help` commands with explanations, split `/status` into shared and this-chat settings, add friendly choices/current markers and clear numbered-reply, five-minute expiry, group-quoting and cancellation guidance. Keep the complete `/replies` disclosure and shared-session guidance in a bounded, unabridged text-menu body rather than truncated titles. Preserve commands, arguments, actions, authorization, consent meaning, confirmations, routing, delivery, optional polls and terminal menus. Synthetic four-locale unit/encrypted-poll/production-entry RPC coverage is separate from pending operator visual/live acceptance.
+
 ## 1.1.6 — 2026-11-08
 
 - Polish terminal `/whatsapp` wording and translations (English, pt-BR, Spanish and French): distinguish sending-number edits from contact removal, name identifiers and saved-login deletion, use **Close settings** at the root and contextual **Back to …** exits, and explain Esc on menu/input/editor headings. Keep hierarchy, eligibility, actions, authority and save/close outcomes unchanged; retain consent/disclosure text and the privacy notice. Align only terminal-path citations in phone guidance and the pairing welcome with localized labels. Validated with source tests, lint/typecheck and synthetic four-locale production-entry RPC; visual/live acceptance remains separate.

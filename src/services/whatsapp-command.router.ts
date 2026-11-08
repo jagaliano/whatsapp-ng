@@ -15,9 +15,6 @@ interface Frame extends CommandMenuBinding { revision: number }
 interface ResumeTicket { profile: string; account: string; sessionId: string; actor: string; chat: string; expires: number }
 const handoffs = globalThis as typeof globalThis & { __whatsappNgControlHandoffs?: Map<string, ResumeTicket> };
 const commands = new Set(['help', 'status', 'stop', 'abort', 'model', 'think', 'compact', 'new', 'voice', 'replies', 'off', 'quit']);
-const DENIED = 'Owner authorization required. Choose the owner in terminal /whatsapp > Chats / Owner > Owner.';
-const BUSY = 'The shared Pi session is busy. Use /stop explicitly before changing it.';
-const SHARED = 'This affects the shared Pi session, not a private chat session.';
 
 export interface PhoneControlPorts {
     pi: Pick<ExtensionAPI, 'getThinkingLevel' | 'setThinkingLevel' | 'setModel' | 'sendUserMessage'>;
@@ -83,7 +80,7 @@ export class WhatsAppCommandRouter {
             return selection.handled;
         }
         const privileged = command !== 'help' && command !== 'status';
-        if (privileged && !this.ports.owner(actor)) { await this.reply(this.binding(chat, actor, false), DENIED); return true; }
+        if (privileged && !this.ports.owner(actor)) { await this.reply(this.binding(chat, actor, false), t('phone.denied', { chatsOwner: t('menu.category.chatsOwner'), owner: t('voice.owner') })); return true; }
         // Another allowed group participant cannot invalidate the owner's menu
         // or an already-authorized asynchronous command by sending /help.
         if (this.ports.owner(actor)) this.invalidate(chat);
@@ -91,25 +88,38 @@ export class WhatsAppCommandRouter {
         if (!frame.current()) return true;
         const ctx = this.ports.context(); if (!ctx) return true;
         try {
-            if (text.length > 2048) { await this.reply(frame, 'Command is too long.'); return true; }
+            if (text.length > 2048) { await this.reply(frame, t('phone.tooLong')); return true; }
             if (command === 'help') {
-                await this.reply(frame, `/help /status /stop (/abort) /model [provider/model or search] /think [level] /compact [focus] /new /voice [text|voice|both|mirror] /replies /off /quit\n${SHARED}\nState-changing commands are owner-only. Menu choices expire after five minutes.\nCurrent chat mode: ${chatReplyPolicy(this.ports.session.getSpeechSettings(), chat, this.ports.canonical).mode}.`);
+                await this.reply(frame, this.helpText(chat));
             } else if (command === 'status') {
                 const usage = ctx.getContextUsage(); const speech = this.ports.session.getSpeechSettings();
-                await this.reply(frame, `WhatsApp: ${this.ports.session.getStatus()}\nPi: ${this.idle(ctx) ? 'idle' : 'busy'}\nModel: ${ctx.model ? modelLabel(ctx.model) : 'unavailable'}\nThinking: ${this.ports.pi.getThinkingLevel()}\nContext: ${usage?.percent == null ? 'unknown' : `${Math.round(usage.percent)}%`}\nReplies: ${this.ports.session.getFinalAfterAttachments() ? 'explain after attachments' : 'caption/tool only'}\nAutomatic replies: ${chatReplyPolicy(speech, chat, this.ports.canonical).automaticReplies ? 'Enabled' : 'Paused'}\nVoice: ${chatReplyPolicy(speech, chat, this.ports.canonical).mode}\nFinal stats: ${this.ports.session.getReplyStats() ? 'On' : 'Off'}\n${SHARED}`);
+                const policy = chatReplyPolicy(speech, chat, this.ports.canonical);
+                await this.reply(frame, [
+                    t('phone.status.shared'),
+                    t('phone.status.whatsapp', { value: t(`menu.status.${this.ports.session.getStatus()}`) }),
+                    t('phone.status.pi', { value: t(this.idle(ctx) ? 'phone.status.idle' : 'phone.status.busy') }),
+                    t('phone.status.model', { value: ctx.model ? modelLabel(ctx.model) : t('phone.status.unavailable') }),
+                    t('phone.status.thinking', { value: t(`phone.level.${this.ports.pi.getThinkingLevel()}`) }),
+                    t('phone.status.context', { value: usage?.percent == null ? t('phone.status.unknown') : `${Math.round(usage.percent)}%` }),
+                    t('phone.status.replyDelivery', { value: t(this.ports.session.getFinalAfterAttachments() ? 'phone.status.explainAfter' : 'phone.status.captionOnly') }),
+                    t('phone.status.finalStats', { value: t(this.ports.session.getReplyStats() ? 'phone.status.on' : 'phone.status.off') }),
+                    t('phone.shared'), '', t('phone.status.chat'),
+                    t('phone.status.automaticReplies', { value: t(policy.automaticReplies ? 'phone.status.enabled' : 'phone.status.paused') }),
+                    t('phone.status.voice', { value: t(`phone.mode.${policy.mode}`) })
+                ].join('\n'));
             } else if (command === 'stop' || command === 'abort') {
-                if (argument) await this.reply(frame, 'Usage: /stop (or /abort)');
-                else { await this.ports.stop(ctx); await this.reply(frame, 'Shared Pi run and owned speech stopped.'); }
+                if (argument) await this.reply(frame, t('phone.usage', { command: '/stop (or /abort)' }));
+                else { await this.ports.stop(ctx); await this.reply(frame, t('phone.stopped')); }
             } else if (command === 'compact') {
-                if (!this.idle(ctx)) await this.reply(frame, BUSY);
+                if (!this.idle(ctx)) await this.reply(frame, t('phone.busy'));
                 else {
                     const release = this.lock();
                     try {
                         if (!frame.current()) { release(); return true; }
                         ctx.compact({ customInstructions: argument.slice(0, 512) || undefined,
-                            onComplete: () => { release(); void this.reply(frame, 'Shared Pi session compacted.').catch(() => this.ports.notify('Compaction reply failed.')); },
-                            onError: () => { release(); void this.reply(frame, 'Shared Pi compaction failed; the session remains available.').catch(() => this.ports.notify('Compaction reply failed.')); } });
-                        await this.reply(frame, 'Shared Pi compaction requested.');
+                            onComplete: () => { release(); void this.reply(frame, t('phone.compact.done')).catch(() => this.ports.notify('Compaction reply failed.')); },
+                            onError: () => { release(); void this.reply(frame, t('phone.compact.failed')).catch(() => this.ports.notify('Compaction reply failed.')); } });
+                        await this.reply(frame, t('phone.compact.requested'));
                     } catch { release(); throw new Error('Compaction failed'); }
                 }
             } else if (command === 'model') await this.models(frame, argument);
@@ -118,39 +128,66 @@ export class WhatsAppCommandRouter {
                 else if (ctx.model) {
                     const model = `${ctx.model.provider}/${ctx.model.id}`;
                     await this.menu({ ...frame, current: () => frame.current() && `${this.ports.context()?.model?.provider}/${this.ports.context()?.model?.id}` === model },
-                        `Thinking — ${SHARED}`, supportedThinking(ctx.model).map(value => ({ label: value, value: { command: 'think', value } })));
-                } else await this.reply(frame, 'No current model.');
+                        t('phone.think.title'), supportedThinking(ctx.model).map(value => ({ label: this.mark(t(`phone.level.${value}`), value === this.ports.pi.getThinkingLevel()), value: { command: 'think', value } })), t('phone.shared'));
+                } else await this.reply(frame, t('phone.model.noCurrent'));
             } else if (command === 'voice') {
                 if (argument) await this.apply({ command, value: argument.toLowerCase() }, frame);
-                else await this.menu(frame, 'Voice for this chat', ['text', 'voice', 'both', 'mirror'].map(value => ({ label: value, value: { command: 'voice', value } })));
+                else {
+                    let mode: ReturnType<typeof chatReplyPolicy>['mode'] | undefined;
+                    try { mode = chatReplyPolicy(this.ports.session.getSpeechSettings(), chat, this.ports.canonical).mode; }
+                    catch { /* Unreadable preferences hide the marker, not the existing menu or action guards. */ }
+                    await this.menu(frame, t('phone.voice.title'), (['text', 'voice', 'both', 'mirror'] as const).map(value => ({ label: this.mark(t(`phone.mode.${value}`), value === mode), value: { command: 'voice', value } })));
+                }
             } else if (command === 'replies') {
-                if (argument) await this.reply(frame, 'Usage: /replies');
+                if (argument) await this.reply(frame, t('phone.usage', { command: '/replies' }));
                 else {
                     const revision = this.ports.session.getReplyStatsRevision();
                     let flags = { changedFiles: false, interimText: false, liveActivity: false }; let invalid = false;
                     try { flags = this.ports.session.getReplyReporting(); } catch { invalid = true; }
                     const reportingRevision = this.ports.session.getReplyReportingRevision();
-                    const reporting = ([['changedFiles', 'Observed file paths'], ['interimText', 'Interim assistant text'], ['liveActivity', 'Live tool activity']] as const).map(([key, label]) => ({
-                        label: `${flags[key] ? 'Disable' : 'Enable'} ${label.toLowerCase()}`, value: { command: 'replies' as const, value: `report:${key}:${flags[key] ? 'off' : 'on'}`, revision: reportingRevision } }));
-                    await this.menu(frame, `Shared replies — final stats ${this.ports.session.getReplyStats() ? 'On' : 'Off'}; files ${flags.changedFiles ? 'On' : 'Off'}, interim ${flags.interimText ? 'On' : 'Off'}, activity ${flags.liveActivity ? 'On' : 'Off'}. Enabling shares workspace-relative paths/intermediate assistant text or tool names with allowed chats; never thinking/tool bodies.${invalid ? ' Saved optional settings are invalid; selecting a reporting option replaces them.' : ''}`, [
-                        { label: 'Explain after attachments', value: { command: 'replies', value: 'explain' } },
-                        { label: 'Caption/tool only', value: { command: 'replies', value: 'caption' } },
-                        { label: 'Enable final stats for allowed chats', value: { command: 'replies', value: 'stats:on', revision } },
-                        { label: 'Disable final stats', value: { command: 'replies', value: 'stats:off', revision } }, ...reporting]);
+                    const reporting = ([['changedFiles', 'files'], ['interimText', 'interim'], ['liveActivity', 'activity']] as const).map(([key, label]) => ({
+                        label: t(`phone.replies.${label}.${flags[key] ? 'off' : 'on'}`), value: { command: 'replies' as const, value: `report:${key}:${flags[key] ? 'off' : 'on'}`, revision: reportingRevision } }));
+                    const stats = t(this.ports.session.getReplyStats() ? 'phone.status.on' : 'phone.status.off');
+                    const disclosure = t('phone.replies.disclosure', { stats,
+                        files: t(flags.changedFiles ? 'phone.status.on' : 'phone.status.off'),
+                        interim: t(flags.interimText ? 'phone.status.on' : 'phone.status.off'),
+                        activity: t(flags.liveActivity ? 'phone.status.on' : 'phone.status.off')
+                    }) + (invalid ? ` ${t('phone.replies.invalid')}` : '');
+                    await this.menu(frame, t('phone.replies.title', { stats }), [
+                        { label: this.mark(t('phone.replies.explain'), this.ports.session.getFinalAfterAttachments()), value: { command: 'replies', value: 'explain' } },
+                        { label: this.mark(t('phone.replies.caption'), !this.ports.session.getFinalAfterAttachments()), value: { command: 'replies', value: 'caption' } },
+                        { label: this.mark(t('phone.replies.statsOn'), this.ports.session.getReplyStats()), value: { command: 'replies', value: 'stats:on', revision } },
+                        { label: this.mark(t('phone.replies.statsOff'), !this.ports.session.getReplyStats()), value: { command: 'replies', value: 'stats:off', revision } }, ...reporting], disclosure);
                 }
             } else if (!argument && (command === 'new' || command === 'off' || command === 'quit')) {
-                await this.menu(frame, command === 'new' ? `Start a fresh shared Pi session? Login/settings/history stay. ${SHARED}`
-                    : command === 'off' ? 'Stop WhatsApp and disable outbound tools? Turning it on requires the terminal.'
-                        : 'Shut down this Pi process? WhatsApp credentials will be retained.', [
-                    { label: 'Cancel', value: { command, value: 'cancel' } }, { label: 'Confirm', value: { command, value: 'confirm' } }]);
-            } else await this.reply(frame, `Usage: /${command}`);
-        } catch { await this.reply(frame, 'Phone command failed; no automatic retry. Check terminal settings/status.'); }
+                await this.menu(frame, t(`phone.${command}.title`), [
+                    { label: t('phone.cancel'), value: { command, value: 'cancel' } }, { label: t('phone.confirm'), value: { command, value: 'confirm' } }], t(`phone.${command}.body`, { shared: t('phone.shared') }));
+            } else await this.reply(frame, t('phone.usage', { command: `/${command}` }));
+        } catch { await this.reply(frame, t('phone.failed')); }
         return true;
     }
 
-    private async menu(frame: Frame, title: string, options: Array<{ label: string; value: Action }>): Promise<void> {
+    private mark(label: string, current: boolean): string {
+        const suffix = current ? ` ${t('phone.current')}` : '';
+        return label + suffix;
+    }
+
+    private helpText(chat: string): string {
+        return [
+            t('phone.help.title'), '',
+            t('phone.help.info'), t('phone.help.cmd.help'), t('phone.help.cmd.status'), '',
+            t('phone.help.shared'), t('phone.help.cmd.stop'), t('phone.help.cmd.model'), t('phone.help.cmd.think'),
+            t('phone.help.cmd.compact'), t('phone.help.cmd.new'), t('phone.help.cmd.replies'), '',
+            t('phone.help.chat'), t('phone.help.cmd.voice'), '',
+            t('phone.help.process'), t('phone.help.cmd.off'), t('phone.help.cmd.quit'), '',
+            t('phone.shared'), t('phone.help.ownerOnly'), t('phone.help.expiry'),
+            t('phone.help.mode', { mode: t(`phone.mode.${chatReplyPolicy(this.ports.session.getSpeechSettings(), chat, this.ports.canonical).mode}`) })
+        ].join('\n');
+    }
+
+    private async menu(frame: Frame, title: string, options: Array<{ label: string; value: Action }>, body?: string): Promise<void> {
         if (!frame.current()) return;
-        const menu = this.menus.create(frame, title, options);
+        const menu = this.menus.create(frame, title, options, body);
         const sent = await this.ports.send(frame.chat, menu.text, frame.current);
         if (!frame.current() || (!sent.success && sent.delivery !== 'unknown') || !sent.messageId) { this.menus.discard(menu.id); return; }
         if (!this.menus.activate(menu.id, sent.messageId)) return;
@@ -167,78 +204,82 @@ export class WhatsAppCommandRouter {
         if (argument && page === undefined && models.some(model => `${model.provider}/${model.id}` === argument)) {
             await this.apply({ command: 'model', value: argument }, frame); return;
         }
-        if (!models.length) { await this.reply(frame, 'No authenticated models available. Configure provider login in the terminal.'); return; }
+        if (!models.length) { await this.reply(frame, t('phone.model.noAvailable')); return; }
         const ordered = [...models].sort((a, b) => `${a.provider}/${a.id}`.localeCompare(`${b.provider}/${b.id}`));
         // Private identifiers stay browsable, but neither their paths nor placeholders are search terms.
         const choices = argument ? fuzzyFilter(ordered, argument, model => publicModelIdentifier(model) ?? '') : ordered;
-        if (!choices.length) { await this.reply(frame, 'No authenticated models match. Use /model to browse or /model <provider or model search>.'); return; }
+        if (!choices.length) { await this.reply(frame, t('phone.model.noMatches')); return; }
         const currentPage = Math.min(page ?? 0, Math.floor((choices.length - 1) / 10));
         const options: Array<{ label: string; value: Action }> = choices.slice(currentPage * 10, currentPage * 10 + 10)
-            .map(model => ({ label: modelLabel(model), value: { command: 'model', value: `${model.provider}/${model.id}` } }));
-        if (currentPage > 0) options.push({ label: 'Previous page', value: { command: 'model', value: `page:${currentPage - 1}`, query: argument } });
-        if ((currentPage + 1) * 10 < choices.length) options.push({ label: 'Next page', value: { command: 'model', value: `page:${currentPage + 1}`, query: argument } });
-        await this.menu(frame, `Authenticated ${argument ? 'model matches' : 'models'}, page ${currentPage + 1}. ${SHARED}`, options);
+            .map(model => {
+                const current = model.provider === ctx.model?.provider && model.id === ctx.model?.id;
+                const reserve = current ? t('phone.current').length + 1 : 0;
+                return { label: this.mark(modelLabel(model).slice(0, 120 - reserve), current), value: { command: 'model', value: `${model.provider}/${model.id}` } };
+            });
+        if (currentPage > 0) options.push({ label: t('phone.model.previous'), value: { command: 'model', value: `page:${currentPage - 1}`, query: argument } });
+        if ((currentPage + 1) * 10 < choices.length) options.push({ label: t('phone.model.next'), value: { command: 'model', value: `page:${currentPage + 1}`, query: argument } });
+        await this.menu(frame, t(argument ? 'phone.model.titleMatches' : 'phone.model.title', { page: currentPage + 1 }), options, t('phone.shared'));
     }
     private async apply(action: Action, frame: Frame): Promise<void> {
         const ctx = this.ports.context(); if (!ctx || !frame.current()) return;
-        if (action.value === 'cancel') { await this.reply(frame, 'Cancelled.'); return; }
+        if (action.value === 'cancel') { await this.reply(frame, t('phone.cancelled')); return; }
         if (action.command === 'model' && /^page:\d+$/.test(action.value)) { await this.models(frame, action.query ?? '', Number(action.value.slice(5))); return; }
-        if (!['off', 'quit'].includes(action.command) && !this.idle(ctx)) { await this.reply(frame, BUSY); return; }
+        if (!['off', 'quit'].includes(action.command) && !this.idle(ctx)) { await this.reply(frame, t('phone.busy')); return; }
         const release = this.lock();
         try {
             if (action.command === 'model') {
                 const choices = await ctx.modelRegistry.getAvailable();
                 const model = choices.find(choice => `${choice.provider}/${choice.id}` === action.value);
                 if (!frame.current()) return;
-                if (!ctx.isIdle() || ctx.hasPendingMessages()) { await this.reply(frame, BUSY); return; }
-                if (!model) await this.reply(frame, 'Exact authenticated model unavailable. Nothing changed.');
-                else if (await this.ports.pi.setModel(model)) await this.reply(frame, `Shared model selected: ${modelLabel(model)}.`);
-                else await this.reply(frame, 'Model authentication unavailable. Nothing changed.');
+                if (!ctx.isIdle() || ctx.hasPendingMessages()) { await this.reply(frame, t('phone.busy')); return; }
+                if (!model) await this.reply(frame, t('phone.model.unavailable'));
+                else if (await this.ports.pi.setModel(model)) await this.reply(frame, t('phone.model.selected', { model: modelLabel(model) }));
+                else await this.reply(frame, t('phone.model.noAuth'));
             } else if (action.command === 'think') {
-                if (!ctx.model || !supportedThinking(ctx.model).includes(action.value as Thinking)) await this.reply(frame, 'Unsupported thinking level. Nothing changed. Use /think.');
-                else if (frame.current()) { this.ports.pi.setThinkingLevel(action.value as Thinking); await this.reply(frame, `Shared thinking level: ${action.value}.`); }
+                if (!ctx.model || !supportedThinking(ctx.model).includes(action.value as Thinking)) await this.reply(frame, t('phone.think.unsupported'));
+                else if (frame.current()) { this.ports.pi.setThinkingLevel(action.value as Thinking); await this.reply(frame, t('phone.think.saved', { level: t(`phone.level.${action.value as Thinking}`) })); }
             } else if (action.command === 'voice') {
-                if (!outputMode(action.value)) { await this.reply(frame, 'Usage: /voice text|voice|both|mirror'); return; }
+                if (!outputMode(action.value)) { await this.reply(frame, t('phone.usage', { command: '/voice text|voice|both|mirror' })); return; }
                 const revision = this.ports.session.getSpeechRevision(); const settings = this.ports.session.getSpeechSettings();
                 const policy = chatReplyPolicy(settings, frame.chat, this.ports.canonical);
                 const missing = [
-                    ...(!settings.enabled ? ['Speech is disabled'] : []),
-                    ...(settings.approvedDestinationKey !== resolveTtsConfig(settings.config).destinationKey ? ['Speech destination is not approved'] : []),
-                    ...(frame.chat.endsWith('@g.us') && !policy.groupOptIn ? ['This group speech opt-in is missing'] : [])
+                    ...(!settings.enabled ? [t('phone.voice.disabled')] : []),
+                    ...(settings.approvedDestinationKey !== resolveTtsConfig(settings.config).destinationKey ? [t('phone.voice.unapproved')] : []),
+                    ...(frame.chat.endsWith('@g.us') && !policy.groupOptIn ? [t('phone.voice.groupMissing')] : [])
                 ];
                 if (action.value !== 'text' && missing.length) {
-                    await this.reply(frame, `${missing.join('; ')}. Use terminal /whatsapp > ${t('voice.menu')} > ${t('voice.setupChat')} and select this chat. Nothing changed; no speech was enabled.`);
+                    await this.reply(frame, t('phone.voice.setup', { missing: missing.join('; '), voice: t('voice.menu'), setup: t('voice.setupChat') }));
                     return;
                 }
                 await this.ports.session.setSpeechSettings(setChatReplyPreferences(settings, frame.chat, { mode: action.value }, this.ports.canonical), revision, frame.current);
-                await this.reply(frame, `This chat's reply mode: ${action.value}.`);
+                await this.reply(frame, t('phone.voice.saved', { mode: t(`phone.mode.${action.value}`) }));
             } else if (action.command === 'replies') {
                 const report = /^report:(changedFiles|interimText|liveActivity):(on|off)$/.exec(action.value);
                 if (report && action.revision !== undefined) {
                     let settings = { changedFiles: false, interimText: false, liveActivity: false };
                     try { settings = this.ports.session.getReplyReporting(); } catch { /* Only an explicit reporting selection replaces malformed fields. */ }
                     await this.ports.session.setReplyReporting({ ...settings, [report[1]]: report[2] === 'on' }, action.revision, frame.current);
-                    await this.reply(frame, `Optional reply reporting ${report[2] === 'on' ? 'enabled' : 'disabled'} for future owned WhatsApp inputs; prior reporting work is withdrawn. ${SHARED}`);
+                    await this.reply(frame, t('phone.reporting.saved', { state: t(report[2] === 'on' ? 'phone.enabled' : 'phone.disabled'), shared: t('phone.shared') }));
                 } else if (action.value === 'stats:on' || action.value === 'stats:off') {
                     await this.ports.session.setReplyStats(action.value === 'stats:on', () => frame.current()
                         && action.revision !== undefined && action.revision === this.ports.session.getReplyStatsRevision());
-                    await this.reply(frame, `Shared final stats ${action.value === 'stats:on' ? 'enabled' : 'disabled'} for future WhatsApp replies; pending stats are withdrawn.`);
+                    await this.reply(frame, t('phone.stats.saved', { state: t(action.value === 'stats:on' ? 'phone.stats.enabled' : 'phone.stats.disabled') }));
                 } else if (action.value === 'explain' || action.value === 'caption') {
                     await this.ports.session.setFinalAfterAttachments(action.value === 'explain', frame.current);
-                    await this.reply(frame, `Shared attachment policy: ${action.value === 'explain' ? 'explain after attachments' : 'caption/tool only'}.`);
+                    await this.reply(frame, t('phone.attachment.saved', { policy: t(action.value === 'explain' ? 'phone.status.explainAfter' : 'phone.status.captionOnly') }));
                 }
 
             } else if (action.command === 'new') {
                 const token = randomUUID(); this.newTickets.clear(); this.newTickets.set(token, { frame, expires: Date.now() + 15_000 });
                 this.ports.pi.sendUserMessage(`/whatsapp --internal control-new ${token}`, { expandPromptTemplates: true, deliverAs: 'followUp' });
             } else if (action.command === 'off') {
-                await this.reply(frame, 'WhatsApp is turning off. Use the terminal to turn it on again; login/history are retained.');
+                await this.reply(frame, t('phone.off.done'));
                 if (frame.current()) await this.ports.off(ctx);
             } else if (action.command === 'quit') {
-                await this.reply(frame, 'Pi shutdown requested. WhatsApp credentials are retained.');
+                await this.reply(frame, t('phone.quit.done'));
                 if (frame.current()) ctx.shutdown();
             }
-        } catch { await this.reply(frame, 'Phone command failed; no automatic retry. Check terminal settings/status.'); }
+        } catch { await this.reply(frame, t('phone.failed')); }
         finally { release(); }
     }
 
@@ -278,7 +319,7 @@ export class WhatsAppCommandRouter {
         const revision = this.ports.session.getOperatorRevision(); const sessionId = ctx.sessionManager.getSessionId();
         const current = () => revision === this.ports.session.getOperatorRevision() && this.ports.owner(ticket.actor)
             && this.ports.allowed(ticket.chat) && sessionId === this.ports.context()?.sessionManager.getSessionId();
-        if (await this.ports.resume(current, ticket.account) && current()) await this.ports.send(ticket.chat, 'A fresh shared Pi session is ready. Login, settings and history were retained.', current);
+        if (await this.ports.resume(current, ticket.account) && current()) await this.ports.send(ticket.chat, t('phone.new.ready'), current);
         else ctx.ui.notify('New Pi session created; reconnect WhatsApp from the terminal.', 'warning');
     }
 }
@@ -290,7 +331,7 @@ function publicModelIdentifier(model: Model): string | undefined {
 
 function modelLabel(model: Model): string {
     const identifier = publicModelIdentifier(model);
-    return identifier === undefined ? 'Configured model (private identifier hidden)' : safeLabel(identifier);
+    return identifier === undefined ? t('phone.model.private') : safeLabel(identifier);
 }
 
 /** Mirrors the public model capability map; never request a level Pi would silently clamp. */

@@ -187,6 +187,16 @@ Cooperating writers and startup temp cleanup use private `config.json.lock`, wai
 - Failed preference re-reads disable auto-connect without dropping loaded reply settings or overwriting invalid data. A successful later read restores the preference. Release errors neither hide the original failure nor misreport a completed commit.
 - After a crash, inspect ownership before explicit recovery; never remove another process's lock or active temp files.
 
+## Phone menus
+
+`/help` groups commands under **Information**, **Shared Pi session**, **This chat**, and **WhatsApp and process**, with an explanation and the existing argument form for each command. `/replies` is shared, whereas `/voice` changes only this chat’s mode within existing speech approvals. `/status` separates **Shared Pi and WhatsApp** (connection, busy/idle, model, thinking, context, reply delivery, final stats) from **This chat** (automatic replies, voice mode). These headings do not provide per-chat session isolation.
+
+Numbered choices retain their original order and actions. A localized **(current)** suffix marks the current model on its page, thinking level, voice mode, attachment policy and final-stats state. Independent reporting toggles show their current state and the action they will take. Reply with the number within **five minutes**; in groups, quote the active menu. Ordinary text cancels it. There is no generic phone Back or new cancel command; `/new`, `/off` and `/quit` retain their **Cancel / Confirm** choices.
+
+Short menu titles and optional poll names are limited to 120 characters. Explanatory/shared-session guidance and the complete `/replies` disclosure are in the same numbered text message’s body, not the truncated title. The body is limited to 1,000 characters and never silently shortened; shipped translations including the invalid-settings note fit this limit. Optional polls still mirror the numbered option labels and require `--whatsapp-ng-native-polls`.
+
+The existing `WHATSAPP_NG_LOCALE` override (or `--whatsapp-ng-locale`) selects `en`, `pt-BR`, `es` or `fr`; missing/unsupported values use English. This is process-wide presentation, not automatic language detection or a per-chat setting. Command names, accepted argument tokens and model identifiers are unchanged; private model identifiers stay hidden and long model labels retain the existing display cap. Selection still uses the complete identifier.
+
 ## Off and diagnostics
 
 **Connection → Turn WhatsApp off** and owner `/off` require confirmation. They stop shared Pi work, withdraw known queued WhatsApp input, cancel pending speech/reporting/forwarding and close transport without deleting login/history/preferences. Local history/configuration/status remain available; network history requests are blocked. Off survives session replacement/reload in that process. Terminal Connect restores previously active outbound tools without replaying old work; a fresh process follows its saved auto-connect preference and startup flags.

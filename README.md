@@ -164,7 +164,7 @@ Allowed people can use `/help` and `/status`. State-changing commands require th
 
 `/model` browses authenticated models; `/model anthropic` or `/model anthropic/opus` searches case-insensitively with fuzzy matching. Search results require numbered confirmation, even for one match; exact `provider/model` selects directly. Pagination preserves the search, and no match leaves the current model unchanged. Private filesystem identifiers are available through browsing, not fuzzy search.
 
-Menus use numbered replies. Group selections must quote the menu. Native polls are experimental and require `--whatsapp-ng-native-polls`. Configuration changes require idle Pi; stop active work explicitly rather than interrupting it through a settings change.
+`/help` groups commands with short explanations; `/status` separates shared Pi/WhatsApp settings from this chat’s automatic replies and voice mode. Menus show friendly labels and the current choice; reporting toggles show their state. Reply with a number within five minutes, quoting the menu in groups. Ordinary text cancels the menu. The complete `/replies` reporting disclosure is in the numbered text menu, not the shortened poll title. Phone presentation uses the existing locale override (English, pt-BR, Spanish or French); command arguments and model identifiers stay unchanged. See [phone menus](docs/reference.md#phone-menus). Native polls are experimental and require `--whatsapp-ng-native-polls`. Configuration changes require idle Pi; stop active work explicitly rather than interrupting it through a settings change.
 
 ## LLM-Callable Tools
 

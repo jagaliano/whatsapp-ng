@@ -1,5 +1,6 @@
 import { createCipheriv, createHash, createHmac, randomBytes } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { initI18n, resetI18n, t } from '../../src/i18n.js';
 import { cleanMessage, proto } from 'baileys';
 import { CommandMenuService } from '../../src/services/command-menu.service.ts';
 
@@ -23,7 +24,32 @@ function fixture(chat = owner) {
         vote: encrypted(menu.poll.messageSecret) };
     return { menus, menu, input, revoke: () => { current = false; } };
 }
+afterEach(() => { vi.unstubAllEnvs(); resetI18n(); });
 describe('pinned Baileys encrypted command-poll contract', () => {
+    it.each(['en', 'pt-BR', 'es', 'fr'])('consumes an encrypted vote with frozen localized labels (%s)', locale => {
+        vi.stubEnv('WHATSAPP_NG_LOCALE', locale); initI18n(undefined);
+        const menus = new CommandMenuService<string>(jid => jid);
+        const menu = menus.create({ chat: owner, actor: owner, scope: 'locale-fixture', current: () => true }, t('phone.voice.title'), [
+            { label: t('phone.mode.text') + ' ' + t('phone.current'), value: 'text' }, { label: t('phone.mode.voice'), value: 'voice' }
+        ]);
+        menus.activate(menu.id, 'text-1'); menus.activate(menu.id, 'poll-1', true);
+        const vote = encrypted(menu.poll.messageSecret, owner, [menu.poll.values[1]]);
+        vi.stubEnv('WHATSAPP_NG_LOCALE', 'en'); initI18n(undefined);
+        expect(menus.selectPoll({ chat: owner, actor: owner, scope: 'locale-fixture', selfJid: self,
+            creationKey: { id: 'poll-1', remoteJid: owner, fromMe: true }, voterKey: { id: 'vote-1', remoteJid: owner, fromMe: false }, vote }).value).toBe('voice');
+        menus.reset();
+    });
+    it('keeps a bounded complete body in text only and refuses truncation', () => {
+        const menus = new CommandMenuService<string>(jid => jid);
+        const binding = { chat: owner, actor: owner, scope: 'fixture', current: () => true };
+        const options = [{ label: 'First', value: 'one' }];
+        const plain = menus.create(binding, 'Choose', options);
+        expect(plain.text).toBe('Choose\n1. First\nReply with a number within 5 minutes. Ordinary text cancels this menu.');
+        const body = menus.create(binding, 'Choose', options, 'Full\u0000\u202e disclosure.');
+        expect(body.text).toContain('Choose\nFull disclosure.\n1. First\n'); expect(body.poll.name).toBe('Choose');
+        expect(menus.create(binding, 'Choose', options, 'x'.repeat(1000)).text).toContain('x'.repeat(1000));
+        expect(() => menus.create(binding, 'Choose', options, 'x'.repeat(1001))).toThrow(); menus.reset();
+    });
     it.each(['implicit-chat', 'lid-authors', 'mixed-authors'])('handles a real-cleaner own-direction self-chat vote: %s', variant => {
         const lid = '90000000009@lid'; const canonical = (jid: string) => jid === lid ? self : jid;
         const menus = new CommandMenuService<string>(canonical);

@@ -13,7 +13,7 @@ afterEach(() => { vi.unstubAllEnvs(); resetI18n(); });
 
 /** Real Pi command context/lifecycle; WhatsApp transport and fixture model streams are synthetic. */
 describe('production phone-control Pi RPC gateway', () => {
-    it.each(['menu-polish:en', 'menu-polish:pt-BR', 'menu-polish:es', 'menu-polish:fr', 'direct', 'owner-guidance', 'menu-ui', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard', 'autoconnect', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async scenario => {
+    it.each(['phone-polish:en', 'phone-polish:pt-BR', 'phone-polish:es', 'phone-polish:fr', 'menu-polish:en', 'menu-polish:pt-BR', 'menu-polish:es', 'menu-polish:fr', 'direct', 'owner-guidance', 'menu-ui', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard', 'autoconnect', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async scenario => {
         const [mode, locale = 'en'] = scenario.split(':');
         vi.stubEnv('WHATSAPP_NG_LOCALE', locale); initI18n(undefined);
         const root = await mkdtemp(join(tmpdir(), 'wa-phone-rpc-')); const home = join(root, 'home'); const workspace = join(root, 'workspace');
@@ -45,7 +45,7 @@ describe('production phone-control Pi RPC gateway', () => {
         const cli = fileURLToPath(new URL('./cli.js', import.meta.resolve('@mariozechner/pi-coding-agent')));
         const env = Object.fromEntries(['PATH', 'TMPDIR', 'LANG'].flatMap(key => process.env[key] ? [[key, process.env[key]!]] : []));
         Object.assign(env, { HOME: home, PI_CODING_AGENT_DIR: join(root, 'agent'), PI_OFFLINE: '1', WHATSAPP_NG_LOCALE: locale,
-            WA_PHONE_RPC_METRICS: metricsPath, WA_PHONE_RPC_CONFIG: join(data, 'config.json'), WA_PHONE_RPC_SELF_LID: selfChat ? '1' : '0', WA_PHONE_RPC_STATS: mode === 'stats' ? '1' : '0',
+            WA_PHONE_RPC_POLISH: mode === 'phone-polish' ? '1' : '0', WA_PHONE_RPC_METRICS: metricsPath, WA_PHONE_RPC_CONFIG: join(data, 'config.json'), WA_PHONE_RPC_SELF_LID: selfChat ? '1' : '0', WA_PHONE_RPC_STATS: mode === 'stats' ? '1' : '0',
             WA_PHONE_RPC_GROUPS: ['groups', 'settings'].includes(mode) ? '1' : '0', WA_PHONE_RPC_SELF_AUTO: mode === 'self-auto' ? '1' : '0', WA_PHONE_RPC_MODELS: mode === 'models' ? '1' : '0',
             WA_PHONE_RPC_OPTIONAL: ['images', 'terminal'].includes(mode) ? mode : '', WA_PHONE_RPC_REPORTING: mode === 'reporting' ? '1' : '0', WA_PHONE_RPC_SERVER_VOICE: mode === 'server-voice' ? '1' : '0', WA_PHONE_RPC_SPOKEN_GUARD: mode === 'spoken-guard' ? '1' : '0',
             ...(managed ? { WA_PHONE_RPC_MANAGED: '1', WA_PHONE_RPC_MANAGED_ENDPOINT: endpoint, FIXTURE_KEY: 'synthetic-key', CRISPASR_STT_CMD: JSON.stringify({ executable: process.execPath,
@@ -92,6 +92,33 @@ describe('production phone-control Pi RPC gateway', () => {
         };
         try {
             const initial = await request('get_state');
+            if (mode === 'phone-polish') {
+                const phone = (text: string) => prompt('/phone-fixture polish ' + text);
+                await phone('/help');
+                const help = (await metrics()).messages.at(-1);
+                for (const key of ['phone.help.info', 'phone.help.shared', 'phone.help.chat', 'phone.help.process'] as const) expect(help).toContain(t(key));
+                expect(help).toContain('/voice [text|voice|both|mirror]');
+                await phone('/status');
+                const status = (await metrics()).messages.at(-1);
+                expect(status.indexOf(t('phone.status.shared'))).toBeLessThan(status.indexOf(t('phone.status.chat')));
+                await phone('/voice'); const voice = (await metrics()).messages.at(-1);
+                expect(voice).toContain('1. ' + t('phone.mode.text') + ' ' + t('phone.current'));
+                expect(voice).toContain(t('phone.menu.instruction'));
+                const before = await readFile(join(data, 'config.json'), 'utf8');
+                await phone('/new'); await phone('1');
+                expect((await metrics()).messages.at(-1)).toBe(t('phone.cancelled'));
+                expect(await readFile(join(data, 'config.json'), 'utf8')).toBe(before);
+                await phone('/replies');
+                const replies = (await metrics()).messages.at(-1);
+                expect(replies).toContain(t('phone.replies.disclosure', { stats: t('phone.status.off'), files: t('phone.status.off'), interim: t('phone.status.off'), activity: t('phone.status.off') }));
+                await phone('2');
+                expect(JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).finalAfterAttachments).toBe(false);
+                expect((await metrics()).messages.at(-1)).toBe(t('phone.attachment.saved', { policy: t('phone.status.captionOnly') }));
+                const final = await metrics();
+                expect(final.socketStarts).toBe(1); expect(final.modelStarts).toBe(0); expect(final.pollCreations).toBe(0);
+                expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
+                expect(records.filter(record => record.type === 'extension_error')).toEqual([]); return;
+            }
             if (managed) {
                 const events = async () => { try { return (await readFile(serverMetrics, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line) as { event: string; pid: number }); } catch { return []; } };
                 const connect = async () => { const menu = prompt('/whatsapp'); await select('Connection'); await select('Connect WhatsApp'); await menu; };
@@ -190,7 +217,7 @@ describe('production phone-control Pi RPC gateway', () => {
                 expect((await select('Back')).title).toMatch(/^Voice:/); expect((await select('Back')).title).toMatch(/^WhatsApp — /); await setup;
                 const config = JSON.parse(await readFile(join(data, 'config.json'), 'utf8'));
                 expect(config.voicePreferences).toMatchObject({ enabled: true, mode: 'text', chats: { [owner]: { mode: 'mirror' } } });
-                await prompt('/phone-fixture voice-mirror'); expect((await metrics()).messages.at(-1)).toContain('reply mode: mirror');
+                await prompt('/phone-fixture voice-mirror'); expect((await metrics()).messages.at(-1)).toContain(t('phone.voice.saved', { mode: t('phone.mode.mirror') }));
                 const back = prompt('/whatsapp'); await select('Replies'); await select('Optional outputs');
                 await select('Choose automatic image tools'); expect((await select('Back')).title).toContain('actual image result blocks');
                 expect((await select('Back')).title).toContain('Optional outputs'); expect((await select('Back')).title).toBe('Replies\nEsc closes settings');
@@ -419,11 +446,11 @@ describe('production phone-control Pi RPC gateway', () => {
             expect(JSON.parse(await readFile(metricsPath, 'utf8')).activeTools).toContain('send_wa_message');
             if (mode === 'self-lid') {
                 // A verified phone preference applies to own LID, not its bogus same-digits phone JID.
-                await prompt('/phone-fixture status'); expect((await metrics()).messages.at(-1)).toContain('Voice: mirror');
+                await prompt('/phone-fixture status'); expect((await metrics()).messages.at(-1)).toContain(t('phone.status.voice', { value: t('phone.mode.mirror') }));
                 await prompt('/phone-fixture poll-next');
                 const polled = JSON.parse(await readFile(metricsPath, 'utf8'));
                 expect(polled.pollVotes).toBe(1);
-                expect(polled.messages.filter((text: string) => text.startsWith('Authenticated models, page 2.'))).toHaveLength(1);
+                expect(polled.messages.filter((text: string) => text.startsWith(t('phone.model.title', { page: 2 }) + '\n'))).toHaveLength(1);
             }
             await prompt('/whatsapp --internal control-new 00000000-0000-0000-0000-000000000000');
             expect((await request('get_state')).sessionId).toBe(initial.sessionId);

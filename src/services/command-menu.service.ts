@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { t } from '../i18n.js';
 import { decryptPollVote, getAggregateVotesInPollMessage, getKeyAuthor, jidNormalizedUser, type WAMessageKey, proto } from 'baileys';
 
 export interface CommandMenuBinding {
@@ -41,7 +42,9 @@ export class CommandMenuService<T> {
     private sameActor(menu: Menu<T>, actor: string): boolean {
         const expected = this.canonical(menu.binding.actor); return !!expected && expected === this.canonical(actor);
     }
-    create(binding: CommandMenuBinding, title: string, options: Array<{ label: string; value: T }>) {
+    create(binding: CommandMenuBinding, title: string, options: Array<{ label: string; value: T }>, body?: string) {
+        const detail = body === undefined ? undefined : safeText(body);
+        if (detail !== undefined && detail.length > 1000) throw new Error('Control menu body exceeds limit');
         this.prune(); const key = this.canonical(binding.chat);
         if (!key || !this.canonical(binding.actor) || !binding.current() || !options.length || options.length > 12) throw new Error('Control menu unavailable');
         this.cancel(binding.chat);
@@ -52,7 +55,7 @@ export class CommandMenuService<T> {
         this.menus.set(key, menu);
         menu.timer = setTimeout(() => { if (this.menus.get(key) === menu) this.remove(key); }, 300_000);
         menu.timer.unref?.();
-        return { id: menu.id, text: `${safeLabel(title)}\n${frozen.map(option => option.label).join('\n')}\nReply with a number within 5 minutes${key.endsWith('@g.us') ? ', quoting this menu' : ''}. Ordinary text cancels this menu.`,
+        return { id: menu.id, text: `${safeLabel(title)}\n${detail ? `${detail}\n` : ''}${frozen.map(option => option.label).join('\n')}\n${t(key.endsWith('@g.us') ? 'phone.menu.instructionGroup' : 'phone.menu.instruction')}`,
             poll: { name: safeLabel(title), values: frozen.map(option => option.label), selectableCount: 1 as const, messageSecret: menu.secret } };
     }
     activate(id: string, messageId: string, poll = false): boolean {
@@ -117,8 +120,10 @@ export class CommandMenuService<T> {
     }
 }
 
-export function safeLabel(value: string): string {
+export function safeLabel(value: string): string { return safeText(value).slice(0, 120); }
+
+function safeText(value: string): string {
     return [...value].filter(character => {
         const code = character.codePointAt(0)!; return code >= 32 && (code < 127 || code > 159);
-    }).join('').replace(/[\u202a-\u202e\u2066-\u2069]/g, '').slice(0, 120);
+    }).join('').replace(/[\u202a-\u202e\u2066-\u2069]/g, '');
 }
