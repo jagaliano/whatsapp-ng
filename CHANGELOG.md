@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reclaim a stale transport lock instead of refusing to start forever: when `.transport-lock` already exists, read its payload and, only if the recorded `pid` is provably gone and the file is unchanged, unlink it and retry the exclusive open (bounded to three attempts). Unknown, corrupt or self-owned payloads and live owners still raise `WHATSAPP_NG_PROFILE_IN_USE`, so a concurrent or unverifiable owner is never stolen; a crash now self-heals on the next start rather than requiring a manual lock deletion. Regression coverage uses synthetic profiles for dead, live and self-owned owners.
+
 ## 1.1.7 — 2026-11-08
 
 - Polish WhatsApp phone presentation in English, pt-BR, Spanish and French: group `/help` commands with explanations, split `/status` into shared and this-chat settings, add friendly choices/current markers and clear numbered-reply, five-minute expiry, group-quoting and cancellation guidance. Keep the complete `/replies` disclosure and shared-session guidance in a bounded, unabridged text-menu body rather than truncated titles. Preserve commands, arguments, actions, authorization, consent meaning, confirmations, routing, delivery, optional polls and terminal menus. Synthetic four-locale unit/encrypted-poll/production-entry RPC coverage is separate from pending operator visual/live acceptance.

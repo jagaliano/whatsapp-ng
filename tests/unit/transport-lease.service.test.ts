@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, readFile, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
+import { spawn, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { PROFILE_IN_USE, TransportLease } from '../../src/services/transport-lease.service.ts';
@@ -15,6 +16,10 @@ async function acquire(profile = join(root, 'auth')) {
     const lease = await TransportLease.acquire(profile);
     leases.push(lease);
     return lease;
+}
+async function exitedPid(): Promise<number> {
+    const child = spawnSync(process.execPath, ['-e', ''], { stdio: 'ignore' });
+    return child.pid!;
 }
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'wa-lease-')); leases = []; });
 afterEach(async () => {
@@ -48,7 +53,7 @@ describe('TransportLease', () => {
             expect(owner).toEqual({ version: 1, pid: process.pid, token: expect.any(String) });
         } finally { process.umask(previous); }
     });
-    it.each(['unrecognized lock', JSON.stringify({ version: 1, pid: 2147483647, token: 'synthetic-stale' })])(
+    it.each(['unrecognized lock', JSON.stringify({ version: 1, token: 'no-owner-pid' })])(
         'does not steal an unknown/stale lock (%s)', async content => {
             const profile = join(root, 'auth'); await mkdir(profile);
             const lock = profile + '.transport-lock';
@@ -57,6 +62,32 @@ describe('TransportLease', () => {
             expect(await readFile(lock, 'utf8')).toBe(content);
         }
     );
+    it('reclaims a lock whose recorded owner is provably gone', async () => {
+        const profile = join(root, 'auth'); await mkdir(profile);
+        const lock = profile + '.transport-lock';
+        const dead = await exitedPid();
+        await writeFile(lock, JSON.stringify({ version: 1, pid: dead, token: 'crashed-owner' }), { mode: 0o600 });
+        const lease = await acquire(profile);
+        expect(lease.isHeld).toBe(true);
+        expect(JSON.parse(await readFile(lock, 'utf8'))).toEqual({ version: 1, pid: process.pid, token: expect.any(String) });
+    });
+    it('does not reclaim a lock owned by a live process', async () => {
+        const profile = join(root, 'auth'); await mkdir(profile);
+        const lock = profile + '.transport-lock';
+        const owner = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
+        try {
+            const content = JSON.stringify({ version: 1, pid: owner.pid, token: 'live-owner' });
+            await writeFile(lock, content, { mode: 0o600 });
+            await expect(TransportLease.acquire(profile)).rejects.toMatchObject({ code: PROFILE_IN_USE });
+            expect(await readFile(lock, 'utf8')).toBe(content);
+        } finally { owner.kill(); }
+    });
+    it('does not reclaim a lock naming its own process without a lease', async () => {
+        const profile = join(root, 'auth'); await mkdir(profile);
+        const content = JSON.stringify({ version: 1, pid: process.pid, token: 'self-orphan' });
+        await writeFile(profile + '.transport-lock', content, { mode: 0o600 });
+        await expect(TransportLease.acquire(profile)).rejects.toMatchObject({ code: PROFILE_IN_USE });
+    });
     it('canonicalizes aliases to the same physical auth profile', async () => {
         const first = await acquire(); const alias = join(root, 'alias');
         await symlink(first.profileDir, alias, 'dir');
