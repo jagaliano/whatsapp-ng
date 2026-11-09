@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.1.8 — 2026-11-09
+
 - Scope the existing Node globals to fixture `.mjs` linting as well as TypeScript, retaining undefined-name checks and avoiding browser/global leakage. Update intake test mocks to the installed Vitest function-signature API. Intentional lazy-UI `Reflect.get` policy findings remain a separate review, not a runtime change.
 
 - Add WhatsApp-only, always-on best-effort ⏳ reactions for admitted/queued requests, with per-message run-end/withdrawal cleanup, an independent 500-record bound and account/admission/Off fencing. Explicit and verified own-account reactions suppress future automatic work without waiting or retries; already-in-flight races, indistinguishable manual ⏳ and crash leftovers remain documented limits. Preserve routing, history reconciliation and reply delivery. Synthetic production-entry validation is separate from pending operator live confirmation.
