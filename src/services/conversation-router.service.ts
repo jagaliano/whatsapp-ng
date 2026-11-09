@@ -68,7 +68,8 @@ export class ConversationRouter {
         private readonly resolveActor: (key: WAMessageKey) => string | undefined = key => key.fromMe === false
             ? (key.remoteJid?.endsWith('@g.us') ? key.participant ?? undefined : key.remoteJid ?? undefined)
             : undefined,
-        private readonly retiredInputs = new Set<string>()
+        private readonly retiredInputs = new Set<string>(),
+        private readonly onRetired: (key: WAMessageKey) => void = () => {}
     ) {}
 
     public getRuntimeId(): string {
@@ -107,9 +108,10 @@ export class ConversationRouter {
         if (input.source === 'interactive' || input.source === 'rpc') {
             this.retiredInputs.delete(digest);
             this.pending.delete(digest);
+            if (pending) this.onRetired(pending.key);
             this.terminalInput = { digest, scope: this.scope(), expiresAt: Date.now() + 5 * 60 * 1000 };
         } else if (pending && input.source === 'extension') pending.observed = true;
-        else if (pending) this.pending.delete(digest);
+        else if (pending) { this.pending.delete(digest); this.onRetired(pending.key); }
     }
 
     public consume(message: RoutedMessage): void {
@@ -135,6 +137,7 @@ export class ConversationRouter {
         if (!request?.observed || request.expiresAt <= Date.now() || request.scope !== this.scope() || !jid || !canonical) {
             epoch.unowned = true;
             epoch.sources.add('unknown');
+            if (request) this.onRetired(request.key);
             return;
         }
         if (request.admissionCurrent) epoch.admissionChecks.push(request.admissionCurrent);
@@ -326,7 +329,7 @@ export class ConversationRouter {
         const digest = this.digest(message.content ?? ''); const pending = this.pending.get(digest);
         if (pending?.admissionCurrent) {
             let current = false; try { current = pending.admissionCurrent(); } catch { /* Invalid policy cannot admit old work. */ }
-            if (!current) { this.pending.delete(digest); this.retiredInputs.add(digest); }
+            if (!current) { this.pending.delete(digest); this.retiredInputs.add(digest); this.onRetired(pending.key); }
         }
         return this.retiredInputs.has(digest);
     }
@@ -341,7 +344,7 @@ export class ConversationRouter {
 
     private retireExpiredPending(): void {
         for (const [digest, request] of this.pending) if (request.expiresAt <= Date.now()) {
-            this.retiredInputs.add(digest); this.pending.delete(digest);
+            this.retiredInputs.add(digest); this.pending.delete(digest); this.onRetired(request.key);
         }
     }
 

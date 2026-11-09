@@ -11,7 +11,7 @@ if (!metricsPath || !configPath || process.env.PI_OFFLINE !== '1') throw new Err
 const self = '15550000009@s.whatsapp.net'; const lid = '90000000009@lid';
 const selfChat = process.env.WA_PHONE_RPC_SELF_LID === '1';
 const owner = selfChat ? self : '15550000001@s.whatsapp.net'; const chat = selfChat ? lid : owner;
-const metrics = { socketStarts: 0, controlSends: 0, modelStarts: 0, cancelled: 0, messages: [], activeTools: [], pollVotes: 0, pollCreations: 0, outgoingEchoes: 0, sends: [], imageSends: 0, imageSnapshotsPrivate: true };
+const metrics = { socketStarts: 0, controlSends: 0, modelStarts: 0, cancelled: 0, messages: [], activeTools: [], pollVotes: 0, pollCreations: 0, outgoingEchoes: 0, outgoingReactionEchoes: 0, sends: [], imageSends: 0, imageSnapshotsPrivate: true };
 const save = () => writeFileSync(metricsPath, JSON.stringify(metrics), { mode: 0o600 });
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 let socket; let serial = 0; let latestPoll;
@@ -51,18 +51,19 @@ export function makeWASocket() {
     const ev = new EventEmitter(); metrics.socketStarts++; save();
     const current = { ev, user: { id: self, ...(selfChat ? { lid } : {}) }, opened: false,
         signalRepository: { lidMapping: { getPNForLID: async () => null } },
-        sendMessage: async (jid, content, options) => {
+        sendMessage: async (jid, content, options = {}) => {
+            const messageId = options.messageId ?? `fixture-reaction-${++serial}`;
             const image = process.env.WA_PHONE_RPC_OPTIONAL === 'images' && content.image;
             if (image) { metrics.imageSends++; metrics.imageSnapshotsPrivate &&= (statSync(content.image.url).mode & 0o777) === 0o600 && readFileSync(content.image.url).length > 0; }
             const message = image ? { imageMessage: { mimetype: content.mimetype, caption: 'Synthetic image' } } : await generateWAMessageContent(content, { userJid: self });
-            metrics.sends.push({ jid, kind: content.edit ? 'edit' : image ? 'image' : 'text', ...(content.edit ? { edit: { ...content.edit } } : {}), ...(typeof content.text === 'string' ? { text: content.text } : {}) });
+            metrics.sends.push({ jid, kind: content.react ? 'reaction' : content.edit ? 'edit' : image ? 'image' : 'text', ...(content.react ? { emoji: content.react.text, target: { ...content.react.key } } : {}), ...(content.edit ? { edit: { ...content.edit } } : {}), ...(typeof content.text === 'string' ? { text: content.text } : {}) });
             if (content.poll) { metrics.pollCreations++; latestPoll = { id: options.messageId, labels: content.poll.values, secret: message.messageContextInfo.messageSecret }; }
             metrics.controlSends++; if (typeof content.text === 'string') metrics.messages.push(content.text); save();
             if (process.env.WA_PHONE_RPC_SELF_AUTO === '1') {
-                metrics.outgoingEchoes++; save();
-                ev.emit('messages.upsert', { type: 'notify', messages: [{ key: { id: options.messageId, remoteJid: chat, remoteJidAlt: self, fromMe: true }, message, messageTimestamp: Math.floor(Date.now() / 1000) }] });
+                if (content.react) metrics.outgoingReactionEchoes++; else metrics.outgoingEchoes++; save();
+                ev.emit('messages.upsert', { type: 'notify', messages: [{ key: { id: messageId, remoteJid: chat, remoteJidAlt: self, fromMe: true }, message, messageTimestamp: Math.floor(Date.now() / 1000) }] });
             }
-            return { key: { id: options.messageId, remoteJid: jid, fromMe: true }, ...(jid.endsWith('@g.us') ? { participant: self } : {}), message };
+            return { key: { id: messageId, remoteJid: jid, fromMe: true }, ...(jid.endsWith('@g.us') ? { participant: self } : {}), message };
         }, readMessages: async () => {}, sendPresenceUpdate: async () => {},
         groupMetadata: async () => ({ id: '120363000000@g.us', participants: [] }), groupFetchAllParticipating: async () => ({}),
         end: () => { current.opened = false; }, logout: async () => { throw new Error('Fixture forbids credential logout'); }

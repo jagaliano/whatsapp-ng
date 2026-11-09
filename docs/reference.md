@@ -138,6 +138,16 @@ Terminal **Replies → Optional outputs** separately enables approved tools' inl
 
 Allowed groups default to real WhatsApp mentions or replies to the authenticated account. Displayed `@number` text alone is not a mention. Other trigger modes and optional preceding text context are selected in terminal **Groups** settings. Context is off by default; when enabled it holds at most 20 live text messages per group, 2,000 characters each, for 30 minutes across at most 50 groups. Included text enters normal Pi context; it cannot grant owner authority.
 
+### Processing acknowledgement
+
+An admitted WhatsApp request gets a best-effort ⏳ reaction on its original message, including when queued while Pi is busy. Tool calls and intermediate assistant messages do not clear it. At run end (after final delivery has settled), failure or cancellation, the extension attempts to remove its ⏳. Combined/refused runs clear only the indicators for the inputs actually consumed; queued inputs remain independent. Withdrawn/expired inputs and session resets also release indicators.
+
+This is WhatsApp-only, always on and process-local: no terminal indicator, success ✅ or setting. Phone-control commands, terminal work, ignored/disallowed traffic, imports, duplicates and registered outgoing echoes do not get an indicator. A recoverable-error retry does not add it again. Tracking is capped at 500 records (including unfinished reaction work); excess requests still reach Pi but have no indicator.
+
+Explicit `send_reaction` calls—including removal—and observed, verified own-account reactions from another device supersede future automatic work on the same message. Neither the tool nor replies wait for indicator sends. WhatsApp has one reaction per account per message: a manual ⏳ is indistinguishable from the automatic echo and can still be cleared. An add or cleanup already in flight can arrive after an explicit/manual reaction and overwrite or erase it. Precedence is best-effort; there are no corrective retries.
+
+Before egress the captured account/connection and admission must still be current. Off/logout/account changes discard or fence pending work rather than sending cleanup through a new connection. Reaction failures never change prompts or reply delivery and never cause fallback messages. A ⏳ can remain after a crash, disconnect, revoked admission or unknown reaction outcome; restart does not repair it. Reaction acceptance is not proof of recipient delivery. History reconciliation remains unchanged.
+
 ## History and storage
 
 The data root is `~/.pi/agent/extensions/whatsapp-ng/`; archives are under `archive/`. Offline scope selection uses a stored profile/account marker. A different authenticated account selects a different partition. **Advanced → Local history scope** changes only the local view, not the live ingestion account.

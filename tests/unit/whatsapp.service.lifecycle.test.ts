@@ -67,6 +67,33 @@ describe('typed history/lifecycle socket integration', () => {
         await vi.waitFor(async () => expect((await recents.getConversationHistory('group@g.us'))[0].reactions?.[peer].text).toBe('👍'));
         const record = (await recents.getConversationHistory('group@g.us'))[0]; expect(Object.keys(record.reactions!)).toEqual([peer]); expect(record.status).toBeUndefined(); expect(callback).not.toHaveBeenCalled();
     });
+    it.each(['raw', 'dedicated'])('observes only verified own non-hourglass reactions after %s reconciliation', async source => {
+        const { service, recents, handlers, callback, ingest } = await fixture(); await ingest();
+        const observer = vi.fn(); service.setOwnReactionObserver(observer);
+        for (const [index, text] of ['⏳', '👍', ''].entries()) {
+            const actorKey = { remoteJid: peer, id: 'reaction-' + text, fromMe: true };
+            if (source === 'raw') await service.handleIncomingMessages({ type: 'notify', messages: [{ key: actorKey, message: { reactionMessage: { key, text, senderTimestampMs: 100 + index } } }] });
+            else handlers.get('messages.reaction')!([{ key, reaction: { key: actorKey, text, senderTimestampMs: 100 + index } }]);
+            await vi.waitFor(async () => {
+                const record = (await recents.getConversationHistory(peer))[0];
+                expect(record.reactions?.[self].text).toBe(text);
+            });
+        }
+        expect(observer.mock.calls).toEqual([[key, '👍'], [key, '']]); expect(callback).not.toHaveBeenCalled();
+        const before = await recents.getConversationHistory(peer); service.setOwnReactionObserver(() => { throw new Error('observer failed'); });
+        await service.handleIncomingMessages({ type: 'notify', messages: [{ key: { remoteJid: peer, id: 'throwing-observer', fromMe: true }, message: { reactionMessage: { key, text: '👍', senderTimestampMs: 200 } } }] });
+        expect((await recents.getConversationHistory(peer))[0].text).toBe(before[0].text);
+    });
+    it('does not notify own reactions from history, foreign actors or stale sockets', async () => {
+        const { service, handlers, ingest, callback, socket } = await fixture(); await ingest();
+        const observer = vi.fn(); service.setOwnReactionObserver(observer);
+        await service.handleIncomingMessages({ type: 'append', messages: [{ key: { remoteJid: peer, id: 'history-reaction', fromMe: true }, message: { reactionMessage: { key, text: '👍' } } }] });
+        handlers.get('messages.reaction')!([{ key, reaction: { key: { remoteJid: peer, id: 'foreign', fromMe: false }, text: '👍' } }]);
+        await new Promise(resolve => setTimeout(resolve, 10));
+        Object.assign(service, { socket: { ...socket } });
+        handlers.get('messages.reaction')!([{ key, reaction: { key: { remoteJid: peer, id: 'stale', fromMe: true }, text: '' } }]);
+        await Promise.resolve(); expect(observer).not.toHaveBeenCalled(); expect(callback).not.toHaveBeenCalled();
+    });
     it('resends carrying request IDs remain import-only and global completion stays uncorrelated', async () => {
         const { service, ingest, callback, handlers } = await fixture(); await ingest();
         expect((await service.requestHistory(peer, 3)).request?.status).toBe('pending');

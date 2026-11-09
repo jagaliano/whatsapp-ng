@@ -132,6 +132,7 @@ export class WhatsAppService {
     private intentionalStop = false;
     private onQRCode?: (qr: string) => void;
     private onMessage?: (message: IncomingMessageEnvelope) => void | Promise<void>;
+    private onOwnReaction?: (key: WAMessageKey, text: string) => void;
     private onPollVote?: (message: IncomingMessageEnvelope) => void | Promise<void>;
     private incomingLedger = new Map<string, { key: WAMessageKey; scope: string; state: IncomingProcessingState; expiresAt: number }>();
     private readonly jidResolver = new JidResolver(() => {
@@ -325,8 +326,21 @@ export class WhatsAppService {
             if (!this.historyAllowed(update.key.remoteJid) && !known) continue;
             const key = update.key.fromMe === true && known ? known.key : update.key;
             this.messageStore.reconcile({ ...update, key });
+            this.observeOwnReaction(update);
         }
         await this.messageStore.flush();
+    }
+
+    public setOwnReactionObserver(observer: (key: WAMessageKey, text: string) => void): void {
+        this.onOwnReaction = observer;
+    }
+
+    private observeOwnReaction(update: LifecycleUpdate): void {
+        const reaction = update.reaction;
+        if (!reaction || reaction.text === '⏳' || !this.isOwnJid(reaction.participant)) return;
+        const key = this.findMessageKey(update.key.remoteJid ?? '', update.key.id ?? '', update.key) ?? update.key;
+        try { this.onOwnReaction?.({ ...key }, reaction.text); }
+        catch { fileLog('Processing reaction observer failed'); }
     }
 
     private reactionUpdate(key: WAMessageKey, reaction: proto.IReaction): LifecycleUpdate | undefined {
@@ -1167,7 +1181,11 @@ export class WhatsAppService {
         const reaction = extractMessageContent(message.message)?.reactionMessage;
         if (reaction?.key) {
             const update = this.reactionUpdate({ ...reaction.key, remoteJid }, { ...reaction, key: message.key });
-            if (update) this.messageStore.reconcile(update); return;
+            if (update) {
+                this.messageStore.reconcile(update);
+                if (live) this.observeOwnReaction(update);
+            }
+            return;
         }
         if (live && this.messageStore.isOwn(message.key)) return;
         if (resolved.kind === 'system' || resolved.kind === 'reaction') return;

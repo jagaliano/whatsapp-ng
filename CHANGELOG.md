@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Scope the existing Node globals to fixture `.mjs` linting as well as TypeScript, retaining undefined-name checks and avoiding browser/global leakage. Update intake test mocks to the installed Vitest function-signature API. Intentional lazy-UI `Reflect.get` policy findings remain a separate review, not a runtime change.
+
+- Add WhatsApp-only, always-on best-effort ⏳ reactions for admitted/queued requests, with per-message run-end/withdrawal cleanup, an independent 500-record bound and account/admission/Off fencing. Explicit and verified own-account reactions suppress future automatic work without waiting or retries; already-in-flight races, indistinguishable manual ⏳ and crash leftovers remain documented limits. Preserve routing, history reconciliation and reply delivery. Synthetic production-entry validation is separate from pending operator live confirmation.
+
 ## 1.1.7 — 2026-11-08
 
 - Polish WhatsApp phone presentation in English, pt-BR, Spanish and French: group `/help` commands with explanations, split `/status` into shared and this-chat settings, add friendly choices/current markers and clear numbered-reply, five-minute expiry, group-quoting and cancellation guidance. Keep the complete `/replies` disclosure and shared-session guidance in a bounded, unabridged text-menu body rather than truncated titles. Preserve commands, arguments, actions, authorization, consent meaning, confirmations, routing, delivery, optional polls and terminal menus. Synthetic four-locale unit/encrypted-poll/production-entry RPC coverage is separate from pending operator visual/live acceptance.

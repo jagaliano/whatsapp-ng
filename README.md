@@ -12,6 +12,7 @@ Use WhatsApp to talk to your [Pi](https://pi.dev) agent: send tasks, share files
 - **Allowed contacts:** choose who can interact with Pi; add names and aliases, inspect ignored senders, and print contact identifiers from the menu.
 - **Allowed groups:** allow specific group JIDs with aliases, then choose mention/reply triggers or all-message handling. Other groups do not trigger the agent.
 - **Recents and history:** browse conversations offline, inspect message details and send native quoted replies.
+- **Processing acknowledgement:** admitted WhatsApp requests get a best-effort ⏳ reaction, including while queued. Cleanup follows processing; explicit reactions suppress future automatic updates. See [limits and lifecycle](docs/reference.md#processing-acknowledgement).
 - **Reliable messaging:** stable message IDs, bounded pre-transmission retries and explicit uncertain outcomes instead of blind resends.
 - **Terminal menu:** manage connection, contacts, groups, history, reply delivery, voice settings and the authorized phone owner through `/whatsapp`.
 - **Phone controls:** select models and thinking levels, stop work, compact context or start a new shared session from the owner's phone.

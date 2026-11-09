@@ -12,7 +12,7 @@ const message = (id: string, jid = '15550000001@s.whatsapp.net') => ({
 
 describe('WhatsAppService intake', () => {
     let service: WhatsAppService;
-    let callback: Mock<[IncomingMessageEnvelope], void | Promise<void>>;
+    let callback: Mock<(message: IncomingMessageEnvelope) => void | Promise<void>>;
     const session = {
         getStatus: () => 'connected',
         isConversationAllowed: (sender: string) => sender === '+15550000001',
@@ -22,7 +22,7 @@ describe('WhatsAppService intake', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         service = new WhatsAppService(session as unknown as SessionManager);
-        callback = vi.fn<[IncomingMessageEnvelope], void | Promise<void>>();
+        callback = vi.fn<(message: IncomingMessageEnvelope) => void | Promise<void>>();
         service.setMessageCallback(callback);
     });
 
@@ -287,6 +287,15 @@ describe('WhatsAppService intake', () => {
         expect(record).toHaveBeenCalledWith(expect.objectContaining({ text: 'Calculate 2π' }));
     });
 
+    it('observes verified own raw reaction removals without prompting or trusting LID digits', async () => {
+        Object.assign(service, { socket: { user: { id: '15559999999@s.whatsapp.net', lid: '90000000009@lid' } } });
+        const observer = vi.fn(); service.setOwnReactionObserver(observer);
+        const target = message('target').key;
+        for (const [id, fromMe, text] of [['own-add', true, '⏳'], ['own-choice', true, '👍'], ['own-removal', true, ''], ['foreign', false, '👍']] as const) {
+            await service.handleIncomingMessages({ type: 'notify', messages: [{ ...message(id), key: { ...message(id).key, fromMe }, message: { reactionMessage: { key: target, text } } }] });
+        }
+        expect(observer.mock.calls).toEqual([[target, '👍'], [target, '']]); expect(callback).not.toHaveBeenCalled();
+    });
     it('never prompts for system or reaction updates', async () => {
         await service.handleIncomingMessages({ type: 'notify', messages: [
             { ...message('protocol'), message: { protocolMessage: { type: 0 } } },

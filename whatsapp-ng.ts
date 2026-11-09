@@ -12,6 +12,7 @@ import { extractIncomingText } from './src/services/incoming-message.resolver.js
 import { IncomingMediaService } from './src/services/incoming-media.service.js';
 import { WhatsAppNgLogger } from './src/services/whatsapp-ng.logger.js';
 import { ReactionSender } from './src/services/reaction.sender.js';
+import { ProcessingIndicator } from './src/services/processing-indicator.service.js';
 import { initI18n, t } from './src/i18n.js';
 import { ConversationRouter, type RoutedContent, type RoutingSnapshot, type SendPurpose } from './src/services/conversation-router.service.js';
 import type { MessageResult, QuoteTarget, TextSendOptions } from './src/models/whatsapp.types.js';
@@ -130,18 +131,27 @@ export default function (pi: ExtensionAPI) {
         const context = whatsappService.getSessionContext();
         return JSON.stringify([context.accountScope, context.generation]);
     };
+    const indicator = new ProcessingIndicator({
+        react: (key, emoji) => new ReactionSender(whatsappService.getSocket() ?? null).sendReaction({
+            jid: key.remoteJid ?? '', messageId: key.id ?? '', emoji, key
+        }),
+        isCurrent: context => whatsappService.isSessionContextCurrent(context),
+        log: message => logger.log(message)
+    });
     const router = new ConversationRouter(
         canonicalConversation,
         routingScope,
-        key => whatsappService.markIncomingProcessing(key, 'consumed'),
+        key => { whatsappService.markIncomingProcessing(key, 'consumed'); indicator.markConsumed(key); },
         (_target, state) => logger.log(`[WhatsApp-NG] Suppressed automatic reply: inFlight=${state.inFlight} confirmed=${state.confirmed} unknown=${state.unknown}`),
         () => sessionManager.getFinalAfterAttachments(),
         key => whatsappService.resolveIncomingActor(key),
-        retiredInputs
+        retiredInputs,
+        key => indicator.settle(key)
     );
 
+    whatsappService.setOwnReactionObserver?.((key, text) => indicator.observeOwnReaction(key, text));
     pi.on('input', event => { router.observeInput(event); });
-    pi.on('session_before_switch', async () => { cancelStartupRetry(); phoneControls.reset(); reports.reset(); router.reset(); await stopSpeech(); });
+    pi.on('session_before_switch', async () => { cancelStartupRetry(); phoneControls.reset(); reports.reset(); indicator.settleAll(); router.reset(); await stopSpeech(); });
 
     const trackOwnedSend = async (jid: string, snapshot: RoutingSnapshot | undefined, send: () => Promise<MessageResult>, purpose: SendPurpose = 'explicit-text'): Promise<MessageResult> => {
         if (snapshot && !router.isCurrent(snapshot)) {
@@ -290,6 +300,7 @@ export default function (pi: ExtensionAPI) {
         // Off is a transition, not a second request to abort newer terminal work.
         if (deliberatelyOff) return;
         setOutboundEnabled(false);
+        indicator.discardAll();
         phoneControls.reset(); reports.reset(); router.reset();
         const speech = stopSpeech();
         ctx.abort();
@@ -310,7 +321,7 @@ export default function (pi: ExtensionAPI) {
             ? whatsappService.sendContent({ recipientJid: chat, text: '', content: { poll }, ephemeralProtocol: true,
                 sessionContext: whatsappService.getSessionContext(), isCurrent: () => !deliberatelyOff && current(), sendTimeoutMs: 10_000, options: { brand: false, maxRetries: 1 } })
             : Promise.resolve({ success: false, attempts: 0 }),
-        stop: async ctx => { ctx.abort(); reports.reset(); router.reset(); await stopSpeech(); },
+        stop: async ctx => { ctx.abort(); reports.reset(); indicator.settleAll(); router.reset(); await stopSpeech(); },
         off: ctx => turnWhatsAppOff(ctx),
         resume: async (current, account) => {
             const runtime = router.getRuntimeId();
@@ -563,6 +574,7 @@ export default function (pi: ExtensionAPI) {
         cancelStartupRetry();
         phoneControls.reset();
         reports.reset();
+        indicator.settleAll();
         router.reset();
         await Promise.all([stopSpeech(), managedSpeech.disconnect()]);
         if (startupLifecycle !== managedLifecycle) return;
@@ -615,7 +627,7 @@ export default function (pi: ExtensionAPI) {
             stop: async () => {
                 managedLifecycle++;
                 managedClosing = true;
-                cancelStartupRetry(); reports.reset(); router.reset();
+                cancelStartupRetry(); reports.reset(); indicator.discardAll(); router.reset();
                 try { await Promise.all([stopSpeech(), managedSpeech.disconnect()]); }
                 finally { await whatsappService.stop(); }
             }
@@ -847,6 +859,7 @@ export default function (pi: ExtensionAPI) {
         // Preserve Pi input policies; ownership requires observed, exact consumed content.
         pi.sendUserMessage(submitted.content as Parameters<ExtensionAPI['sendUserMessage']>[0], { deliverAs: 'followUp' });
         whatsappService.markIncomingProcessing?.(msg.key, 'handed-off');
+        indicator.start(msg.key, msg.sessionContext, admissionCurrent);
     });
 
     const quoteSchema = Type.Object({
@@ -1023,9 +1036,13 @@ export default function (pi: ExtensionAPI) {
             }
 
             // Create sender with the socket
-            const sender = new ReactionSender(socket, options => whatsappService.findMessageKey(options.jid, options.messageId, {
-                fromMe: options.fromMe, participant: options.participant
-            }));
+            const sender = new ReactionSender(socket, options => {
+                const key = whatsappService.findMessageKey(options.jid, options.messageId, {
+                    fromMe: options.fromMe, participant: options.participant
+                });
+                if (key) indicator.supersede(key);
+                return key;
+            });
             const result = await sender.sendReaction({
                 jid: params.jid ?? '',
                 messageId: params.messageId ?? '',
@@ -1342,12 +1359,14 @@ export default function (pi: ExtensionAPI) {
         if (last?.role === 'assistant' && (last.stopReason === 'aborted' || last.stopReason === 'error')) { reports.reset(); await stopSpeech(); }
         optionalOutputs.reset();
         router.endRun(last?.role === 'assistant' && last.stopReason === 'error');
+        indicator.finishRun();
     });
 
     pi.on("session_shutdown", async () => {
         managedLifecycle++;
         managedClosing = true;
         cancelStartupRetry(); phoneControls.reset(); reports.reset();
+        indicator.discardAll();
         router.reset();
         logger.log("[WhatsApp-NG] Session shutdown detected. Stopping WhatsApp service...");
         try { await Promise.all([stopSpeech(), managedSpeech.disconnect()]); }

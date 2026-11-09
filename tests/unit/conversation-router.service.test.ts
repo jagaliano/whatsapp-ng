@@ -15,6 +15,39 @@ const consume = (router: ConversationRouter, jid: string, text = 'hello') => {
     return input;
 };
 
+describe('ConversationRouter retirement notifications', () => {
+    const fixture = () => {
+        const retired = vi.fn();
+        return { retired, router: new ConversationRouter(undefined, undefined, undefined, undefined, undefined, undefined, undefined, retired) };
+    };
+    it.each(['interactive', 'rpc', 'unknown'])('notifies once on %s withdrawal', source => {
+        const { router, retired } = fixture(); const input = router.prepare('queued', origin(A));
+        router.observeInput({ source, text: input.content }); router.observeInput({ source, text: input.content });
+        expect(retired).toHaveBeenCalledExactlyOnceWith(origin(A));
+    });
+    it('notifies once on invalid admission before abort, not again at abort', () => {
+        const { router, retired } = fixture(); let admitted = true;
+        const input = router.prepare('queued', origin(A), { admissionCurrent: () => admitted }); admitted = false;
+        router.abortRetiredInput({ role: 'user', content: input.content }, vi.fn());
+        router.abortRetiredInput({ role: 'user', content: input.content }, vi.fn());
+        expect(retired).toHaveBeenCalledExactlyOnceWith(origin(A));
+    });
+    it('notifies once on expiry, but not on reset or valid consumption', () => {
+        const { router, retired } = fixture(); const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+        try {
+            const input = router.prepare('queued', origin(A)); clock.mockReturnValue(1_800_086_400_001);
+            router.abortRetiredInput({ role: 'user', content: input.content }, vi.fn());
+            expect(retired).toHaveBeenCalledExactlyOnceWith(origin(A)); retired.mockClear();
+            consume(router, A); router.prepare('queued', origin(B)); router.reset(); expect(retired).not.toHaveBeenCalled();
+        } finally { clock.mockRestore(); }
+    });
+    it('notifies when consume rejects an unobserved or stale pending request', () => {
+        const { router, retired } = fixture(); const input = router.prepare('unobserved', origin(A));
+        router.consume({ role: 'user', content: input.content });
+        expect(retired).toHaveBeenCalledExactlyOnceWith(origin(A));
+    });
+});
+
 describe('ConversationRouter retired phone follow-ups', () => {
     it('retires stale admission before native inference and never revives it on re-enable', () => {
         const router = new ConversationRouter(); let revision = 0;

@@ -4,7 +4,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { MessageRequest } from '../../src/models/whatsapp.types.ts';
+import type { WAMessageKey } from 'baileys';
 import { resolveTtsConfig } from '../../src/services/tts-config.ts';
+
+type ReactionCall = [string, { react: { text: string; key: WAMessageKey } }];
 
 const mocks = vi.hoisted(() => {
     const createSessionManager = () => ({
@@ -34,6 +37,9 @@ const mocks = vi.hoisted(() => {
         setStatusCallback: vi.fn(),
         setIncomingMessageRecorder: vi.fn(),
         setMessageCallback: vi.fn(),
+        setOwnReactionObserver: vi.fn(),
+        getSocket: vi.fn().mockReturnValue({ sendMessage: vi.fn().mockResolvedValue({ key: { id: 'REACTION' } }) }),
+        findMessageKey: vi.fn((jid: string, id: string, hint: object = {}) => ({ remoteJid: jid, id, fromMe: false, ...hint })),
         setGroupBinding: vi.fn(),
         setRecentsService: vi.fn(),
         getBoundGroupJid: vi.fn().mockReturnValue(null),
@@ -264,6 +270,113 @@ describe('whatsapp-ng owned turn delivery', () => {
         vi.spyOn(console, 'log').mockImplementation(() => {});
         vi.spyOn(console, 'warn').mockImplementation(() => {});
         vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    it('acknowledges queued messages immediately, clears only consumed inputs after run end', async () => {
+        const { pi, ctx } = await setup(); const socket = mocks.whatsappService.getSocket();
+        await beginOwned(pi, ctx);
+        const callback = mocks.whatsappService.setMessageCallback.mock.calls[0][0]; const queued = incoming('queued', '15550000002@s.whatsapp.net');
+        await callback(queued);
+        expect(socket.sendMessage.mock.calls.map((call: ReactionCall) => call[1].react)).toEqual([
+            { text: '⏳', key: incoming().key }, { text: '⏳', key: queued.key }
+        ]);
+        const intermediate = { message: { role: 'assistant', stopReason: 'toolUse', content: [{ type: 'toolCall', id: 'call', name: 'read' }] } };
+        await pi.handlers.get('message_end')!(intermediate, ctx); await pi.handlers.get('turn_end')!(intermediate, ctx);
+        expect(socket.sendMessage).toHaveBeenCalledTimes(2);
+        await finalTurn(pi, ctx, 'Answer A'); expect(socket.sendMessage).toHaveBeenCalledTimes(2);
+        await pi.handlers.get('agent_end')!({ messages: [] }, ctx); await Promise.resolve(); await Promise.resolve();
+        expect(socket.sendMessage).toHaveBeenCalledTimes(3);
+        expect(socket.sendMessage.mock.calls.at(-1)![1].react).toEqual({ text: '', key: incoming().key });
+    });
+
+    it.each(['stop', 'error', 'aborted'])('clears exact group participant keys at %s run end, not at tool messages', async stopReason => {
+        const { pi, ctx } = await setup(); const socket = mocks.whatsappService.getSocket();
+        const item = incoming('group-input', '120363000000001@g.us'); Object.assign(item.key, { participant: '90000000002@lid' });
+        await mocks.whatsappService.setMessageCallback.mock.calls[0][0](item);
+        const content = pi.sendUserMessage.mock.calls.at(-1)![0];
+        await pi.handlers.get('input')!({ source: 'extension', text: content }, ctx);
+        await pi.handlers.get('message_start')!({ message: { role: 'user', content } }, ctx);
+        expect(socket.sendMessage).toHaveBeenCalledWith(item.key.remoteJid, { react: { text: '⏳', key: item.key } });
+        await pi.handlers.get('agent_end')!({ messages: [{ role: 'assistant', stopReason }] }, ctx);
+        await Promise.resolve(); await Promise.resolve();
+        expect(socket.sendMessage).toHaveBeenLastCalledWith(item.key.remoteJid, { react: { text: '', key: item.key } });
+    });
+
+    it('clears both messages in an ambiguous consumed run after the fixed notice', async () => {
+        const { pi, ctx } = await setup(); const socket = mocks.whatsappService.getSocket();
+        await pi.handlers.get('agent_start')!({}, ctx); await submit(pi, ctx, 'A'); await submit(pi, ctx, 'B', '15550000002@s.whatsapp.net');
+        await pi.handlers.get('message_start')!(makeAssistantEvent(''), ctx); await finalTurn(pi, ctx, 'Ambiguous');
+        expect(socket.sendMessage).toHaveBeenCalledTimes(2); expect(mocks.whatsappService.sendMessage).toHaveBeenCalledTimes(2);
+        await pi.handlers.get('agent_end')!({ messages: [] }, ctx); await Promise.resolve(); await Promise.resolve();
+        expect(socket.sendMessage.mock.calls.filter((call: ReactionCall) => call[1].react.text === '').map((call: ReactionCall) => call[1].react.key.id).sort()).toEqual(['A', 'B']);
+    });
+
+    it.each(['system', 'foreign-own', 'stale', 'paused-group', 'phone-command'])('does not acknowledge %s refusal paths', async kind => {
+        const { pi } = await setup(); const item = incoming();
+        if (kind === 'system') mocks.extractIncomingText.mockReturnValue({ kind: 'system', text: '' });
+        if (kind === 'foreign-own') item.key.fromMe = true;
+        if (kind === 'stale') mocks.whatsappService.isSessionContextCurrent.mockReturnValue(false);
+        if (kind === 'paused-group') { item.key.remoteJid = '120363000000001@g.us'; mocks.sessionManager.getGroupReplies.mockReturnValue({ mode: 'paused', context: false }); }
+        if (kind === 'phone-command') mocks.extractIncomingText.mockReturnValue({ kind: 'text', text: '/help' });
+        await mocks.whatsappService.setMessageCallback.mock.calls[0][0](item);
+        expect(mocks.whatsappService.getSocket().sendMessage).not.toHaveBeenCalled(); expect(pi.sendUserMessage).not.toHaveBeenCalled();
+    });
+
+    it.each(['session_before_switch', 'session_start'])('settles indicators on %s', async event => {
+        const { pi, ctx } = await setup(); await beginOwned(pi, ctx);
+        await pi.handlers.get(event)!({}, ctx); await Promise.resolve(); await Promise.resolve();
+        expect(mocks.whatsappService.getSocket().sendMessage).toHaveBeenLastCalledWith(incoming().key.remoteJid, { react: { text: '', key: incoming().key } });
+    });
+
+    it('withdraws queued invalid-admission input without egress after revocation', async () => {
+        const { pi, ctx } = await setup(); await submit(pi, ctx); // active message
+        await mocks.whatsappService.setMessageCallback.mock.calls[0][0](incoming('withdrawn'));
+        const content = pi.sendUserMessage.mock.calls.at(-1)![0];
+        await pi.handlers.get('input')!({ source: 'extension', text: content }, ctx);
+        mocks.sessionManager.getReplyAdmissionKey.mockReturnValue('new-revision');
+        await pi.handlers.get('message_start')!({ message: { role: 'user', content } }, ctx);
+        await Promise.resolve(); await Promise.resolve();
+        expect(ctx.abort).toHaveBeenCalledOnce();
+        expect(mocks.whatsappService.getSocket().sendMessage.mock.calls.filter((call: ReactionCall) => call[1].react.text === '' && call[1].react.key.id === 'withdrawn')).toHaveLength(0);
+    });
+
+    it.each(['session_shutdown', 'logout', 'off', 'graceful'])('sends no cleanup after %s', async kind => {
+        const { pi, ctx } = await setup(); await beginOwned(pi, ctx); const socket = mocks.whatsappService.getSocket();
+        try {
+            if (kind === 'logout') mocks.whatsappService.isSessionContextCurrent.mockReturnValue(false);
+            else if (kind === 'off') await mocks.settingsMenus.off(ctx);
+            else if (kind === 'graceful') await (globalThis as any).__whatsappNgShutdown.stop();
+            else await pi.handlers.get('session_shutdown')!({}, ctx);
+            await pi.handlers.get('agent_end')!({ messages: [] }, ctx); await Promise.resolve(); await Promise.resolve();
+            expect(socket.sendMessage).toHaveBeenCalledOnce();
+        } finally { if (kind === 'off') mocks.settingsMenus.connect(); }
+    });
+
+    it.each(['👍', ''])('explicit %s supersedes cleanup without waiting for a hanging hourglass', async emoji => {
+        const { pi, ctx } = await setup(); const socket = mocks.whatsappService.getSocket();
+        socket.sendMessage.mockReturnValueOnce(new Promise(() => {})); await beginOwned(pi, ctx);
+        const result = await pi.tools.get('send_reaction').execute('react', { jid: incoming().key.remoteJid, messageId: incoming().key.id, emoji, fromMe: false });
+        expect(result.isError).toBe(false); expect(socket.sendMessage).toHaveBeenCalledTimes(2);
+        await pi.handlers.get('agent_end')!({ messages: [] }, ctx); await Promise.resolve();
+        expect(socket.sendMessage).toHaveBeenCalledTimes(2);
+    });
+
+    it.each(['👍', ''])('verified own %s observation suppresses automatic cleanup', async text => {
+        const { pi, ctx } = await setup(); await beginOwned(pi, ctx);
+        mocks.whatsappService.setOwnReactionObserver.mock.calls[0][0](incoming().key, text);
+        await pi.handlers.get('agent_end')!({ messages: [] }, ctx); await Promise.resolve();
+        expect(mocks.whatsappService.getSocket().sendMessage).toHaveBeenCalledOnce();
+    });
+
+    it.each(['reject', 'unknown', 'hang'])('reaction %s cannot delay prompt or final delivery or suppress the final', async kind => {
+        const { pi, ctx } = await setup(); const socket = mocks.whatsappService.getSocket();
+        if (kind === 'reject') socket.sendMessage.mockRejectedValue(new Error('PRIVATE REACTION ERROR'));
+        if (kind === 'unknown') socket.sendMessage.mockResolvedValue(undefined);
+        if (kind === 'hang') socket.sendMessage.mockReturnValue(new Promise(() => {}));
+        await beginOwned(pi, ctx); expect(pi.sendUserMessage).toHaveBeenCalledOnce();
+        await finalTurn(pi, ctx, 'Still delivered'); expect(mocks.whatsappService.sendMessage).toHaveBeenCalledExactlyOnceWith(incoming().key.remoteJid, 'Still delivered', true, expect.any(Object));
+        await pi.handlers.get('agent_end')!({ messages: [] }, ctx);
+        expect(JSON.stringify(vi.mocked(console.log).mock.calls)).not.toContain('PRIVATE REACTION ERROR');
     });
 
     it.each(['phone', 'lid', 'group'])('preserves the transport JID namespace in %s prompt labels', async kind => {

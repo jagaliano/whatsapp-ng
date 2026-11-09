@@ -12,9 +12,8 @@ export default [
     },
     js.configs.recommended,
     {
-        files: ['**/*.ts'],
+        files: ['**/*.ts', 'tests/fixtures/**/*.mjs'],
         languageOptions: {
-            ecmaVersion: 2022,
             globals: {
                 Buffer: 'readonly',
                 clearTimeout: 'readonly',
@@ -22,7 +21,13 @@ export default [
                 globalThis: 'readonly',
                 process: 'readonly',
                 setTimeout: 'readonly'
-            },
+            }
+        }
+    },
+    {
+        files: ['**/*.ts'],
+        languageOptions: {
+            ecmaVersion: 2022,
             parser: tsParser,
             parserOptions: {
                 sourceType: 'module'

@@ -409,6 +409,13 @@ describe('production phone-control Pi RPC gateway', () => {
                 await expect.poll(async () => (await metrics()).statsSettled, { timeout: 10_000 }).toBe(1);
                 const final = await metrics(); expect(final.providerRequests).toBe(1); expect(final.outgoingEchoes).toBe(1);
                 expect(final.messages.filter((text: string) => text.startsWith('RPC stats final'))).toHaveLength(1);
+                const reactions = final.sends.filter((send: any) => send.kind === 'reaction');
+                expect(reactions.map((send: any) => send.emoji)).toEqual(['⏳', '']);
+                expect(reactions.every((send: any) => send.jid === '90000000009@lid' && send.target.remoteJid === send.jid && send.target.fromMe === true)).toBe(true);
+                expect(reactions[1].target).toEqual(reactions[0].target);
+                expect(final.outgoingReactionEchoes).toBe(2);
+                expect(final.sends.find((send: any) => send.text?.startsWith('RPC stats final')).jid).toBe('90000000009@lid');
+                expect(records.filter(record => record.type === 'extension_error')).toEqual([]);
                 expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0); return;
             }
             if (mode === 'groups') {
