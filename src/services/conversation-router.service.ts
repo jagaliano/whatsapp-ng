@@ -31,7 +31,7 @@ interface Epoch {
     inputKinds: Set<WhatsAppInputKind>;
     actors: Set<string>;
     unknownActor: boolean;
-    sources: Set<'terminal' | 'whatsapp' | 'unknown'>;
+    sources: Set<'terminal' | 'whatsapp' | 'unknown' | 'autonomous'>;
     admissionChecks: Array<() => boolean>;
 }
 export interface RoutingSnapshot {
@@ -53,11 +53,14 @@ export class ConversationRouter {
     private frozen?: RoutingSnapshot;
     private buffered?: { snapshot: RoutingSnapshot; text: string; eligible: boolean };
     private active = false;
+    private runStartType?: 'user' | 'custom';
+    private onlyAutonomousInputs = false;
+    private hasRunInput = false;
     private runtimeId = randomUUID();
     private readonly claimedResponses = new WeakSet<RoutingSnapshot>();
     private readonly finalizing = new WeakMap<Epoch, RoutingSnapshot>();
     private readonly knownSnapshots = new WeakSet<RoutingSnapshot>();
-    private terminalInput?: { digest: string; scope: string; expiresAt: number };
+    private observedInput?: { digest: string; scope: string; expiresAt: number; source: 'terminal' | 'extension' };
 
     constructor(
         private readonly canonical: (jid: string) => string | undefined = jid => jid,
@@ -101,17 +104,20 @@ export class ConversationRouter {
     public observeInput(input: { source: string; text: string; images?: ContentBlock[] }): void {
         const content: RoutedContent = [{ type: 'text', text: input.text }, ...(input.images ?? [])];
         const digest = this.digest(content);
-        // Positive local provenance, not "no WhatsApp target". Any newer input
-        // invalidates an unconsumed local proof, including handled/transformed input.
-        this.terminalInput = undefined;
+        // Positive host provenance, not "no WhatsApp target". One bounded proof;
+        // any newer input invalidates it, including handled/transformed input.
+        this.observedInput = undefined;
         const pending = this.pending.get(digest);
         if (input.source === 'interactive' || input.source === 'rpc') {
             this.retiredInputs.delete(digest);
             this.pending.delete(digest);
             if (pending) this.onRetired(pending.key);
-            this.terminalInput = { digest, scope: this.scope(), expiresAt: Date.now() + 5 * 60 * 1000 };
+            this.observedInput = { digest, scope: this.scope(), expiresAt: Date.now() + 5 * 60 * 1000, source: 'terminal' };
         } else if (pending && input.source === 'extension') pending.observed = true;
         else if (pending) { this.pending.delete(digest); this.onRetired(pending.key); }
+        else if (input.source === 'extension' && !this.retiredInputs.has(digest)) {
+            this.observedInput = { digest, scope: this.scope(), expiresAt: Date.now() + 5 * 60 * 1000, source: 'extension' };
+        }
     }
 
     public consume(message: RoutedMessage): void {
@@ -122,21 +128,27 @@ export class ConversationRouter {
         }
         const epoch = this.epoch;
         if (!epoch) return;
+        if (!this.hasRunInput && this.runStartType !== message.role) this.onlyAutonomousInputs = false;
+        this.hasRunInput = true;
         const digest = this.digest(message.content ?? '');
-        const local = this.terminalInput;
-        this.terminalInput = undefined;
-        if (message.role === 'user' && local?.digest === digest && local.scope === this.scope() && local.expiresAt > Date.now()) {
+        const local = this.observedInput;
+        this.observedInput = undefined;
+        const proven = local?.digest === digest && local.scope === this.scope() && local.expiresAt > Date.now();
+        const request = message.role === 'user' ? this.pending.get(digest) : undefined;
+        const autonomous = message.role === 'custom' || (proven && local.source === 'extension'
+            && !request && !this.retiredInputs.has(digest));
+        if (!autonomous) this.onlyAutonomousInputs = false;
+        if (message.role === 'user' && proven && local.source === 'terminal') {
             epoch.sources.add('terminal');
             epoch.unowned = true; // Terminal work still has no WhatsApp reply target.
             return;
         }
-        const request = message.role === 'user' ? this.pending.get(digest) : undefined;
         this.pending.delete(digest);
         const jid = request?.key.remoteJid;
         const canonical = jid ? this.canonical(jid) : undefined;
         if (!request?.observed || request.expiresAt <= Date.now() || request.scope !== this.scope() || !jid || !canonical) {
             epoch.unowned = true;
-            epoch.sources.add('unknown');
+            epoch.sources.add(autonomous ? 'autonomous' : 'unknown');
             if (request) this.onRetired(request.key);
             return;
         }
@@ -147,6 +159,19 @@ export class ConversationRouter {
         if (request.actorJid) epoch.actors.add(request.actorJid);
         else epoch.unknownActor = true;
         this.onConsumed(request.key);
+    }
+
+    public noteRunStart(type: 'user' | 'custom' | undefined): void {
+        this.runStartType = type;
+        this.onlyAutonomousInputs = type !== undefined;
+        this.hasRunInput = false;
+    }
+
+    /** Positive egress eligibility only; never a control-plane origin. */
+    public isAutonomous(snapshot = this.frozen): boolean {
+        return !!snapshot && this.active && this.hasRunInput && this.onlyAutonomousInputs
+            && snapshot === this.frozen && snapshot.epoch === this.epoch && this.knownSnapshots.has(snapshot)
+            && this.isCurrent(snapshot) && snapshot.epoch.sources.size === 1 && snapshot.epoch.sources.has('autonomous');
     }
 
     public startRun(): void {
@@ -247,8 +272,13 @@ export class ConversationRouter {
 
     /** Read-only terminal projection: never assigns a WhatsApp target to local work. */
     public takeTerminalAnswer(ownerJid: string): { snapshot: RoutingSnapshot; text: string } | undefined {
-        const buffered = this.buffered; const target = this.canonical(ownerJid);
-        if (!buffered?.eligible || !buffered.text || !target || this.getControlOrigin(buffered.snapshot) !== 'terminal'
+        return this.takeLocalAnswer('terminal', ownerJid);
+    }
+
+    public takeLocalAnswer(kind: 'terminal' | 'autonomous', destinationJid: string): { snapshot: RoutingSnapshot; text: string } | undefined {
+        const buffered = this.buffered; const target = this.canonical(destinationJid);
+        if (!buffered?.eligible || !buffered.text || !target
+            || (kind === 'terminal' ? this.getControlOrigin(buffered.snapshot) !== 'terminal' : !this.isAutonomous(buffered.snapshot))
             || this.claimedResponses.has(buffered.snapshot) || this.coveringSend(buffered.snapshot.epoch, target)) return undefined;
         this.claimedResponses.add(buffered.snapshot);
         return { snapshot: buffered.snapshot, text: buffered.text };
@@ -313,6 +343,7 @@ export class ConversationRouter {
     }
 
     public endRun(recoverable: boolean): void {
+        this.noteRunStart(undefined);
         this.active = false;
         this.buffered = undefined;
         this.frozen = undefined;
@@ -349,10 +380,11 @@ export class ConversationRouter {
     }
 
     public reset(): void {
+        this.noteRunStart(undefined);
         this.runtimeId = randomUUID();
         for (const digest of this.pending.keys()) this.retiredInputs.add(digest);
         this.pending.clear();
-        this.terminalInput = undefined;
+        this.observedInput = undefined;
         this.epoch = undefined;
         this.frozen = undefined;
         this.buffered = undefined;

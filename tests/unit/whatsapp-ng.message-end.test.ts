@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { MessageRequest } from '../../src/models/whatsapp.types.ts';
+import type { OptionalOutputs } from '../../src/services/optional-output.service.ts';
 import type { WAMessageKey } from 'baileys';
 import { resolveTtsConfig } from '../../src/services/tts-config.ts';
 
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => {
         getAllowedGroups: vi.fn().mockReturnValue([{ number: '120363000000001@g.us' }]),
         setGroupJidForAuth: vi.fn(),
         getFinalAfterAttachments: vi.fn().mockReturnValue(true),
+        getOptionalOutputs: vi.fn<() => OptionalOutputs>(() => { throw new Error('Optional outputs not configured in this fixture'); }), getOptionalOutputsRevision: vi.fn().mockReturnValue(0),
         getAutoConnect: vi.fn().mockReturnValue(false),
         getReplyStats: vi.fn().mockReturnValue(false), getReplyStatsRevision: vi.fn().mockReturnValue(0),
         getReplyReporting: vi.fn().mockReturnValue({ changedFiles: false, interimText: false, liveActivity: false }), getReplyReportingRevision: vi.fn().mockReturnValue(0),
@@ -970,6 +972,78 @@ describe('whatsapp-ng owned turn delivery', () => {
         expect(mocks.recentsService.recordMessage).not.toHaveBeenCalled();
     });
 
+    const backgroundSettings = (kind: 'owner' | 'group' = 'owner') => ({ imageTools: [],
+        autonomous: { kind, jid: kind === 'owner' ? '5511999998888@s.whatsapp.net' : '120363000000001@g.us',
+            ownerJid: '5511999998888@s.whatsapp.net', accountScope: 'fixture-account' },
+        terminal: { ownerJid: '5511999998888@s.whatsapp.net', accountScope: 'fixture-account' } });
+    const startLocal = async (pi: MockPi, ctx: ReturnType<typeof createMockContext>, custom: boolean) => {
+        await pi.handlers.get('before_agent_start')!({ messageType: custom ? 'custom' : 'user', systemPromptOptions: { sections: {} } }, ctx);
+        await pi.handlers.get('agent_start')!({}, ctx);
+        if (!custom) await pi.handlers.get('input')!({ source: 'rpc', text: 'Local input' }, ctx);
+        await pi.handlers.get('message_start')!({ message: { role: custom ? 'custom' : 'user', content: 'Local input' } }, ctx);
+        await pi.handlers.get('message_start')!(makeAssistantEvent(''), ctx);
+    };
+    it.each(['owner', 'group'] as const)('forwards autonomous text once to the %s and records settlement once without voice', async kind => {
+        mocks.sessionManager.getOptionalOutputs.mockReturnValue(backgroundSettings(kind));
+        mocks.outputPolicy = { mode: 'voice' };
+        const { pi, ctx } = await setup(); await startLocal(pi, ctx, true);
+        await finalTurn(pi, ctx, 'Background result'); await pi.handlers.get('turn_end')!({}, ctx);
+        expect(mocks.whatsappService.sendContent).toHaveBeenCalledTimes(1);
+        expect(mocks.whatsappService.sendContent.mock.calls[0][0]).toMatchObject({ recipientJid: backgroundSettings(kind).autonomous.jid,
+            text: 'Background result', sessionContext: { accountScope: 'fixture-account', generation: 1 } });
+        expect(mocks.whatsappService.sendMessage).not.toHaveBeenCalled(); expect(mocks.speechPrepare).not.toHaveBeenCalled();
+        expect(mocks.recentsService.recordMessage).toHaveBeenCalledTimes(1);
+    });
+    it.each(['owner', 'group'] as const)('forwards a proven extension user answer once to the %s without terminal consent or voice', async kind => {
+        const { terminal: _terminal, ...settings } = backgroundSettings(kind);
+        mocks.sessionManager.getOptionalOutputs.mockReturnValue(settings);
+        mocks.outputPolicy = { mode: 'voice' };
+        const { pi, ctx } = await setup();
+        await pi.handlers.get('input')!({ source: 'extension', text: 'Scheduled task' }, ctx);
+        await pi.handlers.get('before_agent_start')!({ messageType: 'user', systemPromptOptions: { sections: {} } }, ctx);
+        await pi.handlers.get('agent_start')!({}, ctx);
+        await pi.handlers.get('message_start')!({ message: { role: 'user', content: 'Scheduled task' } }, ctx);
+        await pi.handlers.get('message_start')!(makeAssistantEvent(''), ctx);
+        await finalTurn(pi, ctx, 'Scheduled result'); await pi.handlers.get('turn_end')!({}, ctx);
+        expect(mocks.whatsappService.sendContent).toHaveBeenCalledTimes(1);
+        expect(mocks.whatsappService.sendContent.mock.calls[0][0]).toMatchObject({ recipientJid: settings.autonomous.jid, text: 'Scheduled result' });
+        expect(mocks.recentsService.recordMessage).toHaveBeenCalledTimes(1);
+        expect(mocks.whatsappService.sendMessage).not.toHaveBeenCalled(); expect(mocks.speechPrepare).not.toHaveBeenCalled();
+    });
+    it('keeps both enabled paths separate and preserves WhatsApp routing', async () => {
+        mocks.sessionManager.getOptionalOutputs.mockReturnValue(backgroundSettings());
+        const { pi, ctx } = await setup();
+        for (const custom of [true, false]) {
+            await startLocal(pi, ctx, custom); await finalTurn(pi, ctx, custom ? 'Background' : 'Terminal');
+            await pi.handlers.get('agent_end')!({ messages: [] }, ctx);
+        }
+        expect(mocks.whatsappService.sendContent.mock.calls.map(([request]) => request.text)).toEqual(['Background', 'Terminal']);
+        await beginOwned(pi, ctx); await finalTurn(pi, ctx, 'WhatsApp');
+        expect(mocks.whatsappService.sendContent).toHaveBeenCalledTimes(2);
+        expect(mocks.whatsappService.sendMessage).toHaveBeenCalledTimes(1);
+    });
+    it.each(['removed', 'paused', 'unbound', 'owner', 'account', 'revision', 'disconnected', 'off'])('does not forward a group answer after %s', async change => {
+        mocks.sessionManager.getOptionalOutputs.mockReturnValue(backgroundSettings('group'));
+        const { pi, ctx } = await setup(); await startLocal(pi, ctx, true);
+        if (change === 'removed') mocks.sessionManager.getAllowedGroups.mockReturnValue([]);
+        else if (change === 'paused') mocks.sessionManager.getSpeechSettings.mockReturnValue({ config: {}, enabled: false, mode: 'text', chats: { '120363000000001@g.us': { automaticReplies: false } } } as any);
+        else if (change === 'unbound') mocks.whatsappService.getBoundGroupJid.mockReturnValue('120363000000002@g.us' as any);
+        else if (change === 'owner') mocks.sessionManager.getOperatorRevision.mockReturnValue(1);
+        else if (change === 'account') mocks.whatsappService.isSessionContextCurrent.mockReturnValue(false);
+        else if (change === 'revision') mocks.sessionManager.getOptionalOutputsRevision.mockReturnValue(1);
+        else if (change === 'disconnected') mocks.whatsappService.getEffectiveStatus.mockReturnValue('disconnected');
+        else await mocks.settingsMenus.off(ctx);
+        try { await finalTurn(pi, ctx, 'Private result'); expect(mocks.whatsappService.sendContent).not.toHaveBeenCalled(); }
+        finally { if (change === 'off') mocks.settingsMenus.connect(); }
+    });
+    it('allows only the bound group for autonomous consent without broadening private terminal forwarding', async () => {
+        mocks.sessionManager.getOptionalOutputs.mockReturnValue(backgroundSettings('group'));
+        mocks.whatsappService.getBoundGroupJid.mockReturnValue('120363000000001@g.us' as any);
+        const { pi, ctx } = await setup(); await startLocal(pi, ctx, true); await finalTurn(pi, ctx, 'Bound group result');
+        expect(mocks.whatsappService.sendContent).toHaveBeenCalledTimes(1);
+        await pi.handlers.get('agent_end')!({ messages: [] }, ctx); await startLocal(pi, ctx, false); await finalTurn(pi, ctx, 'Private terminal');
+        expect(mocks.whatsappService.sendContent).toHaveBeenCalledTimes(1);
+    });
     it('supplies policy-aware prompt guidance without making it routing authority', async () => {
         const { pi, ctx } = await setup();
         const event = { systemPromptOptions: { sections: { existing: 'Preserve me' } } };

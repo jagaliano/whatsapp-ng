@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Replace the generic WhatsApp image with the supplied whatsapp-ng lockup in the README and Pi package-gallery metadata. Retain the original SVG and a 1960 × 600 PNG rendering, bundle both, and require those exact reviewed assets in release checks. Public GitHub/npm publication and gallery refresh remain separate actions.
+
+- Add default-off terminal **Replies → Optional outputs → Background answers**: text-only final answers from custom-message or exactly proven extension-origin runs (including live-session cron delivery) to the verified owner or one allowed group after explicit group disclosure. Keep autonomous eligibility separate from control origin/owner authority and preserve WhatsApp routing and independent owner-only terminal forwarding. Recheck first-input consent, exact destination, owner/account/session and group eligibility; retain 64 KiB/four-job bounds, duplicate suppression and no replay/retry/fallback. Localize the panel in English, pt-BR, Spanish and French. Source/synthetic evidence and operator-confirmed private-owner live-session cron ON/Off checks are recorded in [044](specs/044-autonomous-answer-forwarding/tasks.md#validation-evidence); group delivery and broader live/platform acceptance remain unverified.
+
 ## 1.1.8 — 2026-11-09
 
 - Scope the existing Node globals to fixture `.mjs` linting as well as TypeScript, retaining undefined-name checks and avoiding browser/global leakage. Update intake test mocks to the installed Vitest function-signature API. Intentional lazy-UI `Reflect.get` policy findings remain a separate review, not a runtime change.

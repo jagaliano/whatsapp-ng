@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ConversationRouter } from '../../src/services/conversation-router.service.ts';
-import { OptionalOutputService, validateOptionalOutputs } from '../../src/services/optional-output.service.ts';
+import { OptionalOutputService, validateOptionalOutputs, type OptionalOutputs } from '../../src/services/optional-output.service.ts';
 
 const owner = '15550000001@s.whatsapp.net'; const group = '120363000001@g.us';
 const image = { type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgo=' };
@@ -91,5 +91,119 @@ describe('optional outputs', () => {
         const f = fixture('terminal', { imageTools: [], terminal: { ownerJid: '15550000002@s.whatsapp.net', accountScope: 'fixture' } });
         f.router.buffer({ role: 'assistant', content: 'private' }); await f.service.forwardTerminal(); expect(f.send).not.toHaveBeenCalled();
         const other = fixture('terminal', { imageTools: [], terminal: { ownerJid: owner, accountScope: 'other' } }); other.router.buffer({ role: 'assistant', content: 'private' }); await other.service.forwardTerminal(); expect(other.send).not.toHaveBeenCalled();
+    });
+});
+
+
+describe('autonomous consent validator', () => {
+    it.each(['owner', 'group'])('round-trips independent %s consent with required authority fields', kind => {
+        const autonomous = { kind, jid: kind === 'owner' ? owner : group, ownerJid: owner, accountScope: 'fixture' };
+        const settings = { imageTools: [], autonomous, terminal: { ownerJid: owner, accountScope: 'fixture' } };
+        expect(validateOptionalOutputs(settings)).toEqual(settings);
+        for (const key of ['ownerJid', 'accountScope']) {
+            const invalid: Record<string, unknown> = { ...autonomous }; delete invalid[key];
+            expect(() => validateOptionalOutputs({ imageTools: [], autonomous: invalid })).toThrow();
+        }
+    });
+    it('rejects malformed, unsupported or mismatched autonomous consent', () => {
+        const consent = { kind: 'owner', jid: owner, ownerJid: owner, accountScope: 'fixture' };
+        for (const patch of [{ kind: 'other' }, { jid: group }, { jid: '15550000002@s.whatsapp.net' }, { ownerJid: group },
+            { accountScope: '' }, { accountScope: 'x'.repeat(257) }, { extra: true }, { kind: 'group', jid: owner }]) {
+            expect(() => validateOptionalOutputs({ imageTools: [], autonomous: { ...consent, ...patch } })).toThrow();
+        }
+    });
+});
+
+function createAutonomousFixture(kind: 'owner' | 'group', role: 'custom' | 'user') {
+    const consent = { kind, jid: kind === 'owner' ? owner : group, ownerJid: owner, accountScope: 'fixture' };
+    const state = { settings: { imageTools: [], autonomous: consent, terminal: { ownerJid: owner, accountScope: 'fixture' } } as OptionalOutputs,
+        revision: 0, current: true, owner, account: 'fixture', allowed: true, terminalCurrent: true };
+    const router = new ConversationRouter();
+    const send = vi.fn(async (_snapshot: unknown, request: import('../../src/models/whatsapp.types.ts').MessageRequest) => {
+        const result = { success: true, attempts: 1 }; await request.onSettled?.(result); return result as import('../../src/models/whatsapp.types.ts').MessageResult;
+    });
+    const notify = vi.fn(); const prepareImage = vi.fn();
+    const service = new OptionalOutputService({ router, allowed: () => state.allowed, send, notify, prepareImage,
+        policy: () => { const revision = state.revision; const ownerAtInput = state.owner; const account = state.account;
+            return { settings: state.settings, ownerJid: state.owner, accountScope: state.account,
+                isCurrent: () => state.current && state.revision === revision && state.owner === ownerAtInput && state.account === account,
+                terminalCurrent: () => state.terminalCurrent }; } });
+    const input = () => {
+        if (role === 'user') router.observeInput({ source: 'extension', text: 'Background result' });
+        router.consume({ role, content: 'Background result' }); service.noteInput(); router.freeze(); service.capture(router.snapshot()!, '/workspace');
+    };
+    router.noteRunStart(role); router.startRun(); input();
+    const answer = (text = 'Final background answer', stopReason = 'stop') => router.buffer({ role: 'assistant', content: text, stopReason });
+    return { router, service, send, notify, state, answer, input, prepareImage };
+}
+describe.each(['custom', 'user'] as const)('autonomous %s final projection', role => {
+    const autonomousFixture = (kind: 'owner' | 'group' = 'owner') => createAutonomousFixture(kind, role);
+    it.each(['owner', 'group'] as const)('sends one text to the %s, never voice, then claims duplicate callbacks', async kind => {
+        const f = autonomousFixture(kind); f.answer(); await f.service.forwardAutonomous(); await f.service.forwardAutonomous();
+        expect(f.send).toHaveBeenCalledTimes(1);
+        expect(f.send.mock.calls[0][1]).toMatchObject({ recipientJid: kind === 'owner' ? owner : group, text: 'Final background answer', options: { maxRetries: 1 } });
+        expect(f.send.mock.calls[0][1].content).toBeUndefined(); expect(f.prepareImage).not.toHaveBeenCalled();
+        expect(f.router.getControlOrigin()).toBe('unknown');
+    });
+    it.each(['error', 'aborted', 'tool-only', 'toolUse', 'empty'])('keeps %s output local', async reason => {
+        const f = autonomousFixture();
+        f.router.buffer({ role: 'assistant', stopReason: reason, content: reason === 'toolUse' || reason === 'tool-only'
+            ? [{ type: 'toolCall' }, ...(reason === 'toolUse' ? [{ type: 'text', text: 'working' }] : [])] : reason === 'empty' ? '' : 'failure' });
+        await f.service.forwardAutonomous(); expect(f.send).not.toHaveBeenCalled();
+    });
+    it.each(['accepted', 'inflight', 'unknown'])('does not duplicate an %s explicit send', async outcome => {
+        const f = autonomousFixture(); const token = f.router.beginSend(f.router.snapshot(), owner);
+        if (outcome !== 'inflight') f.router.finishSend(token, { success: outcome === 'accepted', ...(outcome === 'unknown' ? { delivery: 'unknown' as const } : {}) });
+        f.answer(); await f.service.forwardAutonomous(); expect(f.send).not.toHaveBeenCalled();
+    });
+    it('keeps terminal forwarding separate in both directions', async () => {
+        const f = autonomousFixture(); f.answer(); await f.service.forwardTerminal(); expect(f.send).not.toHaveBeenCalled();
+        const local = fixture('terminal'); local.router.buffer({ role: 'assistant', content: 'Terminal' });
+        await local.service.forwardAutonomous(); expect(local.send).not.toHaveBeenCalled();
+        await local.service.forwardTerminal(); expect(local.send).toHaveBeenCalledTimes(1);
+        for (const origin of ['whatsapp', 'unknown']) { const other = fixture(origin); await other.service.forwardAutonomous(); expect(other.send).not.toHaveBeenCalled(); }
+    });
+    it.each(['disconnected', 'off', 'logout', 'session', 'revision', 'owner', 'account', 'group-removed', 'group-paused', 'bound-group', 'abort'])('fences %s without replay', async change => {
+        const f = autonomousFixture('group'); f.answer();
+        if (['disconnected', 'off', 'logout', 'session'].includes(change)) f.state.current = false;
+        else if (change === 'revision') f.state.revision++;
+        else if (change === 'owner') f.state.owner = '15550000002@s.whatsapp.net';
+        else if (change === 'account') f.state.account = 'different';
+        else if (change === 'abort') f.service.reset();
+        else f.state.allowed = false;
+        await f.service.forwardAutonomous(); expect(f.send).not.toHaveBeenCalled();
+    });
+    it.each(['owner-group', 'group-owner', 'group-group'])('sends nothing to either destination on %s change, including later custom inputs', async change => {
+        const f = autonomousFixture(change.startsWith('owner') ? 'owner' : 'group'); f.answer();
+        f.state.revision++; f.state.settings.autonomous = { kind: change === 'group-owner' ? 'owner' : 'group',
+            jid: change === 'group-owner' ? owner : '120363000002@g.us', ownerJid: owner, accountScope: 'fixture' };
+        await f.service.forwardAutonomous(); f.input(); f.answer(); await f.service.forwardAutonomous(); await f.service.forwardAutonomous();
+        expect(f.send).not.toHaveBeenCalled();
+    });
+    it.each(['off', 'malformed'])('cannot opt in after an initially %s first input, even via a later custom input', async mode => {
+        const f = autonomousFixture(); f.router.endRun(false); f.service.reset();
+        f.state.settings = mode === 'off' ? { imageTools: [] } : { imageTools: [], autonomous: { kind: 'bogus' } } as unknown as OptionalOutputs;
+        f.router.noteRunStart('custom'); f.router.startRun(); f.input();
+        f.state.settings = { imageTools: [], autonomous: { kind: 'owner', jid: owner, ownerJid: owner, accountScope: 'fixture' } }; f.state.revision++;
+        f.answer(); await f.service.forwardAutonomous(); f.input(); f.answer(); await f.service.forwardAutonomous();
+        expect(f.send).not.toHaveBeenCalled();
+    });
+    it('keeps oversized UTF-8 text entirely local with a notice', async () => {
+        const f = autonomousFixture(); f.answer('漢'.repeat(30 * 1024)); await f.service.forwardAutonomous();
+        expect(f.send).not.toHaveBeenCalled(); expect(f.notify).toHaveBeenCalledWith('Autonomous answer exceeds 64 KiB; kept local.');
+    });
+    it.each(['unknown', 'rejected', 'thrown'])('does not retry %s delivery on later callbacks', async outcome => {
+        const f = autonomousFixture();
+        if (outcome === 'thrown') f.send.mockRejectedValue(new Error('Synthetic failure'));
+        else f.send.mockResolvedValue({ success: false, attempts: 1, ...(outcome === 'unknown' ? { delivery: 'unknown' as const } : {}) });
+        f.answer(); await f.service.forwardAutonomous(); await f.service.forwardAutonomous();
+        expect(f.send).toHaveBeenCalledTimes(1); expect(f.notify).toHaveBeenCalled();
+    });
+    it('retains the existing four-job capacity through unknown settlements', async () => {
+        const f = autonomousFixture(); f.send.mockResolvedValue({ success: false, attempts: 1, delivery: 'unknown' });
+        for (let i = 0; i < 5; i++) { f.input(); f.answer(); await f.service.forwardAutonomous(); }
+        expect(f.send).toHaveBeenCalledTimes(4);
+        expect(f.notify).toHaveBeenCalledWith('Optional output capacity reached; not queued or retried.');
+        for (const [, request] of f.send.mock.calls) await request.onSettled?.({ success: false, attempts: 1 });
     });
 });

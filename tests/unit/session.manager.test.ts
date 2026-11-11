@@ -255,6 +255,30 @@ describe('SessionManager', () => {
         await sessionManager.setStatus('disconnected'); expect(JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')).groupReplies).toEqual(invalid);
         await expect(sessionManager.setGroupReplies({ mode: 'all', context: 'yes' } as any, 0)).rejects.toThrow('group');
     });
+    it('round-trips autonomous consent atomically for both kinds, rejects stale writes and revokes on owner change', async () => {
+        const ownerJid = '15550000001@s.whatsapp.net'; await sessionManager.setOperatorJid(ownerJid);
+        for (const kind of ['owner', 'group'] as const) {
+            const autonomous = { kind, jid: kind === 'owner' ? ownerJid : '120363000001@g.us', ownerJid, accountScope: 'fixture' };
+            const revision = sessionManager.getOptionalOutputsRevision();
+            await sessionManager.setOptionalOutputs({ imageTools: [], autonomous }, revision);
+            expect(sessionManager.getOptionalOutputsRevision()).toBe(revision + 1);
+            const restored = new SessionManager(dataDir); await restored.ensureInitialized();
+            expect(restored.getOptionalOutputs().autonomous).toEqual(autonomous);
+            const before = await readFile(join(dataDir, 'config.json'), 'utf8');
+            await expect(sessionManager.setOptionalOutputs({ imageTools: [] }, revision)).rejects.toThrow('expired');
+            await expect(sessionManager.setOptionalOutputs({ imageTools: [] }, revision + 1, () => false)).rejects.toThrow('expired');
+            expect(await readFile(join(dataDir, 'config.json'), 'utf8')).toBe(before);
+        }
+        await sessionManager.setOperatorJid('15550000002@s.whatsapp.net');
+        expect(sessionManager.getOptionalOutputs()).toEqual({ imageTools: [] });
+    });
+    it('preserves malformed saved autonomous consent and disables optional outputs', async () => {
+        const optionalOutputs = { imageTools: [], autonomous: { kind: 'group', jid: '120363000001@g.us' } };
+        await writeFile(join(dataDir, 'config.json'), JSON.stringify({ optionalOutputs }));
+        await sessionManager.ensureInitialized(); expect(() => sessionManager.getOptionalOutputs()).toThrow();
+        await sessionManager.setStatus('disconnected');
+        expect(JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')).optionalOutputs).toEqual(optionalOutputs);
+    });
     it('round-trips optional outputs defensively, preserving group/stats preferences and revoking owner consent', async () => {
         const owner = '15550000001@s.whatsapp.net';
         expect(sessionManager.getOptionalOutputs()).toEqual({ imageTools: [] });

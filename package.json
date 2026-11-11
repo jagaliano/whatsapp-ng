@@ -16,6 +16,8 @@
   "files": [
     "whatsapp-ng.ts",
     "src",
+    "assets/whatsapp-ng-lockup.svg",
+    "assets/whatsapp-ng-lockup.png",
     "docs/crispasr.md",
     "docs/reference.md",
     "docs/releases.md",
@@ -89,6 +91,6 @@
     "extensions": [
       "./whatsapp-ng.ts"
     ],
-    "image": "https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"
+    "image": "https://raw.githubusercontent.com/jagaliano/whatsapp-ng/main/assets/whatsapp-ng-lockup.png"
   }
 }

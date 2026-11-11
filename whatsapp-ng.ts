@@ -115,7 +115,8 @@ export default function (pi: ExtensionAPI) {
         enabled: () => !deliberatelyOff,
         groupChanged: () => groupPolicy.reset(),
         optional: (ctx, current) => {
-            return showOptionalOutputSettings(ctx, sessionManager, { current, tools: () => pi.getAllTools().map(tool => tool.name), owner: optionalOwner });
+            return showOptionalOutputSettings(ctx, sessionManager, { current, tools: () => pi.getAllTools().map(tool => tool.name), owner: optionalOwner,
+                groups: () => voiceChats().filter(chat => chat.jid.endsWith('@g.us')).map(({ jid, label }) => ({ jid, label })) });
         },
         captureCurrent: () => {
             const runtime = router.getRuntimeId(); const context = whatsappService.getSessionContext(); const owner = sessionManager.getOperatorRevision();
@@ -231,9 +232,11 @@ export default function (pi: ExtensionAPI) {
         policy: () => {
             const settings = sessionManager.getOptionalOutputs(); const revision = sessionManager.getOptionalOutputsRevision();
             const ownerRevision = sessionManager.getOperatorRevision(); const context = whatsappService.getSessionContext();
-            const owner = optionalOwner(); const ownerAdmission = owner ? replyAdmission(owner.ownerJid) : () => false;
+            const owner = optionalOwner(true); const ownerAdmission = owner ? replyAdmission(owner.ownerJid) : () => false;
+            const autonomousAdmission = settings.autonomous ? replyAdmission(settings.autonomous.jid) : () => false;
             return { settings, ownerJid: owner?.ownerJid, accountScope: context.accountScope,
                 terminalCurrent: () => ownerAdmission() && owner !== undefined && optionalOwner()?.ownerJid === owner.ownerJid,
+                autonomousCurrent: () => autonomousAdmission() && owner !== undefined && optionalOwner(true)?.ownerJid === owner.ownerJid,
                 isCurrent: () => !deliberatelyOff && revision === sessionManager.getOptionalOutputsRevision()
                     && ownerRevision === sessionManager.getOperatorRevision() && whatsappService.isSessionContextCurrent(context)
                     && sessionManager.getStatus() === 'connected' && (whatsappService.getEffectiveStatus?.() ?? whatsappService.getStatus()) === 'connected' };
@@ -256,12 +259,15 @@ export default function (pi: ExtensionAPI) {
         },
         notify: text => _ctx?.ui.notify(text, 'warning')
     });
-    function optionalOwner(): { ownerJid: string; accountScope: string } | undefined {
+    function optionalOwner(forAutonomous = false): { ownerJid: string; accountScope: string } | undefined {
         try {
             if (sessionManager.getStatus() !== 'connected' || (whatsappService.getEffectiveStatus?.() ?? whatsappService.getStatus()) !== 'connected') return;
             const configured = sessionManager.getOperatorJid();
             const owner = configured ? canonicalConversation(settingsJid(configured)) : undefined;
-            if (!owner || !/^\d+@(s\.whatsapp\.net|lid)$/.test(owner) || !allowedConversation(owner)
+            const allowedOwner = forAutonomous
+                ? sessionManager.getAllowList().some(contact => canonicalConversation(settingsJid(contact.number)) === owner)
+                : owner !== undefined && allowedConversation(owner);
+            if (!owner || !/^\d+@(s\.whatsapp\.net|lid)$/.test(owner) || !allowedOwner
                 || canonicalConversation(whatsappService.resolveOutboundRecipientJid(owner)) !== owner) return;
             return { ownerJid: owner, accountScope: whatsappService.getAccountScope() };
         } catch { return; }
@@ -508,6 +514,7 @@ export default function (pi: ExtensionAPI) {
     }
 
     pi.on('before_agent_start', event => {
+        router.noteRunStart(event.messageType === 'custom' || event.messageType === 'user' ? event.messageType : undefined);
         if (whatsappService.getStatus() !== 'connected') {
             delete event.systemPromptOptions.sections.whatsapp_reply_delivery;
             return;
@@ -1323,6 +1330,7 @@ export default function (pi: ExtensionAPI) {
         const reportSnapshot = router.snapshot();
         if (_event.message) reports.interim(reportSnapshot, _event.message);
         await optionalOutputs.forwardTerminal();
+        await optionalOutputs.forwardAutonomous();
         if (sessionManager.getStatus() !== 'connected') { if (_event.message) reports.endResponse(reportSnapshot, _event.message); return; }
         const mirror = router.mirror();
         if (!mirror?.snapshot.target) {

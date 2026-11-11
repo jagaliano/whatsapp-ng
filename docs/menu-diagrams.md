@@ -161,12 +161,22 @@ flowchart TB
     Optional --> ClearImages["Disable automatic images"]
     Optional --> Terminal["Enable terminal forwarding to owner / Disable terminal forwarding"]
     Terminal -->|"enabling only"| OwnerConsent["Require verified private owner; confirm forwarding"]
+    Optional --> Background["Background answers: Off / Owner / group JID"]
+    Background --> Private["Owner’s private chat (default)"]
+    Background --> GroupList["Allowed group…"]
+    GroupList --> OneGroup["One eligible allowed group"]
+    OneGroup --> GroupConsent["Confirm: all members can see potentially sensitive background results"]
+    Background --> BackgroundOff["Off (background only)"]
+    Background -. "Back to Optional outputs" .-> Optional
+    GroupList -. "Back to Optional outputs" .-> Optional
     Optional -. "Back to Replies" .-> Replies
 ```
 
 These are **shared reporting/delivery controls**, not the per-chat Text/Voice/Both/Mirror picker. A successful selection saves for future inputs and closes the settings request. Reporting/tool/forwarding labels change with their saved state; the two final-stats choices are both offered.
 
 Automatic image consent is per tool and covers actual inline image results, not paths mentioned in text. Terminal forwarding requires a connected, allowed private owner and retains no permission across an owner/account change. Turning these on does not replay existing work. A missing eligible owner refuses forwarding rather than selecting a fallback recipient.
+
+Background answers have independent, default-off consent for the verified owner or exactly one allowed group, with group disclosure. Only known-start runs consuming custom messages or exactly proven extension-origin user messages qualify, including live-session cron delivery; router control origin and owner authorization are unchanged. Terminal+custom (including steer), WhatsApp-owned and ambiguous work never uses this projection; existing routing/terminal forwarding remains unchanged. Text only, 64 KiB local limit, no replay/retry/fallback; connection/account/consent and allowed, unpaused, bound-group eligibility are rechecked. See [background-answer behavior](reference.md#background-answers).
 
 ## 7. Voice: overview and per-chat setup
 

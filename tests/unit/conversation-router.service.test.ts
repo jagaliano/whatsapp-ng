@@ -551,3 +551,118 @@ describe('ConversationRouter sidecar provenance', () => {
         expect(router.snapshot()?.target).toBeUndefined();
     });
 });
+
+
+describe('proven extension user-message forwarding', () => {
+    const extension = (router: ConversationRouter, text = 'Scheduled background task') => {
+        router.observeInput({ source: 'extension', text }); router.consume({ role: 'user', content: text });
+    };
+    it('accepts an exactly observed extension user input without granting a reply target or control authority', () => {
+        const router = new ConversationRouter(); router.noteRunStart('user'); router.startRun(); extension(router); router.freeze();
+        expect(router.isAutonomous()).toBe(true); expect(router.getControlOrigin()).toBe('unknown');
+        expect(router.defaultTarget()).toBeUndefined();
+        router.buffer({ role: 'assistant', content: 'Scheduled result' });
+        expect(router.takeLocalAnswer('autonomous', A)?.text).toBe('Scheduled result');
+        expect(router.takeLocalAnswer('autonomous', A)).toBeUndefined();
+    });
+    it.each(['user', 'custom'] as const)('allows custom and proven extension inputs within a matching %s-started background run', type => {
+        const router = new ConversationRouter(); router.noteRunStart(type); router.startRun();
+        if (type === 'custom') router.consume({ role: 'custom', content: 'Completion' }); else extension(router);
+        router.freeze(); extension(router, 'Next completion'); router.freeze();
+        router.consume({ role: 'custom', content: 'Another completion' }); router.freeze();
+        expect(router.isAutonomous()).toBe(true); expect(router.getControlOrigin()).toBe('unknown');
+    });
+    it.each(['unknown', 'interactive', 'rpc'])('does not infer extension provenance from a %s input or cron-looking text', source => {
+        const router = new ConversationRouter(); router.noteRunStart('user'); router.startRun();
+        router.observeInput({ source, text: '[cron] Scheduled task' });
+        router.consume({ role: 'user', content: '[cron] Scheduled task' }); router.freeze();
+        expect(router.isAutonomous()).toBe(false);
+    });
+    it.each(['missing', 'transformed', 'superseded', 'expired', 'scope', 'reset', 'image'])('fails closed with %s extension proof', change => {
+        let scope = 'a'; const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+        try {
+            const router = new ConversationRouter(undefined, () => scope);
+            if (change !== 'missing') router.observeInput({ source: 'extension', text: 'Original' });
+            if (change === 'superseded') router.observeInput({ source: 'extension', text: 'Newer' });
+            if (change === 'expired') clock.mockReturnValue(301001);
+            if (change === 'scope') scope = 'b';
+            if (change === 'reset') router.reset();
+            router.noteRunStart('user'); router.startRun();
+            router.consume({ role: 'user', content: change === 'transformed' ? 'Transformed' : change === 'image'
+                ? [{ type: 'text', text: 'Original' }, { type: 'image', data: 'changed', mimeType: 'image/png' }] : 'Original' });
+            router.freeze(); expect(router.isAutonomous()).toBe(false);
+        } finally { clock.mockRestore(); }
+    });
+    it('consumes the proof once, without replay in a later run', () => {
+        const router = new ConversationRouter(); router.noteRunStart('user'); router.startRun(); extension(router); router.freeze();
+        expect(router.isAutonomous()).toBe(true); router.endRun(false);
+        router.noteRunStart('user'); router.startRun(); router.consume({ role: 'user', content: 'Scheduled background task' }); router.freeze();
+        expect(router.isAutonomous()).toBe(false);
+    });
+    it.each(['custom', undefined] as const)('rejects a user first input when the start type is %s', type => {
+        const router = new ConversationRouter(); router.noteRunStart(type); router.startRun(); extension(router); router.freeze();
+        expect(router.isAutonomous()).toBe(false);
+    });
+    it.each(['terminal', 'whatsapp', 'unproven'])('permanently excludes background work mixed with %s consumption', kind => {
+        const router = new ConversationRouter(); router.noteRunStart('user'); router.startRun(); extension(router); router.freeze();
+        if (kind === 'whatsapp') consume(router, A);
+        else {
+            if (kind === 'terminal') router.observeInput({ source: 'rpc', text: 'Other input' });
+            router.consume({ role: 'user', content: 'Other input' });
+        }
+        router.freeze(); extension(router, 'Later background'); router.freeze();
+        expect(router.isAutonomous()).toBe(false);
+    });
+    it.each(['pending', 'unobserved', 'expired', 'withdrawn'])('never grants extension proof to %s WhatsApp input', state => {
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+        try {
+            const router = new ConversationRouter(); const input = router.prepare('Phone task', origin(A));
+            if (state === 'withdrawn') router.reset();
+            if (state === 'expired') clock.mockReturnValue(86_401_001);
+            if (state !== 'unobserved') router.observeInput({ source: 'extension', text: input.content });
+            router.noteRunStart('user'); router.startRun(); router.consume({ role: 'user', content: input.content }); router.freeze();
+            expect(router.isAutonomous()).toBe(false);
+            expect(router.getControlOrigin()).toBe(state === 'pending' ? 'whatsapp' : 'unknown');
+        } finally { clock.mockRestore(); }
+    });
+    it('gives a newer terminal observation priority over an identical extension input', () => {
+        const router = new ConversationRouter(); router.observeInput({ source: 'extension', text: 'Same' });
+        router.observeInput({ source: 'rpc', text: 'Same' }); router.noteRunStart('user'); router.startRun();
+        router.consume({ role: 'user', content: 'Same' }); router.freeze();
+        expect(router.isAutonomous()).toBe(false); expect(router.getControlOrigin()).toBe('terminal');
+    });
+});
+
+describe('autonomous eligibility is not control authority', () => {
+    const custom = (router: ConversationRouter) => router.consume({ role: 'custom', content: 'background' });
+    it('requires a custom run start and only custom consumed inputs; claims once without a reply target', () => {
+        const router = new ConversationRouter(); router.noteRunStart('custom'); router.startRun(); custom(router); router.freeze();
+        expect(router.isAutonomous(router.snapshot())).toBe(true);
+        expect(router.getControlOrigin()).toBe('unknown'); expect(router.defaultTarget()).toBeUndefined();
+        router.buffer({ role: 'assistant', content: 'final' });
+        expect(router.takeLocalAnswer('autonomous', A)?.text).toBe('final');
+        expect(router.takeLocalAnswer('autonomous', A)).toBeUndefined();
+    });
+    it.each(['user', undefined] as const)('excludes custom input in a %s-started run', type => {
+        const router = new ConversationRouter(); router.noteRunStart(type); router.startRun(); custom(router); router.freeze();
+        expect(router.isAutonomous()).toBe(false); expect(router.getControlOrigin()).toBe('unknown');
+    });
+    it.each(['unknown', 'rpc', 'whatsapp'])('excludes %s input mixed into a custom run, even after a prior assistant', kind => {
+        const router = new ConversationRouter(); router.noteRunStart('custom'); router.startRun(); custom(router); router.freeze();
+        if (kind === 'whatsapp') consume(router, A);
+        else { router.observeInput({ source: kind, text: 'mixed' }); router.consume({ role: 'user', content: 'mixed' }); }
+        router.freeze(); custom(router); router.freeze();
+        expect(router.isAutonomous()).toBe(false);
+    });
+    it('rejects no inputs, old snapshots, stale scopes, ended/reset runs and forged snapshots', () => {
+        let scope = 'a'; const router = new ConversationRouter(undefined, () => scope); router.noteRunStart('custom'); router.startRun(); router.freeze();
+        expect(router.isAutonomous()).toBe(false);
+        custom(router); router.freeze(); const snapshot = router.snapshot()!;
+        expect(router.isAutonomous({ ...snapshot })).toBe(false);
+        router.freeze(); expect(router.isAutonomous(snapshot)).toBe(false);
+        scope = 'b'; expect(router.isAutonomous()).toBe(false); scope = 'a';
+        router.endRun(true); expect(router.isAutonomous(snapshot)).toBe(false);
+        router.startRun(); custom(router); router.freeze(); expect(router.isAutonomous()).toBe(false);
+        router.noteRunStart('custom'); router.reset(); router.startRun(); custom(router); router.freeze(); expect(router.isAutonomous()).toBe(false);
+    });
+});

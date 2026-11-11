@@ -16,7 +16,8 @@ interface PackageManifest {
     dependencies: Record<string, string>;
     devDependencies: Record<string, string>;
     peerDependencies: Record<string, string>;
-    pi: { extensions: string[] };
+    files: string[];
+    pi: { extensions: string[]; image: string };
 }
 
 const manifest = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as PackageManifest;
@@ -64,6 +65,21 @@ describe('maintained candidate packaging', () => {
         expect(manifest.pi.extensions).toEqual(['./whatsapp-ng.ts']);
         expect(manifest.dependencies.baileys).toBe('7.0.0-rc14');
         expect(manifest.dependencies['@llamaindex/liteparse']).toBe('2.17.0');
+    });
+
+    it('uses the supplied branding in the gallery and README and ships both artwork formats', () => {
+        const image = 'https://raw.githubusercontent.com/jagaliano/whatsapp-ng/main/assets/whatsapp-ng-lockup.png';
+        expect(manifest.pi.image).toBe(image);
+        const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
+        expect(readme).toContain(`<img src="${image}" alt="whatsapp-ng" width="600">`);
+        for (const name of ['assets/whatsapp-ng-lockup.svg', 'assets/whatsapp-ng-lockup.png']) {
+            expect(manifest.files).toContain(name);
+            expect(existsSync(new URL(`../../${name}`, import.meta.url))).toBe(true);
+        }
+        expect(readFileSync(new URL('../../assets/whatsapp-ng-lockup.svg', import.meta.url), 'utf8')).toContain('viewBox="0 0 980 300"');
+        const png = readFileSync(new URL('../../assets/whatsapp-ng-lockup.png', import.meta.url));
+        expect(png.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+        expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1960, 600]);
     });
 
     it('does not bundle FFmpeg or maintain Whisper build scripts', () => {

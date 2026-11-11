@@ -210,10 +210,10 @@ describe.each(['en', 'pt-BR', 'es', 'fr'])('terminal menu exits (%s)', locale =>
         const owner = panel([], 'menu.back.chatsOwner');
         expect(await showOwnerSettings(owner.ctx, s.session as unknown as SessionManager, s.actions)).toBe('back'); owner.done();
         const images = panel(['menu.optional.chooseImages'], 'menu.back.optionalOutputs', 'menu.optional.title');
-        expect(await showOptionalOutputSettings(images.ctx, s.session as unknown as SessionManager, { current: () => true, tools: () => ['screenshot'], owner: () => undefined })).toBeUndefined(); images.done();
+        expect(await showOptionalOutputSettings(images.ctx, s.session as unknown as SessionManager, { current: () => true, tools: () => ['screenshot'], owner: () => undefined, groups: () => [] })).toBeUndefined(); images.done();
         const optional = panel([], 'menu.back.replies');
         s.session.getOptionalOutputs = () => { throw new Error('invalid'); };
-        expect(await showOptionalOutputSettings(optional.ctx, s.session as unknown as SessionManager, { current: () => true, tools: () => [], owner: () => undefined })).toBe('back');
+        expect(await showOptionalOutputSettings(optional.ctx, s.session as unknown as SessionManager, { current: () => true, tools: () => [], owner: () => undefined, groups: () => [] })).toBe('back');
         expect(optional.ctx.ui.notify).toHaveBeenCalled(); expect(s.session.setOptionalOutputs).not.toHaveBeenCalled(); optional.done();
     });
 });
@@ -224,6 +224,11 @@ describe('terminal translation dictionaries', () => {
     const dictionaries = boundaries.slice(0, -1).map((start, i) => Object.fromEntries(
         [...source.slice(start, boundaries[i + 1]).matchAll(/"([^"]+)":\s*("(?:[^"\\]|\\.)*")/g)].map(m => [m[1], JSON.parse(m[2]) as string])));
     const fallback = dictionaries[0];
+    it('declares all background-answer labels and disclosure keys in every locale', () => {
+        for (const dictionary of dictionaries) for (const suffix of ['background', 'backgroundTitle', 'backgroundOwner', 'backgroundGroup', 'backgroundOff', 'backgroundNoGroups', 'backgroundGroupTitle', 'backgroundDisclosureTitle', 'backgroundDisclosure', 'backgroundOwnerState']) {
+            expect(dictionary).toHaveProperty('menu.optional.' + suffix);
+        }
+    });
     const keys = Object.keys(fallback).filter(key => /^(menu\.|archive\.menu\.|voice\.|message\.detail\.|message\.reply\.)/.test(key));
     const identical = new Set(['menu.whatsapp.title', 'menu.recents.grouped.contacts', 'menu.recents.history.messageTitle', 'voice.no', 'message.reply.original', 'message.detail.direction']);
     it.each([1, 2, 3])('has explicit translations and identical placeholders in locale %s', locale => {

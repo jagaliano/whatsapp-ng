@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp Logo" width="100">
+  <img src="https://raw.githubusercontent.com/jagaliano/whatsapp-ng/main/assets/whatsapp-ng-lockup.png" alt="whatsapp-ng" width="600">
 </p>
 
 # whatsapp-ng
@@ -142,7 +142,7 @@ The `/whatsapp` menu groups settings into **Connection**, **Chats / Owner**, **R
 - **Groups:** add the group JID. By default, the agent responds to actual WhatsApp mentions of its account or replies to that account's messages. Change this under **Groups → Group replies**.
 - **Recents:** browse conversations, inspect messages, reply manually or allow a new chat.
 - **Replies:** choose whether attachments are followed by a final explanation. Optional elapsed/tool-count stats, file-path summaries, interim text and live activity are off by default.
-- **Optional outputs:** explicitly approve individual tools whose image results may be shared, or forward future terminal answers to the private owner. These are off by default.
+- **Optional outputs:** separately approve individual tools’ inline images, forward future terminal answers to the private owner, or enable **Background answers** to the owner (default destination) or one allowed group after disclosure. All are off by default. Background forwarding is text-only, requires custom-message or exact host-reported extension-input provenance (including live-session cron), and never grants control authority; see [eligibility and limits](docs/reference.md#background-answers).
 - **Owner:** explicitly choose the person authorized to use phone controls. An allowed contact or paired device is not automatically an owner.
 
 WhatsApp `@lid` identifiers are not phone numbers. Select known conversations in the menu rather than constructing a recipient from displayed digits.

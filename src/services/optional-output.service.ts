@@ -3,16 +3,18 @@ import type { ConversationRouter, RoutingSnapshot } from './conversation-router.
 import type { MessageRequest, MessageResult } from '../models/whatsapp.types.js';
 import type { PreparedOutgoingMedia } from './outgoing-media.service.js';
 
+export type AutonomousConsent = { kind: 'owner' | 'group'; jid: string; ownerJid: string; accountScope: string };
 export interface OptionalOutputs {
     imageTools: string[];
     terminal?: { ownerJid: string; accountScope: string };
+    autonomous?: AutonomousConsent;
 }
 export function validateOptionalOutputs(value: unknown): OptionalOutputs {
     if (value === undefined) return { imageTools: [] };
     const invalid = () => { throw new Error('Invalid optional output settings'); };
     if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid();
     const record = value as Record<string, unknown>;
-    if (Object.keys(record).some(key => !['imageTools', 'terminal'].includes(key)) || !Array.isArray(record.imageTools) || record.imageTools.length > 32) return invalid();
+    if (Object.keys(record).some(key => !['imageTools', 'terminal', 'autonomous'].includes(key)) || !Array.isArray(record.imageTools) || record.imageTools.length > 32) return invalid();
     const tools = record.imageTools;
     if (tools.some(name => typeof name !== 'string' || !/^[a-zA-Z0-9_.:-]{1,160}$/.test(name) || ['send_wa_media', 'send_wa_message', 'send_reaction'].includes(name.split(/[.:]/).at(-1) ?? '')) || new Set(tools).size !== tools.length) return invalid();
     let terminal: OptionalOutputs['terminal'];
@@ -23,7 +25,17 @@ export function validateOptionalOutputs(value: unknown): OptionalOutputs {
             || typeof item.accountScope !== 'string' || !item.accountScope || item.accountScope.length > 256) return invalid();
         terminal = { ownerJid: item.ownerJid, accountScope: item.accountScope };
     }
-    return { imageTools: [...tools], ...(terminal ? { terminal } : {}) };
+    let autonomous: AutonomousConsent | undefined;
+    if (record.autonomous !== undefined) {
+        const item = record.autonomous as Record<string, unknown>;
+        if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).some(key => !['kind', 'jid', 'ownerJid', 'accountScope'].includes(key))
+            || typeof item.ownerJid !== 'string' || !/^\d+@(s\.whatsapp\.net|lid)$/.test(item.ownerJid)
+            || typeof item.accountScope !== 'string' || !item.accountScope || item.accountScope.length > 256
+            || typeof item.jid !== 'string' || (item.kind !== 'owner' && item.kind !== 'group')
+            || (item.kind === 'owner' ? item.jid !== item.ownerJid : item.kind !== 'group' || !/^\d+(-\d+)?@g\.us$/.test(item.jid))) return invalid();
+        autonomous = { kind: item.kind, jid: item.jid, ownerJid: item.ownerJid, accountScope: item.accountScope };
+    }
+    return { imageTools: [...tools], ...(terminal ? { terminal } : {}), ...(autonomous ? { autonomous } : {}) };
 }
 export interface OptionalOutputPolicy {
     settings: OptionalOutputs;
@@ -31,6 +43,7 @@ export interface OptionalOutputPolicy {
     accountScope: string;
     isCurrent(): boolean;
     terminalCurrent?(): boolean;
+    autonomousCurrent?(): boolean;
 }
 interface Dependencies {
     router: ConversationRouter;
@@ -42,27 +55,33 @@ interface Dependencies {
     notify(text: string): void;
 }
 interface Admission { policy: OptionalOutputPolicy; hashes: Set<string>; bytes: number; count: number }
-interface Frame { admission: Admission; snapshot: RoutingSnapshot; workspace: string; signal?: AbortSignal; origin: 'terminal' | 'whatsapp' | 'unknown' }
+interface Frame { admission: Admission; snapshot: RoutingSnapshot; workspace: string; signal?: AbortSignal; origin: 'terminal' | 'whatsapp' | 'unknown' | 'autonomous' }
 const MAX_BYTES = 25 * 1024 * 1024;
 
 /** Default-off egress from verified lifecycle content, never tool paths, URLs or guessed destinations. */
 export class OptionalOutputService {
     private admission?: Admission;
+    private autonomousAdmission?: Admission;
+    private hasInput = false;
     private frames = new WeakMap<RoutingSnapshot, Frame>();
     private readonly tools = new Map<string, { name: string; frame: Frame }>();
     private readonly jobs = new Set<AbortController>();
     constructor(private readonly dependencies: Dependencies) {}
 
     noteInput(): void {
-        this.reset();
+        this.clearInput();
         try {
             const policy = this.dependencies.policy();
             this.admission = { policy: { ...policy, settings: validateOptionalOutputs(policy.settings) }, hashes: new Set(), bytes: 0, count: 0 };
         } catch { /* Malformed/unavailable settings cannot opt in. */ }
+        // An Off/invalid first input also closes admission for the entire run.
+        if (!this.hasInput) { this.hasInput = true; this.autonomousAdmission = this.admission; }
     }
     capture(snapshot: RoutingSnapshot, workspace: string, signal?: AbortSignal): void {
-        if (!this.admission) return;
-        this.frames.set(snapshot, { admission: this.admission, snapshot, workspace, signal, origin: this.dependencies.router.getControlOrigin(snapshot) });
+        const origin = this.dependencies.router.isAutonomous(snapshot) ? 'autonomous' : this.dependencies.router.getControlOrigin(snapshot);
+        const admission = origin === 'autonomous' ? this.autonomousAdmission : this.admission;
+        if (!admission) return;
+        this.frames.set(snapshot, { admission, snapshot, workspace, signal, origin });
     }
     toolStarted(id: string, name: string, snapshot?: RoutingSnapshot): void {
         const frame = snapshot ? this.frames.get(snapshot) : undefined;
@@ -101,7 +120,20 @@ export class OptionalOutputService {
         if (Buffer.byteLength(answer.text, 'utf8') > 64 * 1024) { this.notify('Terminal answer exceeds 64 KiB; kept local.'); return; }
         await this.deliver(frame, consent.ownerJid, answer.text);
     }
+    async forwardAutonomous(): Promise<void> {
+        const snapshot = this.dependencies.router.snapshot(); const frame = snapshot ? this.frames.get(snapshot) : undefined;
+        const policy = frame?.admission.policy; const consent = policy?.settings.autonomous;
+        if (!frame || frame.origin !== 'autonomous' || !consent || consent.ownerJid !== policy?.ownerJid
+            || consent.accountScope !== policy.accountScope || !this.current(frame, consent.jid)) return;
+        const answer = this.dependencies.router.takeLocalAnswer('autonomous', consent.jid);
+        if (!answer || answer.snapshot !== snapshot) return;
+        if (Buffer.byteLength(answer.text, 'utf8') > 64 * 1024) { this.notify('Autonomous answer exceeds 64 KiB; kept local.'); return; }
+        await this.deliver(frame, consent.jid, answer.text);
+    }
     reset(): void {
+        this.clearInput(); this.autonomousAdmission = undefined; this.hasInput = false;
+    }
+    private clearInput(): void {
         for (const controller of this.jobs) controller.abort();
         this.tools.clear(); this.frames = new WeakMap(); this.admission = undefined;
     }
@@ -109,7 +141,10 @@ export class OptionalOutputService {
         try { this.dependencies.notify(text); } catch { /* UI failure does not replay egress or block model work. */ }
     }
     private current(frame: Frame, target: string): boolean {
-        try { return this.admission === frame.admission && !frame.signal?.aborted && frame.admission.policy.isCurrent()
+        try { return (frame.origin === 'autonomous' ? this.autonomousAdmission === frame.admission : this.admission === frame.admission)
+            && !frame.signal?.aborted && frame.admission.policy.isCurrent()
+            && (frame.origin !== 'autonomous' || (this.dependencies.router.isAutonomous(frame.snapshot)
+                && (!frame.admission.policy.autonomousCurrent || frame.admission.policy.autonomousCurrent())))
             && (frame.origin !== 'terminal' || !frame.admission.policy.terminalCurrent || frame.admission.policy.terminalCurrent())
             && this.dependencies.router.isActive() && this.dependencies.router.isCurrent(frame.snapshot) && this.dependencies.allowed(target); }
         catch { return false; }

@@ -7,7 +7,8 @@ import { expireSettingsRequest, type SettingsNavigation } from './whatsapp-setti
 export interface OptionalOutputSettingsActions {
     current(): boolean;
     tools(): string[];
-    owner(): { ownerJid: string; accountScope: string } | undefined;
+    owner(forAutonomous?: boolean): { ownerJid: string; accountScope: string } | undefined;
+    groups(): Array<{ jid: string; label: string }>;
 }
 /** Explicit local/RPC command consent only; no model tool or phone command enables egress. */
 export async function showOptionalOutputSettings(ctx: ExtensionCommandContext, session: SessionManager, actions: OptionalOutputSettingsActions, ownerRevision = session.getOperatorRevision()): Promise<SettingsNavigation> {
@@ -15,12 +16,14 @@ export async function showOptionalOutputSettings(ctx: ExtensionCommandContext, s
     try { settings = session.getOptionalOutputs(); }
     catch { ctx.ui.notify(t('menu.optional.invalid'), 'warning'); settings = validateOptionalOutputs(undefined); }
     const revision = session.getOptionalOutputsRevision();
-    const current = () => actions.current() && ownerRevision === session.getOperatorRevision();
+    const current = () => actions.current() && ownerRevision === session.getOperatorRevision() && revision === session.getOptionalOutputsRevision();
     const back = t('menu.back.replies');
     const images = t('menu.optional.chooseImages'); const clearImages = t('menu.optional.clearImages');
     const terminal = t(settings.terminal ? 'menu.optional.terminalOff' : 'menu.optional.terminalOn');
-    const choice = await ctx.ui.select(t('menu.optional.status', { count: settings.imageTools.length, state: t(settings.terminal ? 'menu.on' : 'menu.off') }),
-        [images, clearImages, terminal, back]);
+    const backgroundState = settings.autonomous ? settings.autonomous.kind === 'owner' ? t('menu.optional.backgroundOwnerState') : settings.autonomous.jid : t('menu.off');
+    const background = t('menu.optional.background', { state: backgroundState });
+    const choice = await ctx.ui.select(t('menu.optional.status', { count: settings.imageTools.length, state: t(settings.terminal ? 'menu.on' : 'menu.off'), background: backgroundState }),
+        [images, clearImages, terminal, background, back]);
     if (!current()) expireSettingsRequest();
     if (choice === back) return 'back';
     if (choice === clearImages) settings.imageTools = [];
@@ -42,7 +45,7 @@ export async function showOptionalOutputSettings(ctx: ExtensionCommandContext, s
             settings.imageTools.push(name);
         }
     } else if (choice === terminal) {
-        if (settings.terminal) settings = { imageTools: settings.imageTools };
+        if (settings.terminal) delete settings.terminal;
         else {
             const owner = actions.owner();
             if (!owner) { ctx.ui.notify(t('menu.optional.ownerMissing'), 'warning'); return; }
@@ -51,6 +54,32 @@ export async function showOptionalOutputSettings(ctx: ExtensionCommandContext, s
             if (!now || now.ownerJid !== owner.ownerJid || now.accountScope !== owner.accountScope) expireSettingsRequest();
             settings.terminal = owner;
         }
+    } else if (choice === background) {
+        const panelBack = t('menu.back.optionalOutputs');
+        const ownerChoice = t('menu.optional.backgroundOwner'); const groupChoice = t('menu.optional.backgroundGroup');
+        const selected = await ctx.ui.select(t('menu.optional.backgroundTitle'), [ownerChoice, groupChoice, t('menu.optional.backgroundOff'), panelBack]);
+        if (!current()) expireSettingsRequest();
+        if (selected === panelBack) return showOptionalOutputSettings(ctx, session, actions, ownerRevision);
+        if (selected === t('menu.optional.backgroundOff')) delete settings.autonomous;
+        else if (selected === ownerChoice || selected === groupChoice) {
+            const owner = actions.owner(true);
+            if (!owner) { ctx.ui.notify(t('menu.optional.ownerMissing'), 'warning'); return; }
+            let jid = owner.ownerJid;
+            if (selected === groupChoice) {
+                const groups = actions.groups();
+                if (!groups.length) { ctx.ui.notify(t('menu.optional.backgroundNoGroups'), 'info'); return; }
+                const group = await ctx.ui.select(t('menu.optional.backgroundGroupTitle'), [...groups.map(item => item.label), panelBack]);
+                if (!current()) expireSettingsRequest();
+                if (group === panelBack) return showOptionalOutputSettings(ctx, session, actions, ownerRevision);
+                const target = groups.find(item => item.label === group); if (!target) return;
+                if (!await ctx.ui.confirm(t('menu.optional.backgroundDisclosureTitle'), t('menu.optional.backgroundDisclosure', { group: target.label }))) return;
+                if (!actions.groups().some(item => item.jid === target.jid)) expireSettingsRequest();
+                jid = target.jid;
+            }
+            const now = actions.owner(true);
+            if (!now || now.ownerJid !== owner.ownerJid || now.accountScope !== owner.accountScope) expireSettingsRequest();
+            settings.autonomous = { kind: selected === ownerChoice ? 'owner' : 'group', jid, ...owner };
+        } else return;
     } else return;
     if (!current()) expireSettingsRequest();
     await session.setOptionalOutputs(settings, revision, current);

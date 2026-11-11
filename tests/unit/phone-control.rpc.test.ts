@@ -13,7 +13,7 @@ afterEach(() => { vi.unstubAllEnvs(); resetI18n(); });
 
 /** Real Pi command context/lifecycle; WhatsApp transport and fixture model streams are synthetic. */
 describe('production phone-control Pi RPC gateway', () => {
-    it.each(['phone-polish:en', 'phone-polish:pt-BR', 'phone-polish:es', 'phone-polish:fr', 'menu-polish:en', 'menu-polish:pt-BR', 'menu-polish:es', 'menu-polish:fr', 'direct', 'owner-guidance', 'menu-ui', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard', 'autoconnect', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async scenario => {
+    it.each(['phone-polish:en', 'phone-polish:pt-BR', 'phone-polish:es', 'phone-polish:fr', 'menu-polish:en', 'menu-polish:pt-BR', 'menu-polish:es', 'menu-polish:fr', 'direct', 'owner-guidance', 'menu-ui', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard', 'autoconnect', 'classify', 'classify-terminal', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async scenario => {
         const [mode, locale = 'en'] = scenario.split(':');
         vi.stubEnv('WHATSAPP_NG_LOCALE', locale); initI18n(undefined);
         const root = await mkdtemp(join(tmpdir(), 'wa-phone-rpc-')); const home = join(root, 'home'); const workspace = join(root, 'workspace');
@@ -26,10 +26,13 @@ describe('production phone-control Pi RPC gateway', () => {
             if (!address || typeof address === 'string') throw new Error('Missing synthetic speech port');
             endpoint = `http://127.0.0.1:${address.port}/v1`; await new Promise<void>(resolve => server.close(() => resolve()));
         }
-        const selfChat = mode === 'self-lid' || mode === 'self-auto'; const modelFixture = ['stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard'].includes(mode) || managed;
+        const classify = mode === 'classify' || mode === 'classify-terminal';
+        const selfChat = mode === 'self-lid' || mode === 'self-auto'; const modelFixture = classify || ['stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard'].includes(mode) || managed;
         const owner = selfChat ? '15550000009@s.whatsapp.net' : '15550000001@s.whatsapp.net';
         await writeFile(join(data, 'config.json'), JSON.stringify({ operatorJid: mode === 'owner-guidance' ? '' : owner, allowList: [{ number: '+' + owner.split('@')[0] }],
             ...(automatic ? { autoConnect: true } : {}),
+            ...(classify ? { optionalOutputs: { imageTools: [], terminal: { ownerJid: owner, accountScope: JSON.stringify([join(data, 'auth'), '15550000009@s.whatsapp.net']) },
+                ...(mode === 'classify' ? { autonomous: { kind: 'owner', jid: owner, ownerJid: owner, accountScope: JSON.stringify([join(data, 'auth'), '15550000009@s.whatsapp.net']) } } : {}) } } : {}),
             ...(mode === 'spoken-guard' ? { voicePreferences: { enabled: true, mode: 'voice', approvedDestinationKey: resolveTtsConfig({}).destinationKey, chats: {} } } : {}),
             ...(managed ? { sttEndpoint: endpoint, sttModel: 'fixture-api-model', sttEnv: 'FIXTURE_KEY' } : {}),
             ...(mode === 'self-lid' ? { voicePreferences: { enabled: true, mode: 'text', approvedDestinationKey: resolveTtsConfig({}).destinationKey,
@@ -46,7 +49,7 @@ describe('production phone-control Pi RPC gateway', () => {
         const env = Object.fromEntries(['PATH', 'TMPDIR', 'LANG'].flatMap(key => process.env[key] ? [[key, process.env[key]!]] : []));
         Object.assign(env, { HOME: home, PI_CODING_AGENT_DIR: join(root, 'agent'), PI_OFFLINE: '1', WHATSAPP_NG_LOCALE: locale,
             WA_PHONE_RPC_POLISH: mode === 'phone-polish' ? '1' : '0', WA_PHONE_RPC_METRICS: metricsPath, WA_PHONE_RPC_CONFIG: join(data, 'config.json'), WA_PHONE_RPC_SELF_LID: selfChat ? '1' : '0', WA_PHONE_RPC_STATS: mode === 'stats' ? '1' : '0',
-            WA_PHONE_RPC_GROUPS: ['groups', 'settings'].includes(mode) ? '1' : '0', WA_PHONE_RPC_SELF_AUTO: mode === 'self-auto' ? '1' : '0', WA_PHONE_RPC_MODELS: mode === 'models' ? '1' : '0',
+            WA_PHONE_RPC_GROUPS: ['groups', 'settings'].includes(mode) ? '1' : '0', WA_PHONE_RPC_SELF_AUTO: mode === 'self-auto' ? '1' : '0', WA_PHONE_RPC_CLASSIFY: classify ? '1' : '0', WA_PHONE_RPC_MODELS: mode === 'models' ? '1' : '0',
             WA_PHONE_RPC_OPTIONAL: ['images', 'terminal'].includes(mode) ? mode : '', WA_PHONE_RPC_REPORTING: mode === 'reporting' ? '1' : '0', WA_PHONE_RPC_SERVER_VOICE: mode === 'server-voice' ? '1' : '0', WA_PHONE_RPC_SPOKEN_GUARD: mode === 'spoken-guard' ? '1' : '0',
             ...(managed ? { WA_PHONE_RPC_MANAGED: '1', WA_PHONE_RPC_MANAGED_ENDPOINT: endpoint, FIXTURE_KEY: 'synthetic-key', CRISPASR_STT_CMD: JSON.stringify({ executable: process.execPath,
                 args: [join(repo, 'tests/fixtures/managed-speech-server.mjs'), new URL(endpoint).port, 'whisper', 'fixture-loaded-model', 'normal', serverMetrics], cwd: root,
@@ -403,6 +406,54 @@ describe('production phone-control Pi RPC gateway', () => {
                 expect((await metrics()).providerRequests).toBe(mode === 'images' ? 6 : 4);
                 expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
                 expect(records.filter(record => record.type === 'extension_error')).toEqual([]); return;
+            }
+            if (classify) {
+                // Admission must start after the synthetic account is connected, not during asynchronous startup.
+                await expect.poll(async () => JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).status, { timeout: 10_000 }).toBe('connected');
+                // Same real host scenarios with/without autonomous consent; terminal forwarding is enabled in both.
+                const finalCounts: number[] = [];
+                const settled = async (count: number) => {
+                    await expect.poll(async () => (await metrics()).statsSettled, { timeout: 15_000 }).toBe(count);
+                    finalCounts.push((await metrics()).sends.filter((send: any) => send.text?.startsWith('RPC stats final')).length);
+                };
+                await prompt('/phone-fixture custom-wake'); await settled(1);
+                await prompt('/phone-fixture user-wake'); await settled(2);
+                await prompt('/phone-fixture cron-wake'); await settled(3);
+                await prompt('Synthetic terminal task'); await settled(4);
+                await prompt('/phone-fixture mixed'); await settled(5);
+                // Observe the remaining T012 host cases before any dependent production changes.
+                for (const [index, action] of ['terminal-steer', 'terminal-followup'].entries()) {
+                    await prompt('/phone-fixture terminal-hold');
+                    const before = (await metrics()).observations.length;
+                    const running = prompt('Synthetic held terminal task');
+                    await expect.poll(async () => (await metrics()).observations.slice(before).some((item: any) => item.event === 'message_start' && item.role === 'user'), { timeout: 10_000 }).toBe(true);
+                    await prompt('/phone-fixture ' + action); await running; await settled(6 + index);
+                }
+                const final = await metrics(); const runs: any[][] = [[]];
+                for (const item of final.observations ?? []) { runs.at(-1)!.push(item); if (item.event === 'agent_end') runs.push([]); }
+                runs.pop();
+                const summary = runs.map(run => ({ started: run.find(item => item.event === 'before_agent_start')?.messageType,
+                    inputs: run.filter(item => item.event === 'input').map(item => item.source + (item.whatsappRequest ? ':whatsapp' : '')),
+                    consumed: run.filter(item => item.event === 'message_start').map(item => item.role + (item.whatsappRequest ? ':whatsapp' : '') + (item.customType ? ':' + item.customType : '')) }));
+                await writeFile(join(root, 'classification.json'), JSON.stringify(summary));
+                if (process.env.WA_PHONE_RPC_CLASSIFY_OUT) await writeFile(process.env.WA_PHONE_RPC_CLASSIFY_OUT + (mode === 'classify-terminal' ? '.terminal' : ''), JSON.stringify({ summary, finalCounts,
+                    finals: final.sends.filter((send: any) => send.text?.startsWith('RPC stats final')).map((send: any) => send.jid) }, null, 2), { mode: 0o600 });
+                expect(summary).toEqual([
+                    { started: 'custom', inputs: [], consumed: ['custom:fixture-background'] },
+                    { started: 'user', inputs: ['extension'], consumed: ['user'] },
+                    { started: 'user', inputs: ['extension'], consumed: ['user'] },
+                    { started: 'user', inputs: ['rpc'], consumed: ['user'] },
+                    { started: 'user', inputs: ['extension:whatsapp'], consumed: ['user:whatsapp', 'custom:fixture-background'] },
+                    { started: 'user', inputs: ['rpc'], consumed: ['user', 'custom:fixture-background'] },
+                    { started: 'user', inputs: ['rpc'], consumed: ['user', 'custom:fixture-background'] }
+                ]);
+                // Autonomous consent adds custom, extension-user and cron-style live-session wake-ups only.
+                const autonomous = mode === 'classify' ? 1 : 0;
+                expect(finalCounts).toEqual([autonomous, autonomous * 2, autonomous * 3, autonomous * 3 + 1,
+                    autonomous * 3 + 2, autonomous * 3 + 2, autonomous * 3 + 3]);
+                expect(final.sends.filter((send: any) => send.text?.startsWith('RPC stats final')).map((send: any) => send.jid)).toEqual(Array(autonomous * 3 + 3).fill(owner));
+                expect(records.filter(record => record.type === 'extension_error')).toEqual([]);
+                expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0); return;
             }
             if (mode === 'self-auto') {
                 await prompt('/phone-fixture stats-start');
