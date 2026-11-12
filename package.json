@@ -1,6 +1,6 @@
 {
   "name": "whatsapp-ng",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "private": false,
   "type": "module",
   "description": "WhatsApp integration for the Pi Coding Agent",
@@ -18,6 +18,8 @@
     "src",
     "assets/whatsapp-ng-lockup.svg",
     "assets/whatsapp-ng-lockup.png",
+    "assets/whatsapp-ng-logo.svg",
+    "assets/whatsapp-ng-logo.png",
     "docs/crispasr.md",
     "docs/reference.md",
     "docs/releases.md",
@@ -91,6 +93,6 @@
     "extensions": [
       "./whatsapp-ng.ts"
     ],
-    "image": "https://raw.githubusercontent.com/jagaliano/whatsapp-ng/main/assets/whatsapp-ng-lockup.png"
+    "image": "https://raw.githubusercontent.com/jagaliano/whatsapp-ng/main/assets/whatsapp-ng-logo.png"
   }
 }

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.1.10 — 2026-11-12
+
+- Use the supplied square whatsapp-ng logo for the Pi package gallery, preserving its original SVG and bundling a 1024 × 1024 PNG. Keep the README banner unchanged and require both gallery assets in release packaging checks. Gallery indexing and cache refresh remain external.
+
 - Add owner-only phone `/reload` in private chats: confirmation menu, idle/pending/connection refusals, Pi's standard reload, and a bounded one-use reload handoff that the new runtime revalidates before one same-account reconnect (cancelling pending saved auto-connect retries) and one acknowledgment. Explicit Off, changed authorization, expiry and ordinary terminal reload never reconnect or reply; no retries or resends. Localized in English, pt-BR, Spanish and French. Review fixes: a phone mutation started after confirmation blocks the reload, explicit Off then Connect voids the pending acknowledgment, and a different account is refused before any acknowledgment or reply. Only the exact socket that the reload itself started is retired, never an auto-connect or operator connection. Router, locale and production-entry RPC race tests in [045](specs/045-phone-reload/tasks.md); tests-first deviations are recorded in its plan. Operator live acceptance pending.
 
 ## 1.1.9 — 2026-11-11

@@ -153,10 +153,10 @@ export function release(args, { root = resolve(dirname(fileURLToPath(import.meta
         if (!packed || typeof packed !== 'object' || Array.isArray(packed) || !Array.isArray(packed.files)) throw new Error('Malformed npm pack JSON; preparation refused');
         if (packed.name !== manifest.name || packed.version !== manifest.version || packed.filename !== `${manifest.name}-${manifest.version}.tgz`) throw new Error('Packed identity differs from source');
         const allowed = new Set(git('ls-files', '-z').split('\0'));
-        const required = new Set(['package.json', 'README.md', 'LICENSE', manifest.main, 'src/services/edge-tts.worker.mjs', 'src/services/managed-speech.worker.mjs', 'docs/reference.md', 'docs/crispasr.md', 'docs/releases.md', 'assets/whatsapp-ng-lockup.svg', 'assets/whatsapp-ng-lockup.png']);
+        const required = new Set(['package.json', 'README.md', 'LICENSE', manifest.main, 'src/services/edge-tts.worker.mjs', 'src/services/managed-speech.worker.mjs', 'docs/reference.md', 'docs/crispasr.md', 'docs/releases.md', 'assets/whatsapp-ng-lockup.svg', 'assets/whatsapp-ng-lockup.png', 'assets/whatsapp-ng-logo.svg', 'assets/whatsapp-ng-logo.png']);
         for (const file of packed.files) {
             const name = file.path;
-            const publicFile = ['package.json', 'README.md', 'LICENSE', 'SECURITY.md', 'LICENSING.md', 'CHANGELOG.md', 'DEPENDENCIES.md', manifest.main, 'docs/reference.md', 'docs/crispasr.md', 'docs/releases.md', 'assets/whatsapp-ng-lockup.svg', 'assets/whatsapp-ng-lockup.png'].includes(name)
+            const publicFile = ['package.json', 'README.md', 'LICENSE', 'SECURITY.md', 'LICENSING.md', 'CHANGELOG.md', 'DEPENDENCIES.md', manifest.main, 'docs/reference.md', 'docs/crispasr.md', 'docs/releases.md', 'assets/whatsapp-ng-lockup.svg', 'assets/whatsapp-ng-lockup.png', 'assets/whatsapp-ng-logo.svg', 'assets/whatsapp-ng-logo.png'].includes(name)
                 || (name.startsWith('src/') && /\.(ts|mjs)$/.test(name));
             if (!publicFile || !allowed.has(name) || name.split('/').some(part => part === '..' || part.startsWith('.')) || !lstatSync(resolve(root, name)).isFile()) throw new Error('Unexpected packaged file');
             required.delete(name);
