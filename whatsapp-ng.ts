@@ -279,6 +279,7 @@ export default function (pi: ExtensionAPI) {
     const ownerAuthorization = new OwnerAuthorization(router, sessionManager, canonicalConversation, allowedConversation);
     let deliberatelyOff = false;
     let startupAttemptEpoch = 0;
+    let offGeneration = 0;
     let autoConnectRetry: ReturnType<typeof setTimeout> | undefined;
     function cancelStartupRetry(): void {
         startupAttemptEpoch++;
@@ -290,7 +291,7 @@ export default function (pi: ExtensionAPI) {
         deliberatelyOff = !enabled;
         const profile = sessionManager.getAuthStateDir();
         if (enabled) phoneOffProfiles.delete(profile);
-        else { cancelStartupRetry(); phoneOffProfiles.add(profile); }
+        else { offGeneration++; cancelStartupRetry(); phoneOffProfiles.add(profile); }
         const active = pi.getActiveTools();
         const withdrawn = suspendedOutboundTools.get(profile) ?? new Set<string>();
         if (!enabled) {
@@ -329,18 +330,29 @@ export default function (pi: ExtensionAPI) {
             : Promise.resolve({ success: false, attempts: 0 }),
         stop: async ctx => { ctx.abort(); reports.reset(); indicator.settleAll(); router.reset(); await stopSpeech(); },
         off: ctx => turnWhatsAppOff(ctx),
-        resume: async (current, account) => {
+        resume: async (current, account, onOwned) => {
             const runtime = router.getRuntimeId();
             if (deliberatelyOff || !current()) return false;
             // session_start may already have constructed the auto-connect socket.
             // Observe that same attempt rather than retiring it and starting twice.
-            if (!whatsappService.getSocket()) await whatsappService.start({ allowPairingOnAuthFailure: false });
+            if (!whatsappService.getSocket()) {
+                await whatsappService.start({ allowPairingOnAuthFailure: false });
+                const started = whatsappService.getSocket();
+                if (started) onOwned?.(started);
+            }
             for (let attempt = 0; attempt < 300; attempt++) {
                 if (!current() || deliberatelyOff || runtime !== router.getRuntimeId()) return false;
                 if (whatsappService.getEffectiveStatus() === 'connected') return whatsappService.getAccountScope() === account;
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
             return false;
+        },
+        connected: () => !deliberatelyOff && whatsappService.getEffectiveStatus() === 'connected',
+        cancelAutoConnectRetry: () => cancelStartupRetry(),
+        offGeneration: () => offGeneration,
+        retire: async (socket, current) => {
+            if (deliberatelyOff || !current() || whatsappService.getSocket() !== socket) return false;
+            await whatsappService.stop(); return true;
         },
         notify: text => _ctx?.ui.notify(text, 'warning')
     });
@@ -575,7 +587,7 @@ export default function (pi: ExtensionAPI) {
     };
 
     // Initial status setup
-    pi.on("session_start", async (_event, ctx) => {
+    pi.on("session_start", async (event, ctx) => {
         const startupLifecycle = ++managedLifecycle;
         managedClosing = true;
         cancelStartupRetry();
@@ -732,6 +744,10 @@ export default function (pi: ExtensionAPI) {
         }
 
         syncManagedSpeech();
+        // After the awaited first auto-connect attempt: a valid phone-reload handoff cancels
+        // pending retries before its single reconnect (specs/045-phone-reload research R3).
+        if (startupLifecycle === managedLifecycle) void phoneControls.consumeReload(event.reason, ctx)
+            .catch(() => ctx.ui.notify('Phone reload reconnect failed. Reconnect WhatsApp from the terminal; no automatic retry.', 'warning'));
         ctx.ui.notify('WhatsApp: Session reset via /new is now fully supported.', 'info');
     });
 
@@ -1370,7 +1386,9 @@ export default function (pi: ExtensionAPI) {
         indicator.finishRun();
     });
 
-    pi.on("session_shutdown", async () => {
+    pi.on("session_shutdown", async event => {
+        // Before any reset: only the intent armed by the phone gateway survives this exact reload.
+        phoneControls.publishReload(event.reason);
         managedLifecycle++;
         managedClosing = true;
         cancelStartupRetry(); phoneControls.reset(); reports.reset();

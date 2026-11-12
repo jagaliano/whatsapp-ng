@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext } from '@mariozechner/pi-coding-agent';
 import { fuzzyFilter } from '@mariozechner/pi-tui';
 import type { IncomingMessageEnvelope, MessageResult } from '../models/whatsapp.types.js';
-import type { SessionManager } from './session.manager.js';
+import { SessionManager } from './session.manager.js';
 import { CommandMenuService, safeLabel, type CommandMenuBinding, type CommandPollInput } from './command-menu.service.js';
 import { chatReplyPolicy, outputMode, setChatReplyPreferences } from './speech-settings.js';
 import { resolveTtsConfig } from './tts-config.js';
@@ -10,11 +10,14 @@ import { t } from '../i18n.js';
 
 type Model = NonNullable<ExtensionContext['model']>;
 type Thinking = ReturnType<ExtensionAPI['getThinkingLevel']>;
-type Action = { command: 'model' | 'think' | 'voice' | 'replies' | 'new' | 'off' | 'quit'; value: string; revision?: number; query?: string };
+type Action = { command: 'model' | 'think' | 'voice' | 'replies' | 'new' | 'off' | 'quit' | 'reload'; value: string; revision?: number; query?: string };
 interface Frame extends CommandMenuBinding { revision: number }
 interface ResumeTicket { profile: string; account: string; sessionId: string; actor: string; chat: string; expires: number }
-const handoffs = globalThis as typeof globalThis & { __whatsappNgControlHandoffs?: Map<string, ResumeTicket> };
-const commands = new Set(['help', 'status', 'stop', 'abort', 'model', 'think', 'compact', 'new', 'voice', 'replies', 'off', 'quit']);
+/** Reload-only authority carried across runtime replacement: bounded, expiring, one-use; never secrets or message text. */
+export interface ReloadHandoff { profile: string; account: string; sessionId: string; actor: string; chat: string; expires: number }
+const handoffs = globalThis as typeof globalThis & { __whatsappNgControlHandoffs?: Map<string, ResumeTicket>; __whatsappNgReloadHandoffs?: Map<string, ReloadHandoff> };
+const RELOAD_TICKET_MS = 15_000; const RELOAD_HANDOFF_MS = 30_000; const RELOAD_HANDOFF_LIMIT = 10;
+const commands = new Set(['help', 'status', 'stop', 'abort', 'model', 'think', 'compact', 'new', 'voice', 'replies', 'off', 'quit', 'reload']);
 
 export interface PhoneControlPorts {
     pi: Pick<ExtensionAPI, 'getThinkingLevel' | 'setThinkingLevel' | 'setModel' | 'sendUserMessage'>;
@@ -30,7 +33,16 @@ export interface PhoneControlPorts {
     poll?: (chat: string, content: ReturnType<CommandMenuService<Action>['create']>['poll'], current: () => boolean) => Promise<MessageResult>;
     stop: (ctx: ExtensionContext) => Promise<void>;
     off: (ctx: ExtensionContext) => Promise<void>;
-    resume: (current: () => boolean, account: string) => Promise<boolean>;
+    /** `onOwned` receives the exact socket object only when this call itself started it. */
+    resume: (current: () => boolean, account: string, onOwned?: (socket: unknown) => void) => Promise<boolean>;
+    /** True only while WhatsApp is fully connected on the current account. */
+    connected: () => boolean;
+    /** Cancels pending saved auto-connect retries for this runtime start. */
+    cancelAutoConnectRetry: () => void;
+    /** Bumped only by explicit Off; connection-status resets do not change it. */
+    offGeneration: () => number;
+    /** Stops `socket` through the existing stop/lease path only if it is still the active socket and `current()` holds; returns whether it stopped. */
+    retire: (socket: unknown, current: () => boolean) => Promise<boolean>;
     notify: (text: string) => void;
 }
 
@@ -41,8 +53,10 @@ export class WhatsAppCommandRouter {
     private epoch = 0;
     private mutation?: symbol;
     private readonly newTickets = new Map<string, { frame: Frame; expires: number }>();
+    private readonly reloadTickets = new Map<string, { frame: Frame; account: string; expires: number; lock?: symbol }>();
+    private reloadIntent?: ReloadHandoff;
     constructor(private readonly ports: PhoneControlPorts) { this.menus = new CommandMenuService(ports.canonical); }
-    reset(): void { this.epoch++; this.mutation = undefined; this.sequences.clear(); this.newTickets.clear(); this.menus.reset(); }
+    reset(): void { this.epoch++; this.mutation = undefined; this.sequences.clear(); this.newTickets.clear(); this.reloadTickets.clear(); this.reloadIntent = undefined; this.menus.reset(); }
     private lock(): () => void {
         const token = Symbol(); this.mutation = token;
         return () => { if (this.mutation === token) this.mutation = undefined; };
@@ -159,6 +173,11 @@ export class WhatsAppCommandRouter {
                         { label: this.mark(t('phone.replies.statsOn'), this.ports.session.getReplyStats()), value: { command: 'replies', value: 'stats:on', revision } },
                         { label: this.mark(t('phone.replies.statsOff'), !this.ports.session.getReplyStats()), value: { command: 'replies', value: 'stats:off', revision } }, ...reporting], disclosure);
                 }
+            } else if (command === 'reload') {
+                if (argument) await this.reply(frame, t('phone.usage', { command: '/reload' }));
+                else if (SessionManager.isGroupJid(chat)) await this.reply(frame, t('phone.reload.privateOnly'));
+                else await this.menu(frame, t('phone.reload.title'), [
+                    { label: t('phone.cancel'), value: { command, value: 'cancel' } }, { label: t('phone.confirm'), value: { command, value: 'confirm' } }], t('phone.reload.confirm', { shared: t('phone.shared') }));
             } else if (!argument && (command === 'new' || command === 'off' || command === 'quit')) {
                 await this.menu(frame, t(`phone.${command}.title`), [
                     { label: t('phone.cancel'), value: { command, value: 'cancel' } }, { label: t('phone.confirm'), value: { command, value: 'confirm' } }], t(`phone.${command}.body`, { shared: t('phone.shared') }));
@@ -179,7 +198,7 @@ export class WhatsAppCommandRouter {
             t('phone.help.shared'), t('phone.help.cmd.stop'), t('phone.help.cmd.model'), t('phone.help.cmd.think'),
             t('phone.help.cmd.compact'), t('phone.help.cmd.new'), t('phone.help.cmd.replies'), '',
             t('phone.help.chat'), t('phone.help.cmd.voice'), '',
-            t('phone.help.process'), t('phone.help.cmd.off'), t('phone.help.cmd.quit'), '',
+            t('phone.help.process'), t('phone.help.cmd.reload'), t('phone.help.cmd.off'), t('phone.help.cmd.quit'), '',
             t('phone.shared'), t('phone.help.ownerOnly'), t('phone.help.expiry'),
             t('phone.help.mode', { mode: t(`phone.mode.${chatReplyPolicy(this.ports.session.getSpeechSettings(), chat, this.ports.canonical).mode}`) })
         ].join('\n');
@@ -272,6 +291,14 @@ export class WhatsAppCommandRouter {
             } else if (action.command === 'new') {
                 const token = randomUUID(); this.newTickets.clear(); this.newTickets.set(token, { frame, expires: Date.now() + 15_000 });
                 this.ports.pi.sendUserMessage(`/whatsapp --internal control-new ${token}`, { expandPromptTemplates: true, deliverAs: 'followUp' });
+            } else if (action.command === 'reload') {
+                if (SessionManager.isGroupJid(frame.chat)) { await this.reply(frame, t('phone.reload.privateOnly')); return; }
+                if (!this.ports.connected()) { await this.reply(frame, t('phone.reload.notConnected')); return; }
+                const token = randomUUID(); this.reloadTickets.clear();
+                this.reloadTickets.set(token, { frame, account: this.ports.account(), expires: Date.now() + RELOAD_TICKET_MS, lock: this.mutation });
+                await this.reply(frame, t('phone.reload.started'));
+                if (frame.current()) this.ports.pi.sendUserMessage(`/whatsapp --internal control-reload ${token}`, { expandPromptTemplates: true, deliverAs: 'followUp' });
+                else this.reloadTickets.delete(token);
             } else if (action.command === 'off') {
                 await this.reply(frame, t('phone.off.done'));
                 if (frame.current()) await this.ports.off(ctx);
@@ -292,9 +319,10 @@ export class WhatsAppCommandRouter {
 
     /** Native command context only. Tokens are in-memory, one-use, scoped and never supplied by a phone payload. */
     async gateway(args: string, ctx: ExtensionCommandContext): Promise<void> {
-        const match = /^--internal control-(new|resume) ([a-f0-9-]{36})$/.exec(args);
+        const match = /^--internal control-(new|resume|reload) ([a-f0-9-]{36})$/.exec(args);
         if (!match) { ctx.ui.notify('Internal phone control cannot be invoked manually.', 'warning'); return; }
         const token = match[2];
+        if (match[1] === 'reload') { await this.reload(token, ctx); return; }
         if (match[1] === 'new') {
             const ticket = this.newTickets.get(token); this.newTickets.delete(token);
             const frame = ticket?.frame;
@@ -321,6 +349,69 @@ export class WhatsAppCommandRouter {
             && this.ports.allowed(ticket.chat) && sessionId === this.ports.context()?.sessionManager.getSessionId();
         if (await this.ports.resume(current, ticket.account) && current()) await this.ports.send(ticket.chat, t('phone.new.ready'), current);
         else ctx.ui.notify('New Pi session created; reconnect WhatsApp from the terminal.', 'warning');
+    }
+
+    /** Last action of the native gateway: arms one-use intent, then Pi's standard reload; no work afterward. */
+    private async reload(token: string, ctx: ExtensionCommandContext): Promise<void> {
+        const ticket = this.reloadTickets.get(token); this.reloadTickets.delete(token);
+        const frame = ticket?.frame;
+        if (!ticket || ticket.expires <= Date.now() || !frame?.current()) {
+            if (frame?.current()) await this.reply(frame, t('phone.reload.expired'));
+            ctx.ui.notify('Phone reload request expired.', 'warning'); return;
+        }
+        // Only the confirming apply's own lock may still be held (plan D2); any other phone mutation blocks.
+        if (!ctx.isIdle() || ctx.hasPendingMessages() || (this.mutation && this.mutation !== ticket.lock)) { await this.reply(frame, t('phone.busy')); ctx.ui.notify('Phone reload refused: Pi is busy.', 'warning'); return; }
+        if (!this.ports.connected() || this.ports.account() !== ticket.account) { await this.reply(frame, t('phone.reload.notConnected')); ctx.ui.notify('Phone reload refused: WhatsApp is not connected.', 'warning'); return; }
+        const intent: ReloadHandoff = { profile: this.ports.session.getAuthStateDir(), account: ticket.account, sessionId: ctx.sessionManager.getSessionId(),
+            actor: frame.actor, chat: frame.chat, expires: Date.now() + RELOAD_HANDOFF_MS };
+        this.reloadIntent = intent;
+        // No catch: Pi keeps its own diagnostics and recovery path for a failed reload.
+        try { await ctx.reload(); } finally { if (this.reloadIntent === intent) this.reloadIntent = undefined; }
+    }
+
+    /** Old runtime, session_shutdown: publish only the intent armed for this exact reload; any other shutdown revokes. */
+    publishReload(reason: string | undefined): void {
+        const intent = this.reloadIntent; this.reloadIntent = undefined;
+        const profile = this.ports.session.getAuthStateDir();
+        const tickets = handoffs.__whatsappNgReloadHandoffs ??= new Map();
+        tickets.delete(profile);
+        if (reason !== 'reload' || !intent || intent.expires <= Date.now() || intent.profile !== profile) return;
+        for (const [id, ticket] of tickets) if (ticket.expires <= Date.now()) tickets.delete(id);
+        while (tickets.size >= RELOAD_HANDOFF_LIMIT) tickets.delete(tickets.keys().next().value!);
+        tickets.set(profile, intent);
+    }
+
+    /** New runtime, session_start after WhatsApp initialization: consume once, revalidate, then the single reconnect. */
+    async consumeReload(reason: string | undefined, ctx: ExtensionContext): Promise<void> {
+        const profile = this.ports.session.getAuthStateDir();
+        const ticket = handoffs.__whatsappNgReloadHandoffs?.get(profile); handoffs.__whatsappNgReloadHandoffs?.delete(profile);
+        if (reason !== 'reload' || !ticket) return;
+        const sessionId = ctx.sessionManager.getSessionId();
+        if (ticket.expires <= Date.now() || ticket.profile !== profile || ticket.sessionId !== sessionId || SessionManager.isGroupJid(ticket.chat)
+            || !this.ports.owner(ticket.actor) || !this.ports.allowed(ticket.chat)) { ctx.ui.notify('Phone reload handoff expired or was no longer authorized; WhatsApp was not reconnected for it.', 'warning'); return; }
+        // An account already known (saved auto-connect connected) must match before anything is cancelled or reconnected.
+        const preconnected = this.ports.connected();
+        if (preconnected && this.ports.account() !== ticket.account) { ctx.ui.notify('Phone reload handoff belongs to a different WhatsApp account; it was not used.', 'warning'); return; }
+        // Synchronously, before any await: the reload's reconnect replaces saved auto-connect retries for this start.
+        this.ports.cancelAutoConnectRetry();
+        // No router epoch: connection-status resets during the reconnect itself must not void the acknowledgment.
+        const revision = this.ports.session.getOperatorRevision(); const off = this.ports.offGeneration();
+        const current = () => off === this.ports.offGeneration() && revision === this.ports.session.getOperatorRevision() && this.ports.owner(ticket.actor)
+            && this.ports.allowed(ticket.chat) && sessionId === this.ports.context()?.sessionManager.getSessionId();
+        let owned: unknown;
+        if (await this.ports.resume(current, ticket.account, socket => { owned = socket; }) && current()) { await this.ports.send(ticket.chat, t('phone.reload.ready'), current); return; }
+        // Ownership is the exact socket object this reload started, never inferred from connection status.
+        // An auto-connect or operator connection is never retired; changed authority (Off, owner, chat, session) blocks it.
+        if (owned !== undefined && current() && this.ports.connected() && this.ports.account() !== ticket.account) {
+            if (await this.ports.retire(owned, current)) {
+                this.ports.notify('Phone reload reconnected a different WhatsApp account; it was disconnected without reply. Reconnect from the terminal.'); return;
+            }
+        }
+        this.ports.notify('Pi reloaded, but WhatsApp did not reconnect. Reconnect WhatsApp from the terminal; no automatic retry.');
+        // Best effort, attempted once; an uncertain outcome is never repeated.
+        // Only on the requesting account: never reply through another account's connection.
+        const sameAccount = () => current() && this.ports.account() === ticket.account;
+        if (sameAccount()) await this.ports.send(ticket.chat, t('phone.reload.failed'), sameAccount).catch(() => undefined);
     }
 }
 

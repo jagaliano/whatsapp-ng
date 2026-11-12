@@ -49,9 +49,15 @@ globalThis.__waPhoneRpcFixture = { metrics, save, deliver: async (text, response
 save();
 export function makeWASocket() {
     const ev = new EventEmitter(); metrics.socketStarts++; save();
-    const current = { ev, user: { id: self, ...(selfChat ? { lid } : {}) }, opened: false,
+    // Explicit synthetic start failures (1-based start numbers) for reload/auto-connect race tests only.
+    if ((process.env.WA_PHONE_RPC_FAIL_STARTS ?? '').split(',').includes(String(metrics.socketStarts))) throw new Error('Synthetic socket start failure');
+    // Explicit synthetic different account (1-based start numbers) for the reload account-mismatch tests only.
+    const foreign = (process.env.WA_PHONE_RPC_ACCOUNT_STARTS ?? '').split(',').includes(String(metrics.socketStarts));
+    const current = { ev, user: { id: foreign ? '15550000077@s.whatsapp.net' : self, ...(selfChat && !foreign ? { lid } : {}) }, opened: false,
         signalRepository: { lidMapping: { getPNForLID: async () => null } },
         sendMessage: async (jid, content, options = {}) => {
+            // Explicit synthetic hold of group sends for the reload busy race (G-M2) only.
+            if (jid.endsWith('@g.us') && globalThis.__waGroupSendGate?.held) { metrics.heldGroupSends = (metrics.heldGroupSends ?? 0) + 1; save(); await globalThis.__waGroupSendGate.promise; }
             const messageId = options.messageId ?? `fixture-reaction-${++serial}`;
             const image = process.env.WA_PHONE_RPC_OPTIONAL === 'images' && content.image;
             if (image) { metrics.imageSends++; metrics.imageSnapshotsPrivate &&= (statSync(content.image.url).mode & 0o777) === 0o600 && readFileSync(content.image.url).length > 0; }
@@ -70,7 +76,8 @@ export function makeWASocket() {
     };
     socket = current;
     const open = () => { if (!ev.listenerCount('connection.update')) { setTimeout(open, 10).unref(); return; } current.opened = true; ev.emit('connection.update', { connection: 'open' }); };
-    setTimeout(open, 20).unref();
+    // Explicit synthetic slow opens (1-based start numbers) for the reload/Off race test only.
+    setTimeout(open, (process.env.WA_PHONE_RPC_SLOW_STARTS ?? '').split(',').includes(String(metrics.socketStarts)) ? 6000 : 20).unref();
     return current;
 }
 export default makeWASocket;

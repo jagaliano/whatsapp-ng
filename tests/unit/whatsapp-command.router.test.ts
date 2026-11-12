@@ -8,12 +8,12 @@ import { getSupportedThinkingLevels } from '@earendil-works/pi-ai';
 const owner = '15550000001@s.whatsapp.net'; const other = '15550000002@s.whatsapp.net'; const group = '120363000000@g.us';
 const model = { provider: 'fixture', id: 'chat/exact', reasoning: true, thinkingLevelMap: { minimal: null, xhigh: 'xhigh' } } as any;
 function fixture() {
-    let revision = 0; let scope = 'account:1/session:1'; let idle = true; let pending = false; let allowed = true; let n = 0; let stats = false; let statsRevision = 0;
+    let revision = 0; let scope = 'account:1/session:1'; let idle = true; let pending = false; let allowed = true; let n = 0; let stats = false; let statsRevision = 0; let connected = true; let account = 'account:1'; let offGeneration = 0;
     let reporting = { changedFiles: false, interimText: false, liveActivity: false }; let reportingRevision = 0;
     let settings = speechDefaults(); const sent: string[] = [];
     const ctx = { isIdle: () => idle, hasPendingMessages: () => pending, getContextUsage: () => ({ percent: 25 }), model,
         modelRegistry: { getAvailable: vi.fn().mockResolvedValue([model]) }, compact: vi.fn(), abort: vi.fn(), shutdown: vi.fn(),
-        sessionManager: { getSessionId: () => scope }, ui: { notify: vi.fn() }, newSession: vi.fn().mockResolvedValue({ cancelled: true }) };
+        sessionManager: { getSessionId: () => scope }, ui: { notify: vi.fn() }, newSession: vi.fn().mockResolvedValue({ cancelled: true }), reload: vi.fn().mockResolvedValue(undefined) };
     const ports = { pi: { getThinkingLevel: () => 'high', setThinkingLevel: vi.fn(), setModel: vi.fn().mockResolvedValue(true), sendUserMessage: vi.fn() },
         session: { getOperatorRevision: () => revision, getStatus: () => 'connected', getFinalAfterAttachments: () => true,
             getReplyStats: () => stats, getReplyStatsRevision: () => statsRevision,
@@ -22,7 +22,7 @@ function fixture() {
             setReplyStats: vi.fn(async (enabled, current) => { if (!current()) throw new Error('Expired'); stats = enabled; statsRevision++; }),
             getSpeechRevision: () => 0, getSpeechSettings: () => structuredClone(settings), setSpeechSettings: vi.fn(async (next, _revision, current) => { if (!current()) throw new Error('Expired'); settings = next; }),
             setFinalAfterAttachments: vi.fn(), getAuthStateDir: () => '/synthetic/profile' },
-        context: () => ctx, scope: () => scope, account: () => 'account:1', allowed: () => allowed, canonical: (jid: string) => jid,
+        context: () => ctx, scope: () => scope, account: () => account, connected: vi.fn(() => connected), cancelAutoConnectRetry: vi.fn(), offGeneration: () => offGeneration, retire: vi.fn().mockResolvedValue(undefined), allowed: () => allowed, canonical: (jid: string) => jid,
         actor: (key: any) => key.fromMe === false ? key.participant ?? key.remoteJid : undefined, owner: (actor: string) => actor === owner,
         send: vi.fn(async (_chat, text, current) => { if (!current()) return { success: false, attempts: 0 }; sent.push(text); return { success: true, messageId: `sent-${++n}`, attempts: 1 }; }),
         stop: vi.fn().mockResolvedValue(undefined), off: vi.fn().mockResolvedValue(undefined), resume: vi.fn().mockResolvedValue(true), notify: vi.fn() };
@@ -30,7 +30,7 @@ function fixture() {
     const handle = (text: string, actor = owner, chat = actor, quotedId?: string) => router.handle({ key: { remoteJid: chat, id: `incoming-${n}`, fromMe: false, ...(chat === group ? { participant: actor } : {}) },
         message: { conversation: text }, sessionContext: { accountScope: 'account:1', generation: 1 }, senderNumber: actor }, text, quotedId);
     return { router, ports, ctx, sent, handle, busy: () => { idle = false; }, queued: () => { pending = true; }, revoke: () => { revision++; }, replace: () => { scope = 'account:2/session:2'; },
-        deny: () => { allowed = false; }, changeStats: () => { statsRevision++; }, changeReporting: () => { reportingRevision++; }, settings: () => settings, enableSpeech: () => { settings.enabled = true; settings.approvedDestinationKey = resolveTtsConfig(settings.config).destinationKey; } };
+        deny: () => { allowed = false; }, allow: () => { allowed = true; }, disconnect: () => { connected = false; }, switchAccount: () => { account = 'account:2'; }, idle: () => { idle = true; pending = false; }, offThenConnect: () => { offGeneration++; }, setAccount: (value: string) => { account = value; }, reconnect: () => { connected = true; }, changeStats: () => { statsRevision++; }, changeReporting: () => { reportingRevision++; }, settings: () => settings, enableSpeech: () => { settings.enabled = true; settings.approvedDestinationKey = resolveTtsConfig(settings.config).destinationKey; } };
 }
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); resetI18n(); });
 describe('exact owner phone controls', () => {
@@ -298,5 +298,155 @@ describe('exact owner phone controls', () => {
         await h.handle('/new'); await h.handle('2'); vi.advanceTimersByTime(15_001);
         await h.router.gateway((h.ports.pi.sendUserMessage.mock.calls[0][0] as string).slice('/whatsapp '.length), h.ctx as any);
         expect(h.ctx.newSession).not.toHaveBeenCalled();
+    });
+});
+
+describe('phone /reload (specs/045-phone-reload)', () => {
+    const gatewayArgs = (h: ReturnType<typeof fixture>) => (h.ports.pi.sendUserMessage.mock.calls.at(-1)![0] as string).slice('/whatsapp '.length);
+    const confirm = async (h: ReturnType<typeof fixture>) => { await h.handle('/reload'); await h.handle('2'); return gatewayArgs(h); };
+    const handoffs = () => (globalThis as any).__whatsappNgReloadHandoffs as Map<string, any> | undefined;
+    afterEach(() => { handoffs()?.clear(); });
+    /** Simulates Pi's reload: old runtime shutdown(reload) publishes, a fresh router consumes after initialization. */
+    const reloadInto = (old: ReturnType<typeof fixture>, next = fixture()) => { old.ctx.reload.mockImplementation(async () => { old.router.publishReload('reload'); old.router.reset(); }); return next; };
+
+    it('confirms through a one-use native gateway whose last action is the standard reload', async () => {
+        const h = fixture(); await h.handle('/reload');
+        expect(h.sent.at(-1)).toContain(t('phone.reload.title')); expect(h.ports.pi.sendUserMessage).not.toHaveBeenCalled();
+        await h.handle('2'); expect(h.sent.at(-1)).toBe(t('phone.reload.started'));
+        const [content, options] = h.ports.pi.sendUserMessage.mock.calls[0];
+        expect(content).toMatch(/^\/whatsapp --internal control-reload [a-f0-9-]{36}$/); expect(options).toMatchObject({ expandPromptTemplates: true, deliverAs: 'followUp' });
+        const sends = h.ports.send.mock.calls.length; const args = gatewayArgs(h);
+        await h.router.gateway(args, h.ctx as any); expect(h.ctx.reload).toHaveBeenCalledOnce();
+        expect(h.ports.send.mock.calls.length).toBe(sends); expect(h.ports.resume).not.toHaveBeenCalled(); expect(h.ports.stop).not.toHaveBeenCalled();
+        await h.router.gateway(args, h.ctx as any); expect(h.ctx.reload).toHaveBeenCalledOnce();
+    });
+    it('reconnects once and acknowledges in the requesting chat after reload, including with auto-connect off', async () => {
+        const old = fixture(); const next = reloadInto(old); const args = await confirm(old);
+        await old.router.gateway(args, old.ctx as any);
+        expect(handoffs()?.size).toBe(1); const before = next.ctx.sessionManager.getSessionId();
+        await next.router.consumeReload('reload', next.ctx as any);
+        expect(next.ports.cancelAutoConnectRetry).toHaveBeenCalledOnce(); expect(next.ports.resume).toHaveBeenCalledOnce();
+        expect(next.ports.resume.mock.calls[0][1]).toBe('account:1'); expect(next.sent).toEqual([t('phone.reload.ready')]);
+        expect(next.ports.send.mock.calls[0][0]).toBe(owner); expect(next.ctx.sessionManager.getSessionId()).toBe(before);
+        expect(next.ports.session.setSpeechSettings).not.toHaveBeenCalled(); expect(next.ports.session.setFinalAfterAttachments).not.toHaveBeenCalled();
+        expect(handoffs()?.size).toBe(0);
+        await next.router.consumeReload('reload', next.ctx as any); expect(next.ports.resume).toHaveBeenCalledOnce(); expect(next.sent).toHaveLength(1);
+    });
+    it('acknowledges recovery without claiming every extension loaded, in every locale', () => {
+        for (const locale of ['en', 'pt-BR', 'es', 'fr']) { vi.stubEnv('WHATSAPP_NG_LOCALE', locale); initI18n(undefined); expect(t('phone.reload.ready')).not.toMatch(/all extensions|todas|toutes/i); }
+    });
+    it('denies non-owners and every group, without a menu or reload', async () => {
+        const h = fixture(); await h.handle('/reload', other); expect(h.sent.at(-1)).toContain('Owner authorization');
+        await h.handle('/reload', owner, group); expect(h.sent.at(-1)).toBe(t('phone.reload.privateOnly'));
+        await h.handle('/reload now'); expect(h.sent.at(-1)).toBe(t('phone.usage', { command: '/reload' }));
+        expect(h.ports.pi.sendUserMessage).not.toHaveBeenCalled(); expect(h.ctx.reload).not.toHaveBeenCalled();
+    });
+    it('refuses cancel, busy, pending and not-connected confirmations while staying connected', async () => {
+        const h = fixture(); await h.handle('/reload'); await h.handle('1'); expect(h.sent.at(-1)).toBe(t('phone.cancelled'));
+        h.busy(); await h.handle('/reload'); await h.handle('2'); expect(h.sent.at(-1)).toBe(t('phone.busy'));
+        h.idle(); h.queued(); await h.handle('/reload'); await h.handle('2'); expect(h.sent.at(-1)).toBe(t('phone.busy'));
+        h.idle(); h.disconnect(); await h.handle('/reload'); await h.handle('2'); expect(h.sent.at(-1)).toBe(t('phone.reload.notConnected'));
+        expect(h.ports.pi.sendUserMessage).not.toHaveBeenCalled(); expect(h.ctx.reload).not.toHaveBeenCalled();
+        expect(h.ports.stop).not.toHaveBeenCalled(); expect(h.ports.off).not.toHaveBeenCalled();
+    });
+    it('rechecks busy, pending, connection and account at the gateway', async () => {
+        for (const change of ['busy', 'queued', 'disconnect', 'switchAccount'] as const) {
+            const h = fixture(); const args = await confirm(h); h[change]();
+            await h.router.gateway(args, h.ctx as any); expect(h.ctx.reload).not.toHaveBeenCalled();
+            expect(h.sent.at(-1)).toBe(t(change === 'busy' || change === 'queued' ? 'phone.busy' : 'phone.reload.notConnected'));
+        }
+    });
+    it('refuses expired, forged, replayed and superseded tokens', async () => {
+        vi.useFakeTimers(); const h = fixture();
+        await h.router.gateway('--internal control-reload 00000000-0000-0000-0000-000000000000', h.ctx as any);
+        const args = await confirm(h); vi.advanceTimersByTime(15_001); await h.router.gateway(args, h.ctx as any);
+        expect(h.sent.at(-1)).toBe(t('phone.reload.expired'));
+        const first = await confirm(h); const second = await confirm(h); await h.router.gateway(first, h.ctx as any);
+        expect(h.ctx.reload).not.toHaveBeenCalled(); await h.router.gateway(second, h.ctx as any); expect(h.ctx.reload).toHaveBeenCalledOnce();
+        expect(h.ctx.ui.notify).toHaveBeenCalledWith('Phone reload request expired.', 'warning');
+    });
+    it.each(['expired', 'session', 'owner', 'chat', 'off'] as const)('never reconnects or replies for a %s handoff', async change => {
+        vi.useFakeTimers(); const old = fixture(); const next = reloadInto(old); await old.router.gateway(await confirm(old), old.ctx as any);
+        if (change === 'expired') vi.advanceTimersByTime(30_001);
+        if (change === 'session') next.replace();
+        if (change === 'owner') (next.ports as any).owner = () => false;
+        if (change === 'chat' || change === 'off') next.deny();
+        await next.router.consumeReload('reload', next.ctx as any);
+        expect(next.ports.resume).not.toHaveBeenCalled(); expect(next.ports.send).not.toHaveBeenCalled(); expect(next.ports.cancelAutoConnectRetry).not.toHaveBeenCalled();
+    });
+    it('revokes the intent for other shutdowns and stale handoffs on ordinary starts', async () => {
+        const h = fixture(); await h.router.gateway(await confirm(h), h.ctx as any);
+        h.router.publishReload('quit'); expect(handoffs()?.size ?? 0).toBe(0);
+        h.router.publishReload('reload'); expect(handoffs()?.size ?? 0).toBe(0);
+        const old = fixture(); const next = reloadInto(old); await old.router.gateway(await confirm(old), old.ctx as any);
+        await next.router.consumeReload('startup', next.ctx as any); expect(handoffs()?.size).toBe(0);
+        await next.router.consumeReload('reload', next.ctx as any); expect(next.ports.resume).not.toHaveBeenCalled();
+    });
+    it('clears the armed intent when Pi rejects the reload, propagating the error', async () => {
+        const h = fixture(); h.ctx.reload.mockRejectedValue(new Error('Synthetic reload failure'));
+        await expect(h.router.gateway(await confirm(h), h.ctx as any)).rejects.toThrow('Synthetic reload failure');
+        h.router.publishReload('reload'); expect(handoffs()?.size ?? 0).toBe(0);
+    });
+    it('reports a failed reconnect once on the terminal and best effort on the phone, without retry or resend', async () => {
+        const old = fixture(); const next = reloadInto(old); await old.router.gateway(await confirm(old), old.ctx as any);
+        next.ports.resume.mockResolvedValue(false);
+        next.ports.send.mockResolvedValueOnce({ success: false, delivery: 'unknown', messageId: 'uncertain', attempts: 1 } as any);
+        await next.router.consumeReload('reload', next.ctx as any);
+        expect(next.ports.resume).toHaveBeenCalledOnce(); expect(next.ports.notify).toHaveBeenCalledWith(expect.stringContaining('Reconnect WhatsApp from the terminal'));
+        expect(next.ports.send).toHaveBeenCalledOnce(); expect(next.ports.send.mock.calls[0][1]).toBe(t('phone.reload.failed'));
+    });
+    it('lists /reload in localized help', async () => {
+        const h = fixture(); await h.handle('/help'); expect(h.sent.at(-1)).toContain(t('phone.help.cmd.reload'));
+    });
+
+    it('R2: Off then Connect during the reconnect wait voids the acknowledgment', async () => {
+        const old = fixture(); const next = reloadInto(old); await old.router.gateway(await confirm(old), old.ctx as any);
+        next.ports.resume.mockImplementation(async () => { next.offThenConnect(); return true; });
+        await next.router.consumeReload('reload', next.ctx as any);
+        expect(next.sent).not.toContain(t('phone.reload.ready'));
+    });
+    it('R3: refuses an already-connected different account before cancelling retries or reconnecting', async () => {
+        const old = fixture(); const next = reloadInto(old); await old.router.gateway(await confirm(old), old.ctx as any);
+        next.switchAccount();
+        await next.router.consumeReload('reload', next.ctx as any);
+        expect(next.ports.cancelAutoConnectRetry).not.toHaveBeenCalled(); expect(next.ports.resume).not.toHaveBeenCalled(); expect(next.ports.send).not.toHaveBeenCalled();
+    });
+    const owned = { synthetic: 'reload-owned-socket' };
+    const mismatch = (next: ReturnType<typeof fixture>, start: boolean, during?: () => void) => {
+        next.disconnect();
+        next.ports.resume.mockImplementation(async (_current: () => boolean, _account: string, onOwned?: (socket: unknown) => void) => {
+            if (start) onOwned?.(owned); during?.(); next.setAccount('account:2'); next.reconnect(); return false; });
+    };
+    it('B1: retires exactly the reload-owned socket while authority is current, without acknowledgment', async () => {
+        const old = fixture(); const next = reloadInto(old); await old.router.gateway(await confirm(old), old.ctx as any);
+        mismatch(next, true); await next.router.consumeReload('reload', next.ctx as any);
+        expect(next.ports.retire).toHaveBeenCalledOnce(); expect(next.ports.retire.mock.calls[0][0]).toBe(owned);
+        expect(next.sent).not.toContain(t('phone.reload.ready'));
+    });
+    it('B1: never retires a socket the reload did not start (auto-connect still opening)', async () => {
+        const old = fixture(); const next = reloadInto(old); await old.router.gateway(await confirm(old), old.ctx as any);
+        mismatch(next, false); await next.router.consumeReload('reload', next.ctx as any);
+        expect(next.ports.retire).not.toHaveBeenCalled(); expect(next.sent).not.toContain(t('phone.reload.ready'));
+    });
+    it('B2: never sends the failure notice over a different account', async () => {
+        const old = fixture(); const next = reloadInto(old); await old.router.gateway(await confirm(old), old.ctx as any);
+        mismatch(next, false); await next.router.consumeReload('reload', next.ctx as any);
+        expect(next.ports.send).not.toHaveBeenCalled();
+    });
+    it('B1: never retires after authority changed (Off then operator Connect)', async () => {
+        const old = fixture(); const next = reloadInto(old); await old.router.gateway(await confirm(old), old.ctx as any);
+        mismatch(next, true, () => next.offThenConnect()); await next.router.consumeReload('reload', next.ctx as any);
+        expect(next.ports.retire).not.toHaveBeenCalled(); expect(next.sent).toEqual([]);
+    });
+    it('R3: a reconnect failure on the same account does not retire anything', async () => {
+        const old = fixture(); const next = reloadInto(old); await old.router.gateway(await confirm(old), old.ctx as any);
+        next.disconnect(); next.ports.resume.mockResolvedValue(false);
+        await next.router.consumeReload('reload', next.ctx as any); expect(next.ports.retire).not.toHaveBeenCalled();
+    });
+    it('R1: a phone /compact started from another allowed chat after confirmation blocks the gateway', async () => {
+        const h = fixture(); const args = await confirm(h);
+        await h.handle('/compact', owner, group); expect(h.ctx.compact).toHaveBeenCalledOnce();
+        await h.router.gateway(args, h.ctx as any);
+        expect(h.ctx.reload).not.toHaveBeenCalled(); expect(h.sent.at(-1)).toBe(t('phone.busy'));
     });
 });

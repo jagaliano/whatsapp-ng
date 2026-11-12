@@ -33,7 +33,7 @@ function fixture() {
         owner: (actor: string) => actor === owner, send: vi.fn(async (_chat: string, text: string) => {
             sent.push(text); return { success: true, attempts: 1, messageId: `sent-${sent.length}` }; }),
         poll: vi.fn(async (_chat: string, _content: { values: string[] }) => ({ success: true, attempts: 1, messageId: 'fixture-poll' })),
-        stop: vi.fn(), off: vi.fn(), resume: vi.fn(async () => true), notify: vi.fn() };
+        stop: vi.fn(), off: vi.fn(), resume: vi.fn(async () => true), notify: vi.fn(), connected: () => true, cancelAutoConnectRetry: vi.fn() };
     const router = new WhatsAppCommandRouter(ports as unknown as PhoneControlPorts);
     const handle = (text: string, actor = owner, chat = actor, quotedId?: string) => router.handle({ key: { remoteJid: chat, id: 'fixture-in', fromMe: false, ...(chat === group ? { participant: actor } : {}) },
         message: { conversation: text }, sessionContext: { accountScope: 'fixture-account', generation: 1 }, senderNumber: actor }, text, quotedId);
@@ -55,8 +55,8 @@ describe('grouped help', () => {
     it('lists exact command tokens once, grouped and readable by a non-owner', async () => {
         const h = fixture(); await h.handle('/help', other);
         const text = h.sent[0];
-        expect(text.match(/(?<![\w/])\/(?:help|status|stop|abort|model|think|compact|new|voice|replies|off|quit)\b/g)?.sort()).toEqual(
-            ['/help', '/status', '/stop', '/abort', '/model', '/think', '/compact', '/new', '/voice', '/replies', '/off', '/quit'].sort());
+        expect(text.match(/(?<![\w/])\/(?:help|status|stop|abort|model|think|compact|new|voice|replies|reload|off|quit)\b/g)?.sort()).toEqual(
+            ['/help', '/status', '/stop', '/abort', '/model', '/think', '/compact', '/new', '/voice', '/replies', '/reload', '/off', '/quit'].sort());
         const headings = ['Information', 'Shared Pi session', 'This chat', 'WhatsApp and process'].map(value => text.indexOf(value));
         expect(headings.every(index => index >= 0)).toBe(true); expect(headings).toEqual([...headings].sort((a, b) => a - b));
         for (const value of ['[provider/model or search]', '[level]', '[focus]', '[text|voice|both|mirror]', 'owner-only', 'five minutes', 'Current chat mode']) expect(text).toContain(value);
@@ -135,6 +135,16 @@ describe.each(locales)('phone presentation (%s)', locale => {
         const actual = entries(source.slice(start, end < 0 ? undefined : end));
         expect(Object.keys(actual).sort()).toEqual(Object.keys(expected).sort());
         for (const [key, value] of Object.entries(expected)) expect(actual[key].match(/\{\w+\}/g)?.sort() ?? []).toEqual(value.match(/\{\w+\}/g)?.sort() ?? []);
+    });
+    it('localizes every phone /reload string (9 keys, contracts/phone-reload.md)', async () => {
+        localize(locale);
+        const keys = ['phone.help.cmd.reload', 'phone.reload.title', 'phone.reload.confirm', 'phone.reload.privateOnly', 'phone.reload.started',
+            'phone.reload.expired', 'phone.reload.notConnected', 'phone.reload.ready', 'phone.reload.failed'] as const;
+        const english = (key: string) => { vi.stubEnv('WHATSAPP_NG_LOCALE', 'en'); initI18n(undefined); const value = t(key as never); localize(locale); return value; };
+        for (const key of keys) { expect(t(key)).not.toBe(key); if (locale !== 'en') expect(t(key)).not.toBe(english(key)); }
+        expect(t('phone.reload.title').length).toBeLessThanOrEqual(120);
+        const h = fixture(); await h.handle('/reload'); await h.handle('/reload', owner, group);
+        expect(h.sent[0]).toContain(t('phone.reload.title')); expect(h.sent[1]).toBe(t('phone.reload.privateOnly')); noEnglish(h.sent.join('\n'), locale); h.router.reset();
     });
     it('renders grouped help and split status with identifiers untouched', async () => {
         localize(locale); const h = fixture(); await h.handle('/help', other); await h.handle('/status', other);

@@ -13,13 +13,13 @@ afterEach(() => { vi.unstubAllEnvs(); resetI18n(); });
 
 /** Real Pi command context/lifecycle; WhatsApp transport and fixture model streams are synthetic. */
 describe('production phone-control Pi RPC gateway', () => {
-    it.each(['phone-polish:en', 'phone-polish:pt-BR', 'phone-polish:es', 'phone-polish:fr', 'menu-polish:en', 'menu-polish:pt-BR', 'menu-polish:es', 'menu-polish:fr', 'direct', 'owner-guidance', 'menu-ui', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard', 'autoconnect', 'classify', 'classify-terminal', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async scenario => {
+    it.each(['phone-polish:en', 'phone-polish:pt-BR', 'phone-polish:es', 'phone-polish:fr', 'menu-polish:en', 'menu-polish:pt-BR', 'menu-polish:es', 'menu-polish:fr', 'direct', 'owner-guidance', 'menu-ui', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard', 'autoconnect', 'classify', 'classify-terminal', 'reload', 'reload-auto', 'reload-retry', 'reload-invalid', 'reload-fail', 'reload-off', 'reload-account', 'reload-account-auto', 'reload-offrace', 'reload-busy', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async scenario => {
         const [mode, locale = 'en'] = scenario.split(':');
         vi.stubEnv('WHATSAPP_NG_LOCALE', locale); initI18n(undefined);
         const root = await mkdtemp(join(tmpdir(), 'wa-phone-rpc-')); const home = join(root, 'home'); const workspace = join(root, 'workspace');
         const data = join(home, '.pi/agent/extensions/whatsapp-ng'); const metricsPath = join(root, 'metrics.json'); const networkPath = join(root, 'network.json');
         await mkdir(join(data, 'auth'), { recursive: true }); await mkdir(workspace);
-        const managed = mode.startsWith('managed-'); const automatic = mode === 'autoconnect' || mode === 'managed-auto';
+        const managed = mode.startsWith('managed-'); const reload = mode.startsWith('reload'); const automatic = mode === 'autoconnect' || mode === 'managed-auto' || (reload && !['reload', 'reload-off', 'reload-account', 'reload-offrace'].includes(mode));
         const serverMetrics = join(root, 'speech.jsonl'); let endpoint = '';
         if (managed) {
             const server = createServer(); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address();
@@ -27,7 +27,7 @@ describe('production phone-control Pi RPC gateway', () => {
             endpoint = `http://127.0.0.1:${address.port}/v1`; await new Promise<void>(resolve => server.close(() => resolve()));
         }
         const classify = mode === 'classify' || mode === 'classify-terminal';
-        const selfChat = mode === 'self-lid' || mode === 'self-auto'; const modelFixture = classify || ['stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard'].includes(mode) || managed;
+        const selfChat = mode === 'self-lid' || mode === 'self-auto'; const modelFixture = classify || mode === 'reload-busy' || ['stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard'].includes(mode) || managed;
         const owner = selfChat ? '15550000009@s.whatsapp.net' : '15550000001@s.whatsapp.net';
         await writeFile(join(data, 'config.json'), JSON.stringify({ operatorJid: mode === 'owner-guidance' ? '' : owner, allowList: [{ number: '+' + owner.split('@')[0] }],
             ...(automatic ? { autoConnect: true } : {}),
@@ -37,7 +37,7 @@ describe('production phone-control Pi RPC gateway', () => {
             ...(managed ? { sttEndpoint: endpoint, sttModel: 'fixture-api-model', sttEnv: 'FIXTURE_KEY' } : {}),
             ...(mode === 'self-lid' ? { voicePreferences: { enabled: true, mode: 'text', approvedDestinationKey: resolveTtsConfig({}).destinationKey,
                 chats: { [owner]: { mode: 'mirror' }, '90000000009@s.whatsapp.net': { mode: 'text' } } } } : {}),
-            ...(['groups', 'images', 'terminal', 'settings', 'reporting'].includes(mode) ? { allowedGroups: [{ number: '120363000001@g.us' }] } : {}), ...(['images', 'settings'].includes(mode) ? { finalAfterAttachments: false } : {}), status: 'disconnected' }), { mode: 0o600 });
+            ...(['groups', 'images', 'terminal', 'settings', 'reporting', 'reload-busy'].includes(mode) ? { allowedGroups: [{ number: '120363000001@g.us' }] } : {}), ...(['images', 'settings'].includes(mode) ? { finalAfterAttachments: false } : {}), status: 'disconnected' }), { mode: 0o600 });
         if (mode === 'settings') await writeFile(join(data, 'whatsapp-ng.log'), 'Historical fixture: preserve unchanged', { mode: 0o644 });
         // Fresh random test material, not copied from an account; no socket connects to WhatsApp.
         await writeFile(join(data, 'auth/creds.json'), JSON.stringify({ ...initAuthCreds(), registered: true,
@@ -48,7 +48,7 @@ describe('production phone-control Pi RPC gateway', () => {
         const cli = fileURLToPath(new URL('./cli.js', import.meta.resolve('@mariozechner/pi-coding-agent')));
         const env = Object.fromEntries(['PATH', 'TMPDIR', 'LANG'].flatMap(key => process.env[key] ? [[key, process.env[key]!]] : []));
         Object.assign(env, { HOME: home, PI_CODING_AGENT_DIR: join(root, 'agent'), PI_OFFLINE: '1', WHATSAPP_NG_LOCALE: locale,
-            WA_PHONE_RPC_POLISH: mode === 'phone-polish' ? '1' : '0', WA_PHONE_RPC_METRICS: metricsPath, WA_PHONE_RPC_CONFIG: join(data, 'config.json'), WA_PHONE_RPC_SELF_LID: selfChat ? '1' : '0', WA_PHONE_RPC_STATS: mode === 'stats' ? '1' : '0',
+            WA_PHONE_RPC_POLISH: mode === 'phone-polish' ? '1' : '0', WA_PHONE_RPC_RELOAD_RACE: mode === 'reload-offrace' ? 'off' : mode === 'reload-busy' ? 'busy' : '', WA_PHONE_RPC_ACCOUNT_STARTS: mode.startsWith('reload-account') ? '2' : '', WA_PHONE_RPC_SLOW_STARTS: ['reload-off', 'reload-offrace'].includes(mode) ? '2' : '', WA_PHONE_RPC_FAIL_STARTS: mode === 'reload-fail' ? '2,3' : ['reload-retry', 'reload-invalid'].includes(mode) ? '2' : '', WA_PHONE_RPC_METRICS: metricsPath, WA_PHONE_RPC_CONFIG: join(data, 'config.json'), WA_PHONE_RPC_SELF_LID: selfChat ? '1' : '0', WA_PHONE_RPC_STATS: mode === 'stats' ? '1' : '0',
             WA_PHONE_RPC_GROUPS: ['groups', 'settings'].includes(mode) ? '1' : '0', WA_PHONE_RPC_SELF_AUTO: mode === 'self-auto' ? '1' : '0', WA_PHONE_RPC_CLASSIFY: classify ? '1' : '0', WA_PHONE_RPC_MODELS: mode === 'models' ? '1' : '0',
             WA_PHONE_RPC_OPTIONAL: ['images', 'terminal'].includes(mode) ? mode : '', WA_PHONE_RPC_REPORTING: mode === 'reporting' ? '1' : '0', WA_PHONE_RPC_SERVER_VOICE: mode === 'server-voice' ? '1' : '0', WA_PHONE_RPC_SPOKEN_GUARD: mode === 'spoken-guard' ? '1' : '0',
             ...(managed ? { WA_PHONE_RPC_MANAGED: '1', WA_PHONE_RPC_MANAGED_ENDPOINT: endpoint, FIXTURE_KEY: 'synthetic-key', CRISPASR_STT_CMD: JSON.stringify({ executable: process.execPath,
@@ -59,7 +59,7 @@ describe('production phone-control Pi RPC gateway', () => {
             '--provider', modelFixture ? 'fixture-phone' : 'openai', '--model', modelFixture ? 'model-01' : 'gpt-4o-mini',
             ...(modelFixture ? ['-e', join(repo, 'whatsapp-ng.ts'), '-e', join(repo, 'tests/fixtures/phone-control-rpc.extension.ts')]
                 : ['-e', join(repo, 'tests/fixtures/phone-control-rpc.extension.ts'), '-e', join(repo, 'whatsapp-ng.ts')]),
-            ...(automatic || managed || mode === 'menu-polish' ? [] : ['--whatsapp-ng-online']), ...(mode === 'self-lid' ? ['--whatsapp-ng-native-polls'] : [])],
+            ...(automatic || managed || reload || mode === 'menu-polish' ? [] : ['--whatsapp-ng-online']), ...(mode === 'self-lid' ? ['--whatsapp-ng-native-polls'] : [])],
             { cwd: workspace, env, stdio: ['pipe', 'pipe', 'pipe'] });
         const waiters = new Map<string, (record: any) => void>(); const records: any[] = []; let buffer = ''; let stderr = ''; let serial = 0;
         child.stderr.on('data', value => { stderr = (stderr + value).slice(-4000); });
@@ -152,6 +152,108 @@ describe('production phone-control Pi RPC gateway', () => {
                 await request('new_session'); await prompt('/phone-fixture reload'); await request('get_state');
                 expect((await events()).filter(event => event.event === 'spawn')).toHaveLength(4); expect((await metrics()).socketStarts).toBe(connectsBeforeOff);
                 expect((await metrics()).modelStarts).toBe(4); expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
+                expect(records.filter(record => record.type === 'extension_error')).toEqual([]); return;
+            }
+            if (reload) {
+                // specs/045-phone-reload T019: real Pi reload through the production entry; synthetic socket only.
+                const ready = () => metrics().then(value => value.messages.filter((text: string) => text === t('phone.reload.ready')).length);
+                const notices = () => records.filter(record => record.type === 'extension_ui_request' && record.method === 'notify').map(record => String(record.message));
+                const settle = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+                if (!automatic) { const menu = prompt('/whatsapp'); await select('Connection'); await select('Connect WhatsApp'); await menu; }
+                await expect.poll(async () => (await metrics()).socketStarts, { timeout: 10_000 }).toBe(1);
+                const config = JSON.parse(await readFile(join(data, 'config.json'), 'utf8'));
+                await prompt('/whatsapp --internal control-reload 00000000-0000-0000-0000-000000000000');
+                expect((await metrics()).socketStarts).toBe(1);
+                if (mode === 'reload-invalid') {
+                    // (c) Ordinary terminal reload: no handoff, saved auto-connect keeps its retry.
+                    await prompt('/phone-fixture reload'); await request('get_state');
+                    await expect.poll(async () => (await metrics()).socketStarts, { timeout: 10_000 }).toBe(3);
+                    await settle(500); expect(await ready()).toBe(0); return;
+                }
+                if (mode !== 'reload-busy') {
+                    await prompt('/phone-fixture phone-reload');
+                    await expect.poll(async () => (await metrics()).messages.includes(t('phone.reload.started')), { timeout: 10_000 }).toBe(true);
+                }
+                if (mode === 'reload-busy') {
+                    // G-M2 (R1): gateway deferred by Pi while agent_settled emits; a group /think holds the router lock.
+                    const before = (await metrics()).socketStarts;
+                    await prompt('/phone-fixture race-start');
+                    await expect.poll(async () => (await metrics()).messages.includes(t('phone.reload.started')), { timeout: 15_000 }).toBe(true);
+                    await expect.poll(async () => (await metrics()).messages.filter((text: string) => text === t('phone.busy')).length, { timeout: 15_000 }).toBe(1);
+                    await settle(4000);
+                    expect((await metrics()).socketStarts).toBe(before); expect(await ready()).toBe(0);
+                    expect((await request('get_state')).sessionId).toBe(initial.sessionId);
+                    expect(records.filter(record => record.type === 'extension_error')).toEqual([]); return;
+                }
+                if (mode === 'reload-offrace') {
+                    // G-M1 (R2): Off then Connect completes while the reconnect poll is held; the poll then resumes.
+                    await expect.poll(async () => (await metrics()).socketStarts, { timeout: 10_000 }).toBe(2);
+                    await prompt('/phone-fixture hold-polls');
+                    const off = prompt('/whatsapp'); await select('Connection'); await select('Turn WhatsApp off'); await confirm(); await off;
+                    const on = prompt('/whatsapp'); await select('Connection'); await select('Connect WhatsApp'); await on;
+                    await expect.poll(async () => JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).status, { timeout: 10_000 }).toBe('connected');
+                    expect((await metrics()).socketStarts).toBe(3);
+                    await prompt('/phone-fixture release-polls');
+                    await expect.poll(() => notices().some(text => text.includes('did not reconnect')), { timeout: 10_000 }).toBe(true);
+                    await settle(1500);
+                    const messages = (await metrics()).messages;
+                    expect(messages).not.toContain(t('phone.reload.ready')); expect(messages).not.toContain(t('phone.reload.failed'));
+                    expect((await metrics()).socketStarts).toBe(3);
+                    expect(records.filter(record => record.type === 'extension_error')).toEqual([]); return;
+                }
+                if (mode.startsWith('reload-account')) {
+                    // R3/B1: the post-reload socket belongs to a different synthetic account.
+                    const creds = await readFile(join(data, 'auth/creds.json'), 'utf8');
+                    const status = async () => JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).status;
+                    await expect.poll(async () => (await metrics()).socketStarts, { timeout: 10_000 }).toBe(2);
+                    if (mode === 'reload-account') {
+                        // Cleanup: the reload's own socket is retired; nothing else is started or retried.
+                        await expect.poll(() => notices().some(text => text.includes('different WhatsApp account; it was disconnected')), { timeout: 15_000 }).toBe(true);
+                        await expect.poll(status, { timeout: 10_000 }).toBe('disconnected');
+                    } else {
+                        // Refusal: the saved auto-connect socket is not the reload's; it is never retired.
+                        await expect.poll(() => notices().some(text => text.includes('different WhatsApp account') || text.includes('did not reconnect')), { timeout: 15_000 }).toBe(true);
+                        expect(notices().some(text => text.includes('it was disconnected'))).toBe(false);
+                        await expect.poll(status, { timeout: 10_000 }).toBe('connected');
+                    }
+                    await settle(4000);
+                    expect((await metrics()).socketStarts).toBe(2); expect(await ready()).toBe(0);
+                    expect((await metrics()).messages).not.toContain(t('phone.reload.failed'));
+                    expect(await readFile(join(data, 'auth/creds.json'), 'utf8')).toBe(creds);
+                    const after = JSON.parse(await readFile(join(data, 'config.json'), 'utf8'));
+                    expect(after.autoConnect).toBe(config.autoConnect); expect(after.operatorJid).toBe(config.operatorJid); expect(after.allowList).toEqual(config.allowList);
+                    expect((await request('get_state')).sessionId).toBe(initial.sessionId);
+                    expect(records.filter(record => record.type === 'extension_error')).toEqual([]); return;
+                }
+                if (mode === 'reload-off') {
+                    // T1/R2: explicit Off then Connect while the reload's own reconnect socket is still opening.
+                    await expect.poll(async () => (await metrics()).socketStarts, { timeout: 10_000 }).toBe(2);
+                    const off = prompt('/whatsapp'); await select('Connection'); await select('Turn WhatsApp off'); await confirm(); await off;
+                    const on = prompt('/whatsapp'); await select('Connection'); await select('Connect WhatsApp'); await on;
+                    await expect.poll(async () => JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).status, { timeout: 10_000 }).toBe('connected');
+                    await settle(7000);
+                    expect((await metrics()).socketStarts).toBe(3); expect(await ready()).toBe(0);
+                    expect((await metrics()).messages).not.toContain(t('phone.reload.failed'));
+                    expect(records.filter(record => record.type === 'extension_error')).toEqual([]); return;
+                }
+                if (mode === 'reload-fail') {
+                    // (d) Valid handoff, reconnect fails: no further automatic attempt; terminal recovery.
+                    await expect.poll(() => notices().some(text => text.includes('Reconnect WhatsApp from the terminal')), { timeout: 10_000 }).toBe(true);
+                    await settle(4000); expect((await metrics()).socketStarts).toBe(3); expect(await ready()).toBe(0); return;
+                }
+                await expect.poll(ready, { timeout: 15_000 }).toBe(1);
+                // reload: auto-connect off, one resume start. reload-auto: (b) resume joins the auto-connect socket.
+                // reload-retry: (a) failed first attempt; pending retry cancelled, one start from resume.
+                const expected = mode === 'reload-retry' ? 3 : 2;
+                expect((await metrics()).socketStarts).toBe(expected); await settle(4000);
+                expect((await metrics()).socketStarts).toBe(expected); expect(await ready()).toBe(1);
+                expect((await request('get_state')).sessionId).toBe(initial.sessionId);
+                const after = JSON.parse(await readFile(join(data, 'config.json'), 'utf8'));
+                expect(after.autoConnect).toBe(config.autoConnect); expect(after.operatorJid).toBe(config.operatorJid); expect(after.allowList).toEqual(config.allowList);
+                // Ordinary terminal reload must not revive the consumed request.
+                await prompt('/phone-fixture reload'); await request('get_state'); await settle(1500);
+                expect(await ready()).toBe(1); if (mode === 'reload') expect((await metrics()).socketStarts).toBe(expected);
+                expect((await metrics()).modelStarts).toBe(0); expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
                 expect(records.filter(record => record.type === 'extension_error')).toEqual([]); return;
             }
             if (mode === 'menu-polish') {

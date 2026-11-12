@@ -160,6 +160,7 @@ Allowed people can use `/help` and `/status`. State-changing commands require th
 | `/new` | Confirm a new Pi session, keeping login, settings and history. |
 | `/voice [text\|voice\|both\|mirror]` | Change this chat's mode within existing speech approvals. |
 | `/replies` | Change reply delivery and optional reporting. |
+| `/reload` | Owner, private chat only: confirm Pi's standard reload of extensions, skills and prompts while Pi is idle and WhatsApp is connected. WhatsApp reconnects the same account and acknowledges in that chat; the acknowledgment confirms WhatsApp recovery, not that every extension loaded. |
 | `/off` | Confirm WhatsApp shutdown without logging out. Re-enable from the terminal Connection menu. |
 | `/quit` | Confirm graceful Pi shutdown. |
 

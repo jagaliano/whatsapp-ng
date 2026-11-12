@@ -12,7 +12,8 @@ export default function (pi: ExtensionAPI) {
     const spokenGuard = process.env.WA_PHONE_RPC_SPOKEN_GUARD === '1';
     // Records only host-delivered events; it never supplies or rewrites a classification.
     const classify = process.env.WA_PHONE_RPC_CLASSIFY === '1';
-    const selfAuto = process.env.WA_PHONE_RPC_SELF_AUTO === '1'; const modelFixture = classify || stats || groups || selfAuto || images || terminal || reporting || search || managed || serverVoice || spokenGuard;
+    const race = process.env.WA_PHONE_RPC_RELOAD_RACE;
+    const selfAuto = process.env.WA_PHONE_RPC_SELF_AUTO === '1'; const modelFixture = race === 'busy' || classify || stats || groups || selfAuto || images || terminal || reporting || search || managed || serverVoice || spokenGuard;
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEElEQVR4nGP4z8DwHwohFABFzAf5Zsv/OQAAAABJRU5ErkJggg==';
     if (images) pi.registerTool({ name: 'fixture_image', label: 'Synthetic image', description: 'Isolated fixture image result only', parameters: Type.Object({}),
         execute: async () => ({ content: [{ type: 'image', mimeType: 'image/png', data: png }, { type: 'image', mimeType: 'image/png', data: png }], details: {} }) });
@@ -79,7 +80,20 @@ export default function (pi: ExtensionAPI) {
             const state = fixture(); state.metrics.statsConsumed = (state.metrics.statsConsumed ?? 0) + 1; state.save(); await statsGate;
         }
     });
+    let raced = false;
     pi.on('agent_settled', async () => {
+        // G-M2: while agent_settled is emitting, Pi defers the confirmation's native gateway. A group phone
+        // mutation then starts and is held in its reply send, so the gateway runs while that lock is held.
+        if (race === 'busy' && !raced) {
+            raced = true; const state = fixture();
+            await state.deliver('/reload'); await state.deliver('2');
+            let release!: () => void; const gate = { held: true, promise: new Promise<void>(resolve => { release = resolve; }) };
+            (globalThis as typeof globalThis & { __waGroupSendGate?: typeof gate }).__waGroupSendGate = gate;
+            await state.deliverGroup('/think low');
+            for (let i = 0; i < 500 && !(state.metrics as { heldGroupSends?: number }).heldGroupSends; i++) await new Promise(resolve => setTimeout(resolve, 10));
+            if (!(state.metrics as { heldGroupSends?: number }).heldGroupSends) throw new Error('Group mutation reply was not held');
+            setTimeout(() => { gate.held = false; release(); }, 1500);
+        }
         if (modelFixture) {
             await new Promise(resolve => setTimeout(resolve, 200));
             const state = fixture(); state.metrics.statsSettled = (state.metrics.statsSettled ?? 0) + 1; state.save();
@@ -91,6 +105,10 @@ export default function (pi: ExtensionAPI) {
     pi.registerCommand('phone-fixture', { description: 'Isolated synthetic test only', handler: async (args, ctx) => {
         const state = fixture(); const menuResponses = process.env.WA_PHONE_RPC_SELF_LID === '1' ? 2 : 1;
         if (args === 'cancel-new') { cancelNext = true; await state.deliver('/new', menuResponses); await state.deliver('2', 0); }
+        else if (race === 'off' && args === 'hold-polls') (globalThis as typeof globalThis & { __waPollGate?: { hold(): void } }).__waPollGate?.hold();
+        else if (race === 'off' && args === 'release-polls') (globalThis as typeof globalThis & { __waPollGate?: { release(): void } }).__waPollGate?.release();
+        else if (race === 'busy' && args === 'race-start') await state.deliver('Fixture race task', 0);
+        else if (args === 'phone-reload') { await state.deliver('/reload', menuResponses); await state.deliver('2', 0); }
         else if (args === 'new') { await state.deliver('/new', menuResponses); await state.deliver('2', 0); }
         else if (args === 'off') { await state.deliver('/off', menuResponses); await state.deliver('2'); }
         else if (args === 'status') await state.deliver('/status');
