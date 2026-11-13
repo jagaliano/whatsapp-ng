@@ -1,0 +1,11 @@
+Feature 046 - synthetic WhatsApp phone check
+
+This document contains no real conversation or account data.
+The test concerns its WhatsApp caption, not this file's rendering.
+
+Expected caption behavior:
+- A Markdown heading becomes WhatsApp bold.
+- The caption table retains its raw pipes and delimiter row.
+- No box or labeled-table extraction is applied to captions.
+
+Please reply: 4 OK, or describe what looks wrong.

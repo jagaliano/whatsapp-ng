@@ -6,14 +6,14 @@ interface Observation { event: string; messageType?: string; role?: string; sour
 interface Fixture { metrics: { modelStarts: number; cancelled: number; activeTools: string[]; statsConsumed?: number; statsSettled?: number; providerRequests?: number; observations?: Observation[] }; save(): void; deliver(text: string, responses?: number): Promise<void>; deliverGroup(text: string, reply?: boolean): Promise<void>; voteNext(): Promise<void> }
 export default function (pi: ExtensionAPI) {
     const stats = process.env.WA_PHONE_RPC_STATS === '1'; const groups = process.env.WA_PHONE_RPC_GROUPS === '1';
-    const optional = process.env.WA_PHONE_RPC_OPTIONAL; const images = optional === 'images'; const terminal = optional === 'terminal';
+    const optional = process.env.WA_PHONE_RPC_OPTIONAL; const images = optional === 'images'; const terminal = optional === 'terminal'; const tables = optional === 'tables';
     const reporting = process.env.WA_PHONE_RPC_REPORTING === '1'; const managed = process.env.WA_PHONE_RPC_MANAGED === '1';
     const search = process.env.WA_PHONE_RPC_MODELS === '1'; const serverVoice = process.env.WA_PHONE_RPC_SERVER_VOICE === '1';
     const spokenGuard = process.env.WA_PHONE_RPC_SPOKEN_GUARD === '1';
     // Records only host-delivered events; it never supplies or rewrites a classification.
     const classify = process.env.WA_PHONE_RPC_CLASSIFY === '1';
     const race = process.env.WA_PHONE_RPC_RELOAD_RACE;
-    const selfAuto = process.env.WA_PHONE_RPC_SELF_AUTO === '1'; const modelFixture = race === 'busy' || classify || stats || groups || selfAuto || images || terminal || reporting || search || managed || serverVoice || spokenGuard;
+    const selfAuto = process.env.WA_PHONE_RPC_SELF_AUTO === '1'; const modelFixture = race === 'busy' || classify || stats || groups || selfAuto || images || terminal || reporting || search || managed || serverVoice || spokenGuard || tables;
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEElEQVR4nGP4z8DwHwohFABFzAf5Zsv/OQAAAABJRU5ErkJggg==';
     if (images) pi.registerTool({ name: 'fixture_image', label: 'Synthetic image', description: 'Isolated fixture image result only', parameters: Type.Object({}),
         execute: async () => ({ content: [{ type: 'image', mimeType: 'image/png', data: png }, { type: 'image', mimeType: 'image/png', data: png }], details: {} }) });
@@ -25,9 +25,14 @@ export default function (pi: ExtensionAPI) {
             const stream = createAssistantMessageEventStream();
             if (!options?.signal?.aborted) { const state = fixture(); state.metrics.providerRequests = (state.metrics.providerRequests ?? 0) + 1; state.save(); }
             const messages = (_context as { messages?: Array<{ role: string; content?: unknown }> }).messages ?? [];
-            const tool = (images || reporting || managed || serverVoice || spokenGuard) && messages.at(-1)?.role === 'user';
+            const tableStep = messages.filter(entry => entry.role === 'toolResult').length;
+            const tool = ((images || reporting || managed || serverVoice || spokenGuard) && messages.at(-1)?.role === 'user') || (tables && tableStep < 2);
+            const table = '# T\n| A | B |\n|---|---|\n| x | y |';
             const message: AssistantMessage = { role: 'assistant', api: model.api, provider: model.provider, model: model.id,
-                timestamp: Date.now(), content: tool ? spokenGuard
+                timestamp: Date.now(), content: tool ? tables
+                    ? [tableStep === 0 ? { type: 'toolCall', id: `fixture-table-text-${fixture().metrics.providerRequests}`, name: 'send_wa_message', arguments: { message: table } }
+                        : { type: 'toolCall', id: `fixture-table-media-${fixture().metrics.providerRequests}`, name: 'send_wa_media', arguments: { path: 'fixture-table.txt', type: 'document', caption: table } }]
+                    : spokenGuard
                     ? [{ type: 'toolCall', id: `fixture-explicit-${fixture().metrics.providerRequests}`, name: 'send_wa_message', arguments: { message: 'Wrong explicit text' } }]
                     : serverVoice
                     ? [{ type: 'toolCall', id: `fixture-voice-${fixture().metrics.providerRequests}`, name: 'configure_wa_tts', arguments: {

@@ -107,7 +107,7 @@ describe('conservative assistant WhatsApp text adapter', () => {
     });
     it('keeps malformed markup, unmatched code and unsupported tables readable', () => {
         expect(formatWhatsAppText('**unclosed\n```js\n**do not touch**')).toBe('**unclosed\n```js\n**do not touch**');
-        expect(formatWhatsAppText('| A | B |\n|---|---|\n| x | y |')).toBe('| A | B |\n|---|---|\n| x | y |');
+        expect(formatWhatsAppText('| A | B |\n|---|---|\n| x | y |')).toBe('```\n---\n┌───┬───┐\n│ A │ B │\n├───┼───┤\n│ x │ y │\n└───┴───┘\n```');
         expect(formatWhatsAppText('[bad](javascript:alert(1))')).toBe('[bad](javascript:alert(1))');
     });
     it('preserves Unicode, CRLF and nested readable emphasis', () => {
@@ -128,5 +128,27 @@ describe('conservative assistant WhatsApp text adapter', () => {
     it('does not run an unbounded parser over oversized output or reinterpret sentinel bytes', () => {
         const long = '**'+ 'x'.repeat(70_000)+'**'; expect(formatWhatsAppText(long)).toBe(long);
         expect(formatWhatsAppText('\u0000**literal**')).toBe('\u0000**literal**');
+    });
+});
+
+describe('legacy display projection freeze (f385a24)', () => {
+    const label511 = 'x'.repeat(511); const label512 = 'x'.repeat(512);
+    const frozen: Array<[string, string]> = [
+        [`[${label511}](https://e.test)`, `${label511} (https://e.test)`],
+        [`[${label512}](https://e.test)`, `[${label512}](https://e.test)`],
+        ['**a __b **c __d **e** f__ g** h__ i**', '**a __b **c *d *e* f* g** h__ i**'],
+        ['[**[x](https://e.test)**](https://e.test)', '[**[x](https://e.test)**](https://e.test)'],
+        ['**__**__**x**__**__**', '********x********'],
+        ['# T\n| A | B |\n|---|---|\n| x | y |', '*T*\n| A | B |\n|---|---|\n| x | y |'],
+        ['[A](https://e.test) **b** | c', 'A (https://e.test) *b* | c'],
+        ['# Result\n**Done** and ~~old~~. [Docs](https://example.test/a_b)', '*Result*\n*Done* and ~old~. Docs (https://example.test/a_b)'],
+        ['```ts\nconst x = "**literal**";\n```', '```\nconst x = "**literal**";\n```'],
+        ['## Hola 👋\r\n**yes ~~old~~**\r\n', '*Hola 👋*\r\n*yes ~old~*\r\n'],
+        ['| A | B |\n|---|---|\n| x | y |', '| A | B |\n|---|---|\n| x | y |']
+    ];
+    it.each(frozen)('keeps %j unchanged with tables disabled and never expands it', (input, expected) => {
+        const output = formatWhatsAppText(input, { tables: false });
+        expect(output).toBe(expected);
+        expect(output.length).toBeLessThanOrEqual(input.length);
     });
 });

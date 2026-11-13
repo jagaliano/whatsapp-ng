@@ -341,6 +341,23 @@ describe('whatsapp-ng extension', () => {
         }
     });
 
+    it('renders tables in text messages but keeps legacy caption formatting', async () => {
+        const table = '# T\n| A | B |\n|---|---|\n| x | y |';
+        const root = await mkdtemp(join(tmpdir(), 'wa-tool-table-'));
+        try {
+            const path = join(root, 'table.txt'); await writeFile(path, 'synthetic');
+            const registerExtension = await loadExtension(); const pi = createMockPi(); registerExtension(pi as any);
+            const jid = '15550000001@s.whatsapp.net';
+            expect((await pi.tools.get('send_wa_message').execute('table-text', { jid, message: table })).isError).toBe(false);
+            expect(mocks.whatsappService.sendMessage.mock.calls.at(-1)?.[1]).toBe('*T*\n```\n---\n┌───┬───┐\n│ A │ B │\n├───┼───┤\n│ x │ y │\n└───┴───┘\n```');
+            const result = await pi.tools.get('send_wa_media').execute('table-caption', { path, type: 'document', jid, caption: table }, new AbortController().signal, undefined, { ...createMockContext(), cwd: root });
+            expect(result.isError).toBe(false);
+            expect(mocks.whatsappService.sendContent.mock.calls.at(-1)?.[0].content).toMatchObject({ caption: '*T*\n| A | B |\n|---|---|\n| x | y |' });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     it('adds the selected native quote to a text tool send and records its relationship', async () => {
         const registerExtension = await loadExtension();
         const pi = createMockPi();

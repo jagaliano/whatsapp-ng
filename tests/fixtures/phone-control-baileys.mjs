@@ -61,8 +61,12 @@ export function makeWASocket() {
             const messageId = options.messageId ?? `fixture-reaction-${++serial}`;
             const image = process.env.WA_PHONE_RPC_OPTIONAL === 'images' && content.image;
             if (image) { metrics.imageSends++; metrics.imageSnapshotsPrivate &&= (statSync(content.image.url).mode & 0o777) === 0o600 && readFileSync(content.image.url).length > 0; }
-            const message = image ? { imageMessage: { mimetype: content.mimetype, caption: 'Synthetic image' } } : await generateWAMessageContent(content, { userJid: self });
-            metrics.sends.push({ jid, kind: content.react ? 'reaction' : content.edit ? 'edit' : image ? 'image' : 'text', ...(content.react ? { emoji: content.react.text, target: { ...content.react.key } } : {}), ...(content.edit ? { edit: { ...content.edit } } : {}), ...(typeof content.text === 'string' ? { text: content.text } : {}) });
+            // Explicit offline document branch for the table-caption test only: records the received caption, never uploads.
+            const document = process.env.WA_PHONE_RPC_OPTIONAL === 'tables' && content.document;
+            const message = image ? { imageMessage: { mimetype: content.mimetype, caption: 'Synthetic image' } }
+                : document ? { documentMessage: { mimetype: content.mimetype, fileName: content.fileName, caption: content.caption } }
+                : await generateWAMessageContent(content, { userJid: self });
+            metrics.sends.push({ jid, kind: content.react ? 'reaction' : content.edit ? 'edit' : image ? 'image' : document ? 'document' : 'text', ...(document ? { caption: content.caption } : {}), ...(content.react ? { emoji: content.react.text, target: { ...content.react.key } } : {}), ...(content.edit ? { edit: { ...content.edit } } : {}), ...(typeof content.text === 'string' ? { text: content.text } : {}) });
             if (content.poll) { metrics.pollCreations++; latestPoll = { id: options.messageId, labels: content.poll.values, secret: message.messageContextInfo.messageSecret }; }
             metrics.controlSends++; if (typeof content.text === 'string') metrics.messages.push(content.text); save();
             if (process.env.WA_PHONE_RPC_SELF_AUTO === '1') {

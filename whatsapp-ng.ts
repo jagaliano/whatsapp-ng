@@ -999,7 +999,7 @@ export default function (pi: ExtensionAPI) {
                 result = await trackOwnedSend(target, snapshot, async () => {
                     let prepared: Awaited<ReturnType<OutgoingMediaService['prepare']>> | undefined;
                     try {
-                        prepared = await new OutgoingMediaService({ workspaceRoot: ctx.cwd }).prepare({ path: mediaPath, type: mediaType, caption: typeof params.caption === 'string' ? formatWhatsAppText(params.caption) : params.caption, voiceNote: params.voiceNote }, signal);
+                        prepared = await new OutgoingMediaService({ workspaceRoot: ctx.cwd }).prepare({ path: mediaPath, type: mediaType, caption: typeof params.caption === 'string' ? formatWhatsAppText(params.caption, { tables: false }) : params.caption, voiceNote: params.voiceNote }, signal);
                         metadata = prepared.metadata;
                         if (!whatsappService.isSessionContextCurrent(sessionContext)) {
                             await prepared.dispose();

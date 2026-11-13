@@ -90,6 +90,10 @@ A definite pre-transmission voice failure can fall back to the full text once. V
 
 The preview shows the recipient and fixed public phrase before confirmation. It sends one voice note, not a conversation excerpt, and does not enable ongoing speech. Pausing a chat invalidates queued automatic replies; re-enabling does not replay them. Malformed saved preferences require explicit repair rather than silent reset.
 
+## Text display formatting
+
+Text messages convert Markdown headings, bold, strike and restricted HTTP(S) links to WhatsApp formatting. Pipe tables are also converted. A valid 2–4 column table of supported Latin/Greek/Cyrillic characters that fits 28 columns becomes a monospace box. A table that is wider, has more columns or contains emoji/CJK becomes one `Header: value · Header: value` line per row. Malformed, unsafe or unstable tables, code blocks, indented lines and media captions keep the previous formatting, and output above 65,536 UTF-16 units leaves the whole message unformatted. Each box starts with a fixed `---` line inside its monospace block. Without it, iPhone and WhatsApp Web rendered the box's top border misaligned when it was the block's first line (cause unconfirmed; Android untested). Box alignment still depends on the client font and is not guaranteed. Speech still uses the original answer, so tables stay text-only.
+
 ## Files and native replies
 
 `send_wa_media` requires a local `path` and `type` (`document`, `image`, `audio` or `video`). Optional fields are `jid`, `caption`, `voiceNote` (audio only) and `quote`.

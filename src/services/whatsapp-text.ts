@@ -1,10 +1,37 @@
+import { MarkdownTableProjector, OutputBudget, type LegacyTextRules, type SourceLine } from './whatsapp-table.js';
+
+export interface WhatsAppTextOptions {
+    /** Render Markdown pipe tables (default). Media captions pass false to keep the legacy projection. */
+    readonly tables?: boolean;
+}
+
 /** Conservative assistant text projections for WhatsApp display and speech; no fetching or model calls. */
-export function formatWhatsAppText(text: string): string {
+export function formatWhatsAppText(text: string, options: WhatsAppTextOptions = {}): string {
     if (text.length > 64 * 1024 || text.includes('\0')) return text;
     const lines = text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
     const output: string[] = [];
+    const budget = options.tables === false ? undefined : new OutputBudget();
+    let counted = 0;
+    // Counts every segment pushed so far (legacy prose and fences included); false means the output limit is exceeded.
+    const sync = (): boolean => { for (; counted < output.length; counted++) if (!budget!.add(output[counted])) return false; return true; };
+    const source = (index: number): SourceLine => { const body = lines[index].replace(/\r?\n$/, ''); return { body, end: lines[index].slice(body.length) }; };
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i]; const body = line.replace(/\r?\n$/, ''); const end = line.slice(body.length);
+        if (budget && tables.isRowCandidate(body) && i + 1 < lines.length) {
+            const next = source(i + 1).body; const delimiter = tables.isRowCandidate(next) ? tables.delimiterCells(next) : undefined;
+            if (delimiter && delimiter.length === tables.split(body).length) {
+                let last = i + 2; while (last < lines.length && tables.isRowCandidate(source(last).body)) last++;
+                const run = lines.slice(i, last).map((_, offset) => source(i + offset));
+                // The whole-input unclosed-code rule covers every consumed table line and wins over table output.
+                if (run.some(row => unclosedCode(row.body))) return text;
+                if (!sync()) return text;
+                const outcome = tables.render(run, budget.remaining);
+                if (outcome.kind === 'refuse') return text;
+                const segments = outcome.kind === 'legacy' ? run.map(row => projectLegacyLine(row.body, row.end)) : [outcome.text];
+                output.push(...segments); if (!sync()) return text;
+                i = last - 1; continue;
+            }
+        }
         const fence = /^ {0,3}(`{3,}|~{3,})([^\r\n]*)$/.exec(body);
         if (fence) {
             const marker = fence[1][0]; const width = fence[1].length; let closing = i + 1;
@@ -25,11 +52,15 @@ export function formatWhatsAppText(text: string): string {
         }
         // A cross-line/unfinished inline span is safer left wholly literal.
         if (unclosedCode(body)) return text;
-        const heading = body.length <= 1024 ? /^ {0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/.exec(body) : null;
-        const rendered = inline(heading?.[1] ?? body);
-        output.push((heading && !rendered.includes('*') ? `*${rendered}*` : rendered) + end);
+        output.push(projectLegacyLine(body, end));
     }
+    if (budget && !sync()) return text;
     return output.join('');
+}
+function projectLegacyLine(body: string, end: string): string {
+    const heading = body.length <= 1024 ? /^ {0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/.exec(body) : null;
+    const rendered = inline(heading?.[1] ?? body);
+    return (heading && !rendered.includes('*') ? `*${rendered}*` : rendered) + end;
 }
 function inline(text: string, depth = 0): string {
     if (depth >= 4) return text;
@@ -203,3 +234,12 @@ function delimiter(text: string, marker: string, start: number, limit = text.len
     }
     return -1;
 }
+
+const legacyTextRules: LegacyTextRules = {
+    projectLine: body => projectLegacyLine(body, ''),
+    unclosedCode,
+    codeEnd,
+    delimiter,
+    isFenceOpener: body => /^ {0,3}(?:`{3,}|~{3,})/.test(body)
+};
+const tables = new MarkdownTableProjector(legacyTextRules);
