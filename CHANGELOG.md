@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.11 — 2026-11-13
 
 - Render Markdown pipe tables in WhatsApp text messages without images or new dependencies: narrow supported tables become a 28-column monospace box with delimiter alignment, while wider, five-plus-column or emoji/CJK tables become labeled `Header: value · …` lines when that preserves data and stays stable. Malformed, unsafe or unstable candidates keep the previous projection; the unclosed-code and new 65,536-unit output guards return the original message. Media captions opt out of table extraction, and speech eligibility is unchanged. Unit, mocked-entry and isolated production-entry RPC tests in [046](specs/046-whatsapp-table-rendering/tasks.md). Each box block starts with a fixed `---` line, because iPhone and WhatsApp Web misaligned a box border that was the block's first line (cause unconfirmed, Android untested). Operator acceptance passed on iPhone and WhatsApp Web on 2026-11-13; alignment still depends on the client font.
 
