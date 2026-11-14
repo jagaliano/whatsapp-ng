@@ -39,7 +39,7 @@ const createContext = (choices: {
                     const category: Record<string, string> = { 'Connect WhatsApp': 'Connection', 'Disconnect WhatsApp': 'Connection',
                         Recents: 'Chats / Owner', 'Allowed contacts': 'Chats / Owner', Owner: 'Chats / Owner',
                         'Reply delivery': 'Replies', 'Optional outputs': 'Replies', 'Allowed groups': 'Groups', 'Group replies': 'Groups',
-                        'Local history scope': 'Advanced', 'Log out and delete saved login': 'Advanced' };
+                        'Local history scope': 'Advanced', 'Log out and delete saved login': 'Advanced', 'Media limits': 'Advanced' };
                     if (category[choice]) { selects.unshift(choice); return category[choice]; }
                 }
                 return !choice || choice === 'Back' ? options.at(-1) : choice;
@@ -63,6 +63,9 @@ const createServices = () => {
     };
 
     const sessionManager = {
+        getMediaLimits: vi.fn().mockReturnValue({ inboundBytes: 25 * 1024 * 1024, outboundBytes: 25 * 1024 * 1024 }),
+        getMediaLimitsRevision: vi.fn().mockReturnValue(0),
+        setMediaLimit: vi.fn().mockResolvedValue(undefined),
         getStatus: vi.fn().mockReturnValue('connected'),
         getFinalAfterAttachments: vi.fn().mockReturnValue(true),
         getAutoConnect: vi.fn().mockReturnValue(false), getAutoConnectRevision: vi.fn().mockReturnValue(7), setAutoConnect: vi.fn().mockResolvedValue(undefined),
@@ -280,6 +283,16 @@ describe('MenuHandler', () => {
         await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any, { voice: vi.fn(), owner, enabled: () => false }).handleCommand(ctx as any);
         expect(ctx.ui.select.mock.calls[1][1]).toEqual(expect.arrayContaining(['Recents', 'Allowed contacts', 'Owner']));
         expect(owner).toHaveBeenCalledOnce(); expect(h.whatsappService.start).not.toHaveBeenCalled();
+    });
+    it('opens Advanced → Media limits, saves through the session and returns to Advanced on Back', async () => {
+        const h = createServices();
+        const ctx = createContext({ selects: ['Media limits', 'Outbound limit'], inputs: ['120'] });
+        await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any).handleCommand(ctx as any);
+        expect(ctx.ui.select.mock.calls[1][1]).toContain('Media limits');
+        expect(h.sessionManager.setMediaLimit).toHaveBeenCalledWith('outbound', 120, 0, expect.any(Function));
+        const back = createContext({ selects: ['Media limits', 'Back', 'Back'] });
+        await new MenuHandler(h.whatsappService as any, h.sessionManager as any, h.recentsService as any).handleCommand(back as any);
+        expect(back.ui.select.mock.calls[2][0]).toContain('Media limits'); expect(back.ui.select.mock.calls[3][0]).toContain('Advanced');
     });
     it('shows a fixed metadata-log policy without reading or deleting logs', async () => {
         const h = createServices(); const ctx = createContext({ selects: ['Advanced', 'Privacy and logs'] });

@@ -184,13 +184,13 @@ The extension registers these tools for Pi's agent:
 | `configure_wa_stt` | Guarded configuration | Owner/local-only: set or update `sttEndpoint`, `sttModel`, `sttEnv` and optional `sttLanguage`. Pass the key's environment-variable name, never its value; `{}` selects local transcription. |
 | `configure_wa_tts` | Guarded configuration | Update speech backend settings for an authorized local/owner request. Does not grant consent, enable speech or synthesize immediately. |
 
-File uploads must be explicit, at most **25 MiB**, and under the current workspace or extension media directory. Mentioning a file path does not upload it. Native quotes require a retained, unambiguous message in the same chat.
+File uploads must be explicit and under the current workspace or extension media directory. Documents, images and videos may be up to the configured outbound limit (default **25 MiB**, maximum **512 MiB**, terminal **Advanced → Media limits**); audio and voice notes stay at 25 MiB. See [media size limits](docs/reference.md#media-size-limits). Mentioning a file path does not upload it. Native quotes require a retained, unambiguous message in the same chat.
 
 The three read-only inbox tools use the selected local archive under `~/.pi/agent/extensions/whatsapp-ng/archive/`. They work offline, never fetch network history and do not mark messages as read. The list/history tools default to, and cap at, 20 items; `check_wa_new_messages` returns all matching conversations. Only an explicit `request_wa_history` request fetches older messages; availability depends on WhatsApp and the linked devices.
 
 ## Data and privacy
 
-Settings, login, history and downloaded media live under `~/.pi/agent/extensions/whatsapp-ng/`. Recents remain readable offline. Archive retention is bounded to 1,000 messages per conversation, 30 days and 100 MiB per account partition; it does not erase Pi transcripts, logs or downloaded media.
+Settings, login, history and received images/videos live under `~/.pi/agent/extensions/whatsapp-ng/`. Received documents are saved under the Pi process's working directory in `.pi-data/whatsapp/documents/`, where Git or indexers may see them. Received files have no automatic retention, so large inbound limits can fill the disk. Recents remain readable offline. Archive retention is bounded to 1,000 messages per conversation, 30 days and 100 MiB per account partition; it does not erase Pi transcripts, logs or downloaded media.
 
 - Allowed chats share model context; routing is not privacy isolation.
 - Images may reach Pi's vision model. Remote transcription and speech send content to the selected service.

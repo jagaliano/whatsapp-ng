@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => {
         setGroupJidForAuth: vi.fn(),
         getFinalAfterAttachments: vi.fn().mockReturnValue(true),
         getOptionalOutputs: vi.fn<() => OptionalOutputs>(() => { throw new Error('Optional outputs not configured in this fixture'); }), getOptionalOutputsRevision: vi.fn().mockReturnValue(0),
+        getMediaLimits: vi.fn(() => ({ inboundBytes: 25 * 1024 * 1024, outboundBytes: 25 * 1024 * 1024 })), getMediaLimitsRevision: vi.fn().mockReturnValue(0),
         getAutoConnect: vi.fn().mockReturnValue(false),
         getReplyStats: vi.fn().mockReturnValue(false), getReplyStatsRevision: vi.fn().mockReturnValue(0),
         getReplyReporting: vi.fn().mockReturnValue({ changedFiles: false, interimText: false, liveActivity: false }), getReplyReportingRevision: vi.fn().mockReturnValue(0),
@@ -443,14 +444,95 @@ describe('whatsapp-ng owned turn delivery', () => {
         const { pi } = await setup();
         const { IncomingMediaService } = await vi.importActual<typeof import('../../src/services/incoming-media.service.ts')>('../../src/services/incoming-media.service.ts');
         const question = 'Please explain the chart';
-        const media = new IncomingMediaService({ transcribe: vi.fn(async () => question) } as any, { log: vi.fn(), error: vi.fn() } as any);
-        vi.spyOn(media as any, 'downloadMessage').mockRejectedValue(new Error('Synthetic unavailable image'));
+        const { InboundMediaTransfer } = await vi.importActual<typeof import('../../src/services/inbound-media-transfer.ts')>('../../src/services/inbound-media-transfer.ts');
+        const { TransferSlots } = await vi.importActual<typeof import('../../src/services/transfer-slots.ts')>('../../src/services/transfer-slots.ts');
+        const transfer = new InboundMediaTransfer({ slots: new TransferSlots(1), download: async () => { throw new Error('Synthetic unavailable image'); } });
+        const media = new IncomingMediaService({ transcribe: vi.fn(async () => question) } as any, { log: vi.fn(), error: vi.fn() } as any, transfer);
         mocks.incomingMediaService.process.mockImplementation(media.process.bind(media));
         (mocks.whatsappService as any).getIncomingQuotedImage = vi.fn().mockReturnValue({ mimetype: 'image/png' });
         mocks.extractIncomingText.mockReturnValue(kind === 'audio' ? { kind: 'audio', text: '', audioMessage: {} } as any : { kind: 'text', text: question });
         const callback = mocks.whatsappService.setMessageCallback.mock.calls[0][0];
         await callback({ ...incoming(), key: { id: 'unavailable-quote', remoteJid: '120363000000001@g.us', fromMe: false, participant: '5511999998888@s.whatsapp.net' } });
         expect(pi.sendUserMessage).toHaveBeenCalledOnce(); expect(pi.sendUserMessage.mock.calls[0][0]).toContain(question);
+    });
+    describe('inbound media lifecycle through the entry handler (047 review)', () => {
+        const realMedia = async (download: () => Promise<any>, onRename?: () => void) => {
+            const { IncomingMediaService } = await vi.importActual<typeof import('../../src/services/incoming-media.service.ts')>('../../src/services/incoming-media.service.ts');
+            const { InboundMediaTransfer } = await vi.importActual<typeof import('../../src/services/inbound-media-transfer.ts')>('../../src/services/inbound-media-transfer.ts');
+            const { TransferSlots } = await vi.importActual<typeof import('../../src/services/transfer-slots.ts')>('../../src/services/transfer-slots.ts');
+            const slots = new TransferSlots(1);
+            const root = await import('node:fs/promises').then(fs => fs.mkdtemp(join(tmpdir(), 'wa-entry-media-')));
+            const media = new IncomingMediaService({ transcribe: vi.fn() } as any, { log: vi.fn(), warn: vi.fn(), error: vi.fn() } as any,
+                new InboundMediaTransfer({ slots, download, fs: { ...InboundMediaTransfer.defaultFileSystem(),
+                    rename: async (from: string, to: string) => { await InboundMediaTransfer.defaultFileSystem().rename(from, to); onRename?.(); } } }), join(root, 'media'));
+            mocks.incomingMediaService.process.mockImplementation(media.process.bind(media));
+            return { slots, root };
+        };
+        it('stops a stalled download and releases capacity on session replacement without another chunk', async () => {
+            const { pi } = await setup();
+            const { Readable } = await import('node:stream');
+            const stream = new Readable({ read() {} });
+            const { slots, root } = await realMedia(async () => stream);
+            const cwd = vi.spyOn(process, 'cwd').mockReturnValue(root);
+            mocks.extractIncomingText.mockReturnValue({ kind: 'document', text: '', documentMessage: { fileName: 'stall.dwg' } } as any);
+            const callback = mocks.whatsappService.setMessageCallback.mock.calls[0][0];
+            const done = callback(incoming('stall'));
+            await vi.waitFor(() => expect(slots.held('inbound')).toBe(1));
+            stream.push(Buffer.alloc(10));
+            const partial = async () => (await import('node:fs/promises')).readdir(join(root, '.pi-data', 'whatsapp', 'documents')).catch(() => [] as string[]);
+            await vi.waitFor(async () => expect((await partial()).length).toBe(1)); // chunk consumed and written while current
+            await new Promise(resolve => setTimeout(resolve, 50));
+            mocks.whatsappService.isSessionContextCurrent.mockReturnValue(false); // session replaced; no further chunk arrives
+            await done;
+            expect(slots.held('inbound')).toBe(0);
+            expect(stream.destroyed).toBe(true);
+            expect(pi.sendUserMessage).not.toHaveBeenCalled();
+            expect(await partial()).toEqual([]);
+            cwd.mockRestore();
+        }, 10_000);
+        it('keeps a file published before authority ended on disk and does not hand it off (FR-031)', async () => {
+            const { pi } = await setup();
+            const { Readable } = await import('node:stream');
+            let renamed = false;
+            // Revoke after publication (rename) but before handoff.
+            const { root } = await realMedia(async () => Readable.from([Buffer.from('drawing')]), () => { renamed = true; mocks.whatsappService.isSessionContextCurrent.mockReturnValue(false); });
+            const cwd = vi.spyOn(process, 'cwd').mockReturnValue(root);
+            mocks.extractIncomingText.mockReturnValue({ kind: 'document', text: '', documentMessage: { fileName: 'kept.dwg', fileLength: 7 } } as any);
+            const fs = await import('node:fs/promises');
+            const callback = mocks.whatsappService.setMessageCallback.mock.calls[0][0];
+            await callback(incoming('kept'));
+            expect(renamed).toBe(true);
+            expect(pi.sendUserMessage).not.toHaveBeenCalled();
+            expect(await fs.readdir(join(root, '.pi-data', 'whatsapp', 'documents'))).toEqual([expect.stringMatching(/_kept\.dwg$/)]);
+            cwd.mockRestore();
+        });
+        it.each(['explicit Off', 'chat revocation'] as const)('keeps a file published before %s on disk and does not hand it off (FR-031)', async change => {
+            delete (globalThis as { __whatsappNgPhoneOffProfiles?: unknown }).__whatsappNgPhoneOffProfiles; // Off is process-wide; isolate each case
+            const { pi, ctx } = await setup();
+            const { Readable } = await import('node:stream');
+            const fs = await import('node:fs/promises');
+            let off: Promise<void> | undefined; let renamed = false;
+            // The change lands during publication: after the transfer's last authority check, before handoff.
+            const { root } = await realMedia(async () => Readable.from([Buffer.from('drawing')]), () => {
+                renamed = true;
+                if (change === 'explicit Off') off = mocks.settingsMenus.off(ctx);
+                else mocks.sessionManager.getReplyAdmissionKey.mockReturnValue('revoked-after-publish');
+            });
+            const cwd = vi.spyOn(process, 'cwd').mockReturnValue(root);
+            mocks.extractIncomingText.mockReturnValue({ kind: 'document', text: '', documentMessage: { fileName: 'kept.dwg', fileLength: 7 } } as any);
+            const callback = mocks.whatsappService.setMessageCallback.mock.calls[0][0];
+            await callback(incoming(change === 'explicit Off' ? 'kept-off' : 'kept-revoked'));
+            await off;
+            expect(renamed).toBe(true);
+            expect(mocks.whatsappService.isSessionContextCurrent(incoming().sessionContext)).toBe(true); // not the session-loss branch
+            expect(pi.sendUserMessage).not.toHaveBeenCalled();
+            const files = await fs.readdir(join(root, '.pi-data', 'whatsapp', 'documents'));
+            expect(files).toEqual([expect.stringMatching(/_kept\.dwg$/)]);
+            expect((await fs.readFile(join(root, '.pi-data', 'whatsapp', 'documents', files[0]), 'utf8'))).toBe('drawing');
+            if (change === 'explicit Off') expect(mocks.whatsappService.stop).toHaveBeenCalled();
+            cwd.mockRestore();
+            delete (globalThis as { __whatsappNgPhoneOffProfiles?: unknown }).__whatsappNgPhoneOffProfiles;
+        });
     });
     it('does not mark paused incoming work read', async () => {
         const { pi } = await setup(); mocks.sessionManager.getSpeechSettings.mockReturnValue({ config: {}, enabled: false, mode: 'text', chats: { '5511999998888@s.whatsapp.net': { automaticReplies: false } } });

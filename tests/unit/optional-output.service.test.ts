@@ -4,12 +4,12 @@ import { OptionalOutputService, validateOptionalOutputs, type OptionalOutputs } 
 
 const owner = '15550000001@s.whatsapp.net'; const group = '120363000001@g.us';
 const image = { type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgo=' };
-function fixture(origin = 'whatsapp', settings: any = { imageTools: ['screenshot'], terminal: { ownerJid: owner, accountScope: 'fixture' } }) {
+function fixture(origin = 'whatsapp', settings: any = { imageTools: ['screenshot'], terminal: { ownerJid: owner, accountScope: 'fixture' } }, outboundBytes?: number) {
     const router = new ConversationRouter(); let valid = true; let disposed = 0;
     const send = vi.fn(async (_snapshot: any, request: any) => { const result = { success: true, attempts: 1 }; await request.onSettled?.(result); return result; });
     const prepare = vi.fn(async () => ({ content: { image: { url: 'private-snapshot' } }, metadata: { type: 'image' }, dispose: async () => { disposed++; } }));
     const notify = vi.fn();
-    const service = new OptionalOutputService({ router, policy: () => ({ settings, ownerJid: owner, accountScope: 'fixture', isCurrent: () => valid }),
+    const service = new OptionalOutputService({ router, policy: () => ({ settings, ownerJid: owner, accountScope: 'fixture', isCurrent: () => valid, ...(outboundBytes === undefined ? {} : { outboundBytes }) }),
         allowed: () => true, prepareImage: prepare, send, notify });
     router.startRun();
     if (origin === 'whatsapp') { const input = router.prepare('input', { remoteJid: group, id: 'm', fromMe: false, participant: owner }); router.observeInput({ source: 'extension', text: input.content }); router.consume({ role: 'user', content: input.content }); }
@@ -36,6 +36,30 @@ describe('optional outputs', () => {
         await tool(f, 'd', 'screenshot', { content: [{ ...image, data: 'https://example.invalid/a.png' }] });
         await tool(f, 'e', 'screenshot', { content: [image], isError: true });
         await f.service.toolEnded('missing', 'screenshot', { content: [image] }, false); expect(f.send).not.toHaveBeenCalled();
+    });
+    describe('configured outbound per-file limit', () => {
+        const png = (size: number) => { const bytes = Buffer.alloc(size); Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes); return { type: 'image', mimeType: 'image/png', data: bytes.toString('base64') }; };
+        const MiB = 1024 * 1024;
+        it('skips a tool image above the outbound limit without consuming a slot and never retries it', async () => {
+            const f = fixture('whatsapp', undefined, 5 * MiB);
+            await tool(f, 'big', 'screenshot', { content: [png(6 * MiB)] });
+            await tool(f, 'big-again', 'screenshot', { content: [png(6 * MiB)] });
+            expect(f.prepare).not.toHaveBeenCalled();
+            await tool(f, 'small', 'screenshot', { content: [1, 2, 3, 4].map(i => png(1024 + i)) });
+            expect(f.send).toHaveBeenCalledTimes(4);
+        });
+        it('keeps the 4-image / 25 MiB aggregate when the outbound limit is 512 MiB', async () => {
+            const f = fixture('whatsapp', undefined, 512 * MiB);
+            await tool(f, 'agg', 'screenshot', { content: [png(10 * MiB), png(10 * MiB + 1), png(10 * MiB + 2)] });
+            expect(f.send).toHaveBeenCalledTimes(2);
+            await tool(f, 'count', 'screenshot', { content: [1, 2, 3].map(i => png(100 + i)) });
+            expect(f.send).toHaveBeenCalledTimes(4);
+        });
+        it('forwards no tool images when limits are unavailable (outboundBytes 0)', async () => {
+            const f = fixture('whatsapp', undefined, 0);
+            await tool(f);
+            expect(f.send).not.toHaveBeenCalled();
+        });
     });
     it('reserves hash dedup before concurrent prepare and does not retry unknown delivery', async () => {
         const f = fixture(); f.send.mockImplementation(async (_snapshot: any, request: any) => { const result = { success: false, delivery: 'unknown' }; await request.onSettled?.(result); return result as any; });

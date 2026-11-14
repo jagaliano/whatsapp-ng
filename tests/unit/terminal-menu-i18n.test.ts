@@ -229,8 +229,8 @@ describe('terminal translation dictionaries', () => {
             expect(dictionary).toHaveProperty('menu.optional.' + suffix);
         }
     });
-    const keys = Object.keys(fallback).filter(key => /^(menu\.|archive\.menu\.|voice\.|message\.detail\.|message\.reply\.)/.test(key));
-    const identical = new Set(['menu.whatsapp.title', 'menu.recents.grouped.contacts', 'menu.recents.history.messageTitle', 'voice.no', 'message.reply.original', 'message.detail.direction']);
+    const keys = Object.keys(fallback).filter(key => /^(menu\.|archive\.menu\.|voice\.|message\.detail\.|message\.reply\.|mediaLimits\.)/.test(key));
+    const identical = new Set(['menu.whatsapp.title', 'menu.recents.grouped.contacts', 'menu.recents.history.messageTitle', 'voice.no', 'message.reply.original', 'message.detail.direction', 'mediaLimits.kind.image', 'mediaLimits.kind.document']);
     it.each([1, 2, 3])('has explicit translations and identical placeholders in locale %s', locale => {
         const words = dictionaries[locale];
         for (const key of keys) {

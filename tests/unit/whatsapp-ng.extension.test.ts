@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetI18n } from '../../src/i18n.ts';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { resetI18n, t } from '../../src/i18n.ts';
+import { mkdtemp, open, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { MessageRequest } from '../../src/models/whatsapp.types.ts';
@@ -10,6 +10,9 @@ import { resolveTtsConfig } from '../../src/services/tts-config.ts';
 const mocks = vi.hoisted(() => {
     const createSessionManager = () => ({
         ensureInitialized: vi.fn().mockResolvedValue(undefined),
+        getMediaLimits: vi.fn<() => { inboundBytes: number; outboundBytes: number }>(() => ({ inboundBytes: 25 * 1024 * 1024, outboundBytes: 25 * 1024 * 1024 })),
+        getMediaLimitsRevision: vi.fn().mockReturnValue(0),
+        setMediaLimit: vi.fn().mockResolvedValue(undefined),
         getAuthStateDir: vi.fn().mockReturnValue('/synthetic-profile'),
         isRegistered: vi.fn().mockResolvedValue(false),
         setStatus: vi.fn().mockResolvedValue(undefined),
@@ -339,6 +342,122 @@ describe('whatsapp-ng extension', () => {
         } finally {
             await rm(root, { recursive: true, force: true });
         }
+    });
+
+    describe('send_wa_media configurable outbound limit', () => {
+        const MiB = 1024 * 1024;
+        const jid = '15550000001@s.whatsapp.net';
+        async function withFile(size: number, run: (path: string, root: string) => Promise<void>) {
+            const root = await mkdtemp(join(tmpdir(), 'wa-tool-limit-'));
+            try {
+                const path = join(root, 'drawing.pdf');
+                const file = await open(path, 'wx', 0o600);
+                await file.write(Buffer.from('%PDF-1.4\n'), 0, 9, 0); await file.truncate(size); await file.close();
+                await run(path, root);
+            } finally { await rm(root, { recursive: true, force: true }); }
+        }
+        const send = async (pi: ReturnType<typeof createMockPi>, path: string, root: string, type = 'document') =>
+            pi.tools.get('send_wa_media').execute('limit', { path, type, jid }, new AbortController().signal, undefined, { ...createMockContext(), cwd: root });
+
+        it('uses a 10-minute caller wait above 25 MiB and keeps 60 seconds otherwise', async () => {
+            mocks.sessionManager.getMediaLimits.mockReturnValue({ inboundBytes: 25 * MiB, outboundBytes: 512 * MiB });
+            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            await withFile(30 * MiB, async (path, root) => { expect((await send(pi, path, root)).isError).toBe(false); });
+            expect(mocks.whatsappService.sendContent.mock.calls.at(-1)?.[0]).toMatchObject({ sendTimeoutMs: 600_000, sendOptions: { mediaUploadTimeoutMs: 60_000 } });
+            await withFile(MiB, async (path, root) => { expect((await send(pi, path, root)).isError).toBe(false); });
+            expect(mocks.whatsappService.sendContent.mock.calls.at(-1)?.[0]).toMatchObject({ sendTimeoutMs: 60_000 });
+        });
+
+        it('refuses above the configured outbound limit with menu guidance, before any send', async () => {
+            mocks.sessionManager.getMediaLimits.mockReturnValue({ inboundBytes: 25 * MiB, outboundBytes: 2 * MiB });
+            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            await withFile(2 * MiB + 1, async (path, root) => {
+                const result = await send(pi, path, root);
+                expect(result.isError).toBe(true);
+                expect(JSON.parse(result.content[0].text).error).toContain('outbound limit of 2 MiB');
+            });
+            expect(mocks.whatsappService.sendContent).not.toHaveBeenCalled();
+        });
+
+        it('holds the large-transfer slot and snapshot through delivery-unknown until settlement, refusing a second large send as busy', async () => {
+            mocks.sessionManager.getMediaLimits.mockReturnValue({ inboundBytes: 25 * MiB, outboundBytes: 512 * MiB });
+            let settle!: () => Promise<void>;
+            let snapshot = '';
+            mocks.whatsappService.sendContent.mockImplementationOnce(async (request: MessageRequest) => {
+                snapshot = (request.content as { document: { url: string } }).document.url;
+                settle = async () => { await request.onSettled?.({ success: false, delivery: 'unknown', messageId: 'M', attempts: 1 }); };
+                return { success: false, delivery: 'unknown', messageId: 'M', attempts: 1 };
+            });
+            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            await withFile(30 * MiB, async (path, root) => {
+                const first = JSON.parse((await send(pi, path, root)).content[0].text);
+                expect(first).toMatchObject({ success: false, delivery: 'unknown' });
+                expect((await stat(snapshot)).size).toBe(30 * MiB);
+                const busy = JSON.parse((await send(pi, path, root)).content[0].text);
+                expect(busy.error).toContain('Another large file transfer is in progress');
+                expect(mocks.whatsappService.sendContent).toHaveBeenCalledTimes(1);
+                await settle();
+                await expect(stat(snapshot)).rejects.toThrow();
+                expect((await send(pi, path, root)).isError).toBe(false);
+                expect(mocks.whatsappService.sendContent).toHaveBeenCalledTimes(2);
+            });
+        });
+
+        it('passes the admission-cap error through without claiming the configured limit was exceeded', async () => {
+            mocks.sessionManager.getMediaLimits.mockReturnValue({ inboundBytes: 25 * MiB, outboundBytes: 512 * MiB });
+            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            const { OutgoingMediaService } = await import('../../src/services/outgoing-media.service.ts');
+            vi.spyOn(OutgoingMediaService.prototype, 'prepare').mockRejectedValueOnce(new Error(t('mediaLimits.unadmittedCap')));
+            await withFile(MiB, async (path, root) => {
+                const { error } = JSON.parse((await send(pi, path, root)).content[0].text);
+                expect(error).toBe(t('mediaLimits.unadmittedCap'));
+                expect(error).not.toContain('512');
+                expect(error).not.toContain('configured outbound limit');
+            });
+        });
+
+        it('names the actual configured outbound limit value when it is exceeded', async () => {
+            mocks.sessionManager.getMediaLimits.mockReturnValue({ inboundBytes: 25 * MiB, outboundBytes: 30 * MiB });
+            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            await withFile(30 * MiB + 1, async (path, root) => {
+                const { error } = JSON.parse((await send(pi, path, root)).content[0].text);
+                expect(error).toBe(t('mediaLimits.outboundTooLarge', { maxMiB: 30 }));
+            });
+        });
+
+        it('keeps the unchanged 25 MiB audio message even with a 512 MiB outbound limit', async () => {
+            mocks.sessionManager.getMediaLimits.mockReturnValue({ inboundBytes: 25 * MiB, outboundBytes: 512 * MiB });
+            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            await withFile(25 * MiB + 1, async (path, root) => {
+                const { error } = JSON.parse((await send(pi, path, root, 'audio')).content[0].text);
+                expect(error).toBe(t('media.tooLarge', { maxMiB: 25 }));
+            });
+            expect(mocks.whatsappService.sendContent).not.toHaveBeenCalled();
+        });
+
+        it('releases the slot when preparation fails before transmission', async () => {
+            mocks.sessionManager.getMediaLimits.mockReturnValue({ inboundBytes: 25 * MiB, outboundBytes: 512 * MiB });
+            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            await withFile(30 * MiB, async (path, root) => {
+                const cancelled = new AbortController(); cancelled.abort();
+                const aborted = await pi.tools.get('send_wa_media').execute('limit', { path, type: 'document', jid }, cancelled.signal, undefined, { ...createMockContext(), cwd: root });
+                expect(aborted.isError).toBe(true);
+                expect(mocks.whatsappService.sendContent).not.toHaveBeenCalled();
+                expect((await send(pi, path, root)).isError).toBe(false);
+            });
+        });
+
+        it('refuses non-audio when saved limits are unavailable but still prepares audio', async () => {
+            mocks.sessionManager.getMediaLimits.mockImplementation(() => { throw new Error('Invalid saved media limits'); });
+            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            await withFile(1024, async (path, root) => {
+                const result = JSON.parse((await send(pi, path, root)).content[0].text);
+                expect(result.error).toContain('Media limits are unavailable');
+                const audio = JSON.parse((await send(pi, path, root, 'audio')).content[0].text);
+                expect(audio.error).not.toContain('Media limits are unavailable');
+            });
+            expect(mocks.whatsappService.sendContent).not.toHaveBeenCalled();
+        });
     });
 
     it('renders tables in text messages but keeps legacy caption formatting', async () => {
@@ -771,7 +890,9 @@ describe('whatsapp-ng extension', () => {
         expect(mocks.extractIncomingText).toHaveBeenCalledWith({ conversation: 'hello' }, mocks.recentsService);
         expect(mocks.incomingMediaService.process).toHaveBeenCalledWith(
             { kind: 'text', text: 'hello from whatsapp' },
-            'Ana'
+            'Ana',
+            undefined,
+            expect.objectContaining({ quoted: false, isCurrent: expect.any(Function) })
         );
         expect(mocks.whatsappService.markRead).toHaveBeenCalledWith({ remoteJid: '5511999998888@s.whatsapp.net', id: 'WA1', fromMe: false });
         expect(mocks.whatsappService.sendPresence).not.toHaveBeenCalled();

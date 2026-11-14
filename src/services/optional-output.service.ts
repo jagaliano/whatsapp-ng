@@ -44,6 +44,8 @@ export interface OptionalOutputPolicy {
     isCurrent(): boolean;
     terminalCurrent?(): boolean;
     autonomousCurrent?(): boolean;
+    /** Captured outbound per-file limit; 0 when saved limits are unavailable. Absent means the aggregate bound only. */
+    outboundBytes?: number;
 }
 interface Dependencies {
     router: ConversationRouter;
@@ -102,7 +104,9 @@ export class OptionalOutputService {
             if (!block || block.type !== 'image' || typeof block.data !== 'string' || !['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(block.mimeType)) continue;
             if (!block.data.length || block.data.length > Math.ceil(MAX_BYTES / 3) * 4 || block.data.length % 4) continue;
             const bytes = Buffer.from(block.data, 'base64');
-            if (!bytes.length || bytes.length + frame.admission.bytes > MAX_BYTES || bytes.toString('base64') !== block.data) continue;
+            // Size refusals (aggregate or per-file) happen before any slot is reserved and are not retried.
+            const perFile = frame.admission.policy.outboundBytes ?? MAX_BYTES;
+            if (!bytes.length || bytes.length > perFile || bytes.length + frame.admission.bytes > MAX_BYTES || bytes.toString('base64') !== block.data) continue;
             const hash = createHash('sha256').update(bytes).digest('hex');
             if (frame.admission.hashes.has(hash)) continue;
             // Reserve before awaiting: parallel and repeated results cannot resend.

@@ -223,7 +223,7 @@ export class MarkdownTableProjector {
     /** Arithmetic size of all labeled lines, computed before any joined line exists. */
     private labeledSize(candidate: TableCandidate, run: readonly SourceLine[]): number {
         const header = candidate.header.map(cell => cell.display);
-        const empty = (label: string): number => label ? label.length + 1 : 0;
+        const empty = (label: string): number => label ? boldLabel(label).length + 1 : 0;
         const base = header.reduce((sum, label) => sum + empty(label), 0) + SEPARATOR.length * (header.length - 1);
         return candidate.body.reduce((sum, row, index) => sum + base + run[index + 2].end.length
             + row.reduce((delta, cell, column) => delta + (cell.display ? (header[column] ? 1 : 0) + cell.display.length : 0), 0), 0);
@@ -233,7 +233,8 @@ export class MarkdownTableProjector {
         return header.map((label, column) => {
             const value = row[column]?.display ?? '';
             if (!label.display) return value;
-            return value ? `${label.display}: ${value}` : `${label.display}:`;
+            const bold = boldLabel(label.display);
+            return value ? `${bold}: ${value}` : `${bold}:`;
         }).join(SEPARATOR);
     }
 
@@ -290,6 +291,11 @@ function htmlTagEnd(text: string, start: number): number {
         else if (char === '>') return at + 1;
     }
     return -1;
+}
+
+/** WhatsApp bold for a labeled-text header; a label already containing '*' stays plain to avoid unbalanced markup. */
+function boldLabel(label: string): string {
+    return label.includes('*') ? label : `*${label}*`;
 }
 
 function isSupportedBase(code: number): boolean {

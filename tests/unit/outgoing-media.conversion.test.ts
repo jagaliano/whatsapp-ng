@@ -128,6 +128,34 @@ describe('FFmpeg process and temporary ownership', () => {
         await expect(access(path)).resolves.toBeUndefined();
     });
 
+    it('stops a mocked FFmpeg conversion of a small-admitted video at 25 MiB and reports the admission cap', async () => {
+        const { t } = await import('../../src/i18n.ts');
+        const { open: openFile } = await import('node:fs/promises');
+        const { TransferSlots } = await import('../../src/services/transfer-slots.ts');
+        root = await mkdtemp(join(tmpdir(), 'wa-process-test-'));
+        const path = join(root, 'small.mov');
+        // QuickTime container header: probed, not directly sendable, so it converts.
+        await writeFile(path, Buffer.concat([Buffer.from([0, 0, 0, 0x14]), Buffer.from('ftypqt  '), Buffer.alloc(52)]));
+        mocks.spawn.mockImplementationOnce(() => {
+            const child = Object.assign(new EventEmitter(), { stderr: new PassThrough(), kill: vi.fn() });
+            queueMicrotask(() => { child.stderr.write('Input #0, mov, from fixture:\n  Duration: 00:00:01.00\n  Stream #0:0: Video: hevc, yuv420p\n'); child.emit('close', 1); });
+            return child;
+        });
+        let output = ''; let killed = false;
+        mocks.spawn.mockImplementationOnce((_command, args) => {
+            output = args.at(-1);
+            const child = Object.assign(new EventEmitter(), { stderr: new PassThrough(), kill: vi.fn(() => { if (!killed) { killed = true; queueMicrotask(() => child.emit('close', null, 'SIGTERM')); } return true; }) });
+            // Mocked conversion writes a sparse 26 MiB output; the size watcher must stop it.
+            void openFile(output, 'w').then(async file => { await file.truncate(26 * 1024 * 1024); await file.close(); });
+            return child;
+        });
+        const service = new OutgoingMediaService({ workspaceRoot: root, maxBytes: 100 * 1024 * 1024, ffmpegCommands: ['fixture-ffmpeg'], slots: new TransferSlots(1) });
+        await expect(service.prepare({ path, type: 'video' })).rejects.toThrow(t('mediaLimits.unadmittedCap'));
+        expect(killed).toBe(true);
+        await expect(access(output)).rejects.toThrow();
+        await expect(access(path)).resolves.toBeUndefined();
+    });
+
     it('reports missing FFmpeg without installing anything or removing the user input', async () => {
         const path = await createInput();
         const service = new OutgoingMediaService({ workspaceRoot: root, ffmpegCommands: [join(root, 'missing-ffmpeg')] });

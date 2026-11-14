@@ -105,7 +105,7 @@ The `---` line is the T044 workaround (FR-022), not a frame row. Line width is 1
 | 👋 | 日本語 |
 ````
 
-Expected: `A: 👋 · B: 日本語` (no final newline).
+Expected: `*A*: 👋 · *B*: 日本語` (bold labels per T045; originally `A: 👋 · B: 日本語`) (no final newline).
 
 ### Edge Cases
 
@@ -159,7 +159,7 @@ Expected: `A: 👋 · B: 日本語` (no final newline).
 
 **Labeled text**
 
-- **FR-023**: For a valid safe table failing only width/column-count/character checks, emit one line per body row with pairs joined by ` · ` per the pair rules in Story 2, using each row's original ending.
+- **FR-023**: For a valid safe table failing only width/column-count/character checks, emit one line per body row with pairs joined by ` · ` per the pair rules in Story 2, using each row's original ending. **T045 (owner-requested)**: each nonempty label is WhatsApp bold, so pairs read `*Header*: value` / `*Header*:`. A label that already contains `*` stays plain. The label text itself is unchanged.
 - **FR-024**: Each complete generated line must be unchanged by today's heading+inline projection, have no unclosed code span, and not be a fence opener; otherwise the whole candidate keeps today's projection. No escaping to force a pass; non-table inline projection unchanged.
 - **FR-025**: Generated box and fallback segments are stable under another projection pass (segment-local guarantee only).
 

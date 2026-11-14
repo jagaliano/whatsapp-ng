@@ -41,7 +41,7 @@ One padding space each side of every cell; alignment padding inside; centered od
 
 ## Labeled segment
 
-One line per body row: pairs joined by ` · `; pair = `H: v` | `H:` (empty v) | `v` (empty H) | `` (both empty); row's own ending.
+One line per body row: pairs joined by ` · `; pair = `*H*: v` | `*H*:` (empty v; `H` plain if it contains `*`, T045) | `v` (empty H) | `` (both empty); row's own ending.
 
 ## Golden examples
 

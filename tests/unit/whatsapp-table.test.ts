@@ -40,11 +40,11 @@ describe('boxed tables', () => {
         expect(lines.slice(0, 2)).toEqual(['```', '---']); expect(lines.at(-1)).toBe('```');
         const frame = lines.slice(2, -1); expect(frame).toHaveLength(5);
         expect(frame.every(line => [...line].length === 28)).toBe(true);
-        expect(format('| aaaaaaa | bbbbbb | cccccc |\n|---|---|---|\n| 1 | 2 | 3 |')).toBe('aaaaaaa: 1 · bbbbbb: 2 · cccccc: 3');
+        expect(format('| aaaaaaa | bbbbbb | cccccc |\n|---|---|---|\n| 1 | 2 | 3 |')).toBe('*aaaaaaa*: 1 · *bbbbbb*: 2 · *cccccc*: 3');
     });
     it('counts supported accents and attached combining marks, but not standalone marks', () => {
         expect(format('| café | e\u0301 |\n|---|---|\n| 1 | 2 |')).toBe(box(['┌──────┬───┐', '│ café │ e\u0301 │', '├──────┼───┤', '│ 1    │ 2 │', '└──────┴───┘']));
-        expect(format('| \u0301 | b |\n|---|---|\n| 1 | 2 |')).toBe('\u0301: 1 · b: 2');
+        expect(format('| \u0301 | b |\n|---|---|\n| 1 | 2 |')).toBe('*\u0301*: 1 · *b*: 2');
     });
     it('preserves CRLF, missing final newline and lone CR prose', () => {
         expect(format('| A | B |\r\n|---|---|\r\n| x | y |\r\n')).toBe(box(AB, '\r\n', '\r\n'));
@@ -59,13 +59,13 @@ describe('boxed tables', () => {
         expect(format('| K | V |\n|---|---|\n| `` a`b `` | x |')).toContain('│  a`b  │ x │');
     });
     it('projects links, strong markers and opaque URLs only in supported shapes', () => {
-        expect(format('| L | V |\n|---|---|\n| [a\\|b](https://example.test) | x |')).toBe('L: a|b (https://example.test) · V: x');
-        expect(format('| U | V |\n|---|---|\n| https://example.test/**path** | x |')).toBe('U: https://example.test/**path** · V: x');
+        expect(format('| L | V |\n|---|---|\n| [a\\|b](https://example.test) | x |')).toBe('*L*: a|b (https://example.test) · *V*: x');
+        expect(format('| U | V |\n|---|---|\n| https://example.test/**path** | x |')).toBe('*U*: https://example.test/**path** · *V*: x');
         expect(format('| A | B |\n|---|---|\n| **x** | __y__ |')).toBe(box(AB));
         expect(format('| A | B |\n|---|---|\n| ~~s~~ | *a* |')).toContain('│ ~~s~~ │ *a* │');
         const label511 = 'x'.repeat(511); const label512 = 'x'.repeat(512);
-        expect(format(`| L | V |\n|---|---|\n| [${label511}](https://e.test) | 1 |`)).toBe(`L: ${label511} (https://e.test) · V: 1`);
-        expect(format(`| L | V |\n|---|---|\n| [${label512}](https://e.test) | 1 |`)).toBe(`L: [${label512}](https://e.test) · V: 1`);
+        expect(format(`| L | V |\n|---|---|\n| [${label511}](https://e.test) | 1 |`)).toBe(`*L*: ${label511} (https://e.test) · *V*: 1`);
+        expect(format(`| L | V |\n|---|---|\n| [${label512}](https://e.test) | 1 |`)).toBe(`*L*: [${label512}](https://e.test) · *V*: 1`);
     });
     it('keeps images and HTML literal in cells while projecting the rest (FR-013)', () => {
         const image = format('| A | B |\n|---|---|\n| ![**x**](https://e) | 1 |');
@@ -84,12 +84,12 @@ describe('boxed tables', () => {
         expect(format('| A | B |\n|---|---|\n| ![**x** | 1 |')).toContain('│ ![**x** │ 1 │');
         expect(format('| A | B |\n|---|---|\n| <!--**x**--> | **y** |')).toContain('│ <!--**x**--> │ y │');
         expect(format('| A | B |\n|---|---|\n| <!--**x** | **y** |')).toContain('│ <!--**x** │ y │');
-        const link511 = `| L | V |\n|---|---|\n| [${'x'.repeat(511)}](https://e.test) | 1 |`; expect(format(link511)).toBe(`L: ${'x'.repeat(511)} (https://e.test) · V: 1`);
+        const link511 = `| L | V |\n|---|---|\n| [${'x'.repeat(511)}](https://e.test) | 1 |`; expect(format(link511)).toBe(`*L*: ${'x'.repeat(511)} (https://e.test) · *V*: 1`);
     });
     it('keeps complete image destinations literal, including parentheses (FR-013)', () => {
         const cell = (value: string): string => format(`| A | B |\n|---|---|\n| ${value} | 1 |`);
-        for (const value of ['![x](https://e/(a)**b**)', '![x](https://e/((a))**b**)', '![x](https://e/\\)**b**)']) expect(cell(value), value).toBe(`A: ${value} · B: 1`);
-        expect(cell('![x](https://e/(a)) **y**')).toBe('A: ![x](https://e/(a)) y · B: 1');
+        for (const value of ['![x](https://e/(a)**b**)', '![x](https://e/((a))**b**)', '![x](https://e/\\)**b**)']) expect(cell(value), value).toBe(`*A*: ${value} · *B*: 1`);
+        expect(cell('![x](https://e/(a)) **y**')).toBe('*A*: ![x](https://e/(a)) y · *B*: 1');
         for (const value of ['![x](https://e/(a**b**', '![x](https://e/((a)**b**']) {
             const input = `| A | B |\n|---|---|\n| ${value} | 1 |`; expect(format(input), value).toBe(legacy(input));
         }
@@ -126,24 +126,29 @@ describe('boxed tables', () => {
 
 describe('labeled table rows', () => {
     it('renders the approved emoji/CJK golden example', () => {
-        expect(format('| A | B |\n|---|---|\n| 👋 | 日本語 |')).toBe('A: 👋 · B: 日本語');
+        expect(format('| A | B |\n|---|---|\n| 👋 | 日本語 |')).toBe('*A*: 👋 · *B*: 日本語');
     });
     it('labels five-column and unsupported-width tables and stays stable', () => {
         const five = format('| a | b | c | d | e |\n|---|---|---|---|---|\n| 1 | 2 | 3 | 4 | 5 |');
-        expect(five).toBe('a: 1 · b: 2 · c: 3 · d: 4 · e: 5'); expect(format(five)).toBe(five);
-        for (const value of ['❤', '❤️', '👨‍👩‍👧', '🇧🇷', '1️⃣', '日本']) expect(format(`| A | B |\n|---|---|\n| ${value} | x |`)).toBe(`A: ${value} · B: x`);
+        expect(five).toBe('*a*: 1 · *b*: 2 · *c*: 3 · *d*: 4 · *e*: 5'); expect(format(five)).toBe(five);
+        for (const value of ['❤', '❤️', '👨‍👩‍👧', '🇧🇷', '1️⃣', '日本']) expect(format(`| A | B |\n|---|---|\n| ${value} | x |`)).toBe(`*A*: ${value} · *B*: x`);
     });
     it('applies positional pair rules', () => {
-        expect(format('|  | B |\n|---|---|\n| x | 1 👋 |')).toBe('x · B: 1 👋');
-        expect(format('| A | B |\n|---|---|\n|  | 👋 |')).toBe('A: · B: 👋');
-        expect(format('|  |  | C |\n|---|---|---|\n|  |  | 👋 |')).toBe(' ·  · C: 👋');
-        expect(format('| A | A |\n|---|---|\n| 1 | 👋 |')).toBe('A: 1 · A: 👋');
-        expect(format('| A | B | C |\n|---|---|---|\n| 👋 |')).toBe('A: 👋 · B: · C:');
-        expect(format('| A | B |\r\n|---|---|\r\n| 👋 | 1 |\n| 2 | 👋 |\r\n| 3 | 4 |')).toBe('A: 👋 · B: 1\nA: 2 · B: 👋\r\nA: 3 · B: 4');
+        expect(format('|  | B |\n|---|---|\n| x | 1 👋 |')).toBe('x · *B*: 1 👋');
+        expect(format('| A | B |\n|---|---|\n|  | 👋 |')).toBe('*A*: · *B*: 👋');
+        expect(format('|  |  | C |\n|---|---|---|\n|  |  | 👋 |')).toBe(' ·  · *C*: 👋');
+        expect(format('| A | A |\n|---|---|\n| 1 | 👋 |')).toBe('*A*: 1 · *A*: 👋');
+        expect(format('| A | B | C |\n|---|---|---|\n| 👋 |')).toBe('*A*: 👋 · *B*: · *C*:');
+        expect(format('| A | B |\r\n|---|---|\r\n| 👋 | 1 |\n| 2 | 👋 |\r\n| 3 | 4 |')).toBe('*A*: 👋 · *B*: 1\n*A*: 2 · *B*: 👋\r\n*A*: 3 · *B*: 4');
+    });
+    it('bolds labels with WhatsApp asterisks, except labels that already contain one', () => {
+        expect(format('| Package | Signal (latest, date, dl/wk, note) |\n|---|---|\n| pi-x | 0.12.0 · 11-06 · 5496/wk |'))
+            .toBe('*Package*: pi-x · *Signal (latest, date, dl/wk, note)*: 0.12.0 · 11-06 · 5496/wk');
+        expect(format('| a*b | c |\n|---|---|\n| 👋 | 1 |')).toBe('a*b: 👋 · *c*: 1');
     });
     it('keeps today\'s projection when a labeled line would be unstable', () => {
         for (const input of ['| a | b | c | d | e |\n|---|---|---|---|---|\n| `**x**` | 2 | 3 | 4 | 5 |', '| a | b | c | d | e |\n|---|---|---|---|---|\n| **a | b** | 3 | 4 | 5 |',
-            '| ~~~ | b |\n|---|---|\n| 👋 | 1 |']) expect(format(input), input).toBe(legacy(input));
+            '|  | b |\n|---|---|\n| ~~~ | 👋 |']) expect(format(input), input).toBe(legacy(input));
     });
 });
 

@@ -152,6 +152,7 @@ Incremental order US1 → US2 → US3 → US4 → Polish with the full suite at 
 - [X] T042 [US1] FR-013 image-label boundary: the raw `indexOf('](')` matched inside escaped (`![a\](b) **x**](https://e)`) or nested (`![a [b](c) **x**](https://e)`) labels and stripped `**x**`. A regression was added first ("finds image label ends past escaped and nested brackets") and observed failing. It covers both cases, wide (labeled line unstable, so legacy) and boxed (literal), a code span containing `](` inside a label, emphasis after the image (`**y**` → `y`) and an unclosed code span in a label (legacy). Fixed with `imageLabelEnd()` in `src/services/whatsapp-table.ts`: one forward scan that skips escapes and matched code spans, counts nesting, and refuses ambiguous labels (`-2`), so the candidate keeps legacy. T041 destination handling and ordinary-link rules unchanged. Research R4 updated.
 - [X] T043 [US1] FR-013 quoted/tagged image boundaries: `![x](h "t) **x**")` and `![<b t="](h) **x**">](h)` closed at a `)` hidden inside a title or attribute and rendered a box with `**x**` exposed or stripped. A regression was added first ("refuses ambiguous quoted image boundaries…") and observed failing. It asserts the complete legacy fallback strings (where legacy formats `**x**` as `*x*`), not raw-marker preservation. Fixed in `src/services/whatsapp-table.ts`: an image span containing `"`, `'` or `<` refuses the cell. No title or HTML-in-label parsing. The plain, escaped, nested and code-span label cases (T042) and destination handling (T041) still pass. Research R4 documents the refusal.
 - [X] T044 [US1] Owner-approved output-contract change (research R13): every generated box block starts with a fixed `---` line before the top border, working around misaligned first-line rendering observed on iPhone and WhatsApp Web (cause unconfirmed, Android untested). Failing regressions first (15 failures): goldens updated in `whatsapp-table`, `whatsapp-text`, mocked entry and RPC tests; the 28-column test checks the fence/lead lines separately and asserts all 5 frame rows are 28 wide; new budget test with LF and CRLF exact-limit and one-over cases including the lead line; labeled text and existing code blocks have no lead. `BOX_LEAD` added to `box()` and `boxSize()` in `src/services/whatsapp-table.ts`. Spec FR-022, contract, plan, research R13, `docs/reference.md` and `CHANGELOG.md` updated.
+- [X] T045 [US2] Owner-requested: bold labeled-text headers (`*Package*: … · *Signal (latest, date, dl/wk, note)*: …`) for readability. Expected outputs were updated first (9 failures). Fixed with `boldLabel()` in `src/services/whatsapp-table.ts`, used in both `labeledLine()` and the `labeledSize()` preflight (+2 units per nonempty label). Labels already containing `*` stay plain. The fence-opener refusal fixture was moved from a `~~~` header (which is now bolded and stable) to a `~~~` value under an empty header. Boxes, captions and legacy fallback are unchanged.
 
 ## Validation Evidence
 
@@ -218,3 +219,16 @@ Operator-confirmed on iPhone and WhatsApp Web; six screenshots were reviewed in 
 - Labeled fallbacks, protected code, other formatting and the caption opt-out behave correctly.
 
 This is operator evidence, not a unit test. Android remains untested, the internal cause of the first-line misalignment is unconfirmed, and alignment remains client- and font-dependent.
+
+### T045 run (2026-11-13)
+
+Isolated credential-free environment (`/tmp/iso.sh` recreated with the same definition). Red: 9 failures after updating expected outputs. Green: `whatsapp-table` + `whatsapp-text` → 150 passed. First full run: 4 `managed-speech.service.test.ts` timing failures; that file then passed 34/34 alone, and the rerun full suite passed 100 files / 2364 tests with 3 skipped. The file count grew since T044 because of other work in the tree, not this change. ESLint (declared globs) exit 0; `tsc --noEmit` exit 0. Phone check of bold labels: accepted 2026-11-14 (see below).
+
+### T045 operator acceptance (2026-11-14)
+
+Operator-confirmed on iPhone and WhatsApp Web. Three screenshots were reviewed in the control session, and all passed:
+- Bold labels render correctly, and values stay plain and intact.
+- Duplicate and empty headers, and the exception for labels already containing `*`, behave correctly.
+- Narrow boxes remain unchanged and aligned.
+
+This is operator evidence, not a unit test. Android is untested.

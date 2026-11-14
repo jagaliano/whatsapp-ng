@@ -12,6 +12,7 @@ import { StateMigrationService } from './state-migration.service.js';
 import { validateGroupReplies, type GroupReplies } from './group-message.policy.js';
 import { validateOptionalOutputs, type OptionalOutputs } from './optional-output.service.js';
 import { validateReplyReporting, type ReplyReporting } from './run-report.service.js';
+import { validateMediaLimits, MAX_MEDIA_LIMIT_MIB, type MediaDirection, type MediaLimits } from './media-limits.js';
 import {
     getDefaultLegacyStorageRoot,
     getDefaultStorageRoot,
@@ -70,6 +71,8 @@ export class SessionManager {
     private groupRepliesRevision = 0;
     private storedOptionalOutputs: unknown;
     private optionalOutputsRevision = 0;
+    private storedMediaLimits: unknown;
+    private mediaLimitsRevision = 0;
     private speechSettings = speechDefaults();
     private storedSpeechState: Record<string, unknown> = {};
     private speechConfigInvalid = false;
@@ -184,6 +187,7 @@ export class SessionManager {
             this.storedReplyReporting = config.replyReporting;
             this.storedGroupReplies = config.groupReplies;
             this.storedOptionalOutputs = config.optionalOutputs;
+            this.storedMediaLimits = config.mediaLimits;
             this.storedSpeechState = Object.fromEntries([...TTS_CONFIG_FIELDS, 'voicePreferences'].flatMap(key => config[key] === undefined ? [] : [[key, config[key]]]));
             try { this.speechSettings = loadSpeechSettings(config); this.speechConfigInvalid = false; }
             catch { this.speechSettings = speechDefaults(); this.speechConfigInvalid = true; }
@@ -290,6 +294,28 @@ export class SessionManager {
             if (!valid()) throw new Error('Settings request expired');
             await this.writeConfig(this.storedSpeechState, this.operatorJid, valid, 'atomic', this.finalAfterAttachments, this.storedReplyStats, this.storedGroupReplies, next);
             this.storedOptionalOutputs = next; this.optionalOutputsRevision++;
+        });
+    }
+
+    /** Throws when configuration is unreadable or saved limits are malformed; callers refuse non-audio work. */
+    public getMediaLimits(): MediaLimits {
+        if (this.configReadFailure) throw new Error('Invalid saved media limits');
+        return validateMediaLimits(this.storedMediaLimits);
+    }
+    public getMediaLimitsRevision(): number { return this.mediaLimitsRevision; }
+    public async setMediaLimit(direction: MediaDirection, mib: number, expectedRevision: number, current: () => boolean = () => true): Promise<void> {
+        if (!Number.isInteger(mib) || mib < 1 || mib > MAX_MEDIA_LIMIT_MIB) throw new Error('Invalid media limit');
+        await this.ensureInitialized();
+        if (!this.configLoaded || this.configReadFailure) throw new Error('Configuration is unreadable; originals preserved');
+        await this.queueConfig(async () => {
+            const valid = () => expectedRevision === this.mediaLimitsRevision && current();
+            if (!valid()) throw new Error('Settings request expired');
+            validateMediaLimits(this.storedMediaLimits); // a malformed saved value is repaired only by fixing it, not merged
+            const previous = (this.storedMediaLimits ?? {}) as Record<string, number>;
+            const next = { ...previous, [direction === 'inbound' ? 'inboundMiB' : 'outboundMiB']: mib };
+            await this.writeConfig(this.storedSpeechState, this.operatorJid, valid, 'atomic', this.finalAfterAttachments, this.storedReplyStats,
+                this.storedGroupReplies, this.storedOptionalOutputs, this.storedReplyReporting, this.sttConfig, undefined, next);
+            this.storedMediaLimits = next; this.mediaLimitsRevision++;
         });
     }
 
@@ -415,7 +441,7 @@ export class SessionManager {
         }
     }
 
-    private async writeConfig(speech = this.storedSpeechState, owner = this.operatorJid, current: () => boolean = () => true, commit: 'ordinary' | 'atomic' = 'ordinary', finalAfterAttachments = this.finalAfterAttachments, replyStats = this.storedReplyStats, groupReplies = this.storedGroupReplies, optionalOutputs = this.storedOptionalOutputs, replyReporting = this.storedReplyReporting, sttConfig = this.sttConfig, autoConnect?: boolean): Promise<void> {
+    private async writeConfig(speech = this.storedSpeechState, owner = this.operatorJid, current: () => boolean = () => true, commit: 'ordinary' | 'atomic' = 'ordinary', finalAfterAttachments = this.finalAfterAttachments, replyStats = this.storedReplyStats, groupReplies = this.storedGroupReplies, optionalOutputs = this.storedOptionalOutputs, replyReporting = this.storedReplyReporting, sttConfig = this.sttConfig, autoConnect?: boolean, mediaLimits = this.storedMediaLimits): Promise<void> {
         this.assertStorageReady();
         await mkdir(this.storagePaths.root, { recursive: true, mode: 0o700 });
         await chmod(this.storagePaths.root, 0o700);
@@ -430,7 +456,7 @@ export class SessionManager {
                     status: this.status, hasAuthState: this.hasAuthState, openaiKey: this.openaiKey,
                     ...(savedAutoConnect === undefined ? {} : { autoConnect: savedAutoConnect }),
                     visionModel: this.visionModel, ...sttConfig, operatorJid: owner,
-                    finalAfterAttachments, ...(replyStats === undefined ? {} : { replyStats }), ...(groupReplies === undefined ? {} : { groupReplies }), ...(optionalOutputs === undefined ? {} : { optionalOutputs }), ...(replyReporting === undefined ? {} : { replyReporting }), ...speech
+                    finalAfterAttachments, ...(replyStats === undefined ? {} : { replyStats }), ...(groupReplies === undefined ? {} : { groupReplies }), ...(optionalOutputs === undefined ? {} : { optionalOutputs }), ...(replyReporting === undefined ? {} : { replyReporting }), ...(mediaLimits === undefined ? {} : { mediaLimits }), ...speech
                 }, null, 2);
                 if (!current()) throw new Error('Settings request expired');
                 await writeFile(tempPath, serialized, { mode: 0o600, flag: 'wx' });

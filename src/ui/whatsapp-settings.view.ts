@@ -75,7 +75,7 @@ export async function chooseWhatsAppSetting(ctx: ExtensionCommandContext, getSta
         'Chats / Owner': [t('menu.root.recents'), t('menu.root.allowedNumbers'), ...(state.owner ? [t('voice.owner')] : []), back],
         Replies: [t('menu.replyDelivery.title'), ...(state.optional ? [t('menu.optional.title')] : []), back],
         Groups: [t('menu.root.allowedGroups'), t('menu.groups.replies'), back],
-        Advanced: [t('menu.advanced.privacy'), ...(state.archive ? [t('archive.menu.scope')] : []), ...(state.registered ? [t('menu.root.logoffDeleteSession')] : []), back]
+        Advanced: [t('menu.advanced.privacy'), t('menu.advanced.mediaLimits'), ...(state.archive ? [t('archive.menu.scope')] : []), ...(state.registered ? [t('menu.root.logoffDeleteSession')] : []), back]
     });
     for (;;) {
         if (!current()) return;

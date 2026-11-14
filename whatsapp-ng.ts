@@ -10,6 +10,7 @@ import { AudioService } from './src/services/audio.service.js';
 import { createRemoteAudioTranscriber } from './src/services/remote-audio.transcriber.js';
 import { extractIncomingText } from './src/services/incoming-message.resolver.js';
 import { IncomingMediaService } from './src/services/incoming-media.service.js';
+import { AUDIO_TRANSFER_MAX_BYTES, PROCESSING_CEILING_BYTES, type MediaLimits } from './src/services/media-limits.js';
 import { WhatsAppNgLogger } from './src/services/whatsapp-ng.logger.js';
 import { ReactionSender } from './src/services/reaction.sender.js';
 import { ProcessingIndicator } from './src/services/processing-indicator.service.js';
@@ -234,7 +235,9 @@ export default function (pi: ExtensionAPI) {
             const ownerRevision = sessionManager.getOperatorRevision(); const context = whatsappService.getSessionContext();
             const owner = optionalOwner(true); const ownerAdmission = owner ? replyAdmission(owner.ownerJid) : () => false;
             const autonomousAdmission = settings.autonomous ? replyAdmission(settings.autonomous.jid) : () => false;
-            return { settings, ownerJid: owner?.ownerJid, accountScope: context.accountScope,
+            let outboundBytes = 0; // malformed/unreadable limits forward no tool images
+            try { outboundBytes = sessionManager.getMediaLimits().outboundBytes; } catch { outboundBytes = 0; }
+            return { settings, ownerJid: owner?.ownerJid, accountScope: context.accountScope, outboundBytes,
                 terminalCurrent: () => ownerAdmission() && owner !== undefined && optionalOwner()?.ownerJid === owner.ownerJid,
                 autonomousCurrent: () => autonomousAdmission() && owner !== undefined && optionalOwner(true)?.ownerJid === owner.ownerJid,
                 isCurrent: () => !deliberatelyOff && revision === sessionManager.getOptionalOutputsRevision()
@@ -838,15 +841,17 @@ export default function (pi: ExtensionAPI) {
         if (remoteJid && msg.key.id) void whatsappService.markRead(msg.key);
         const quotedImage = isGroup && resolved.kind === 'text' ? whatsappService.getIncomingQuotedImage?.(msg) : undefined;
         const mediaResolution = quotedImage && resolved.kind === 'text' ? { ...resolved, kind: 'image' as const, imageMessage: quotedImage } : resolved;
+        const mediaCurrent = () => !deliberatelyOff && runtimeId === router.getRuntimeId() && whatsappService.isSessionContextCurrent(msg.sessionContext) && admissionCurrent();
+        // Each operation captures its limit at admission; malformed/unreadable limits refuse non-audio work.
+        let mediaLimits: MediaLimits | undefined;
+        try { mediaLimits = sessionManager.getMediaLimits(); } catch { mediaLimits = undefined; }
         let processed = mediaResolution.kind === 'audio'
-            ? await incomingMediaService.process(mediaResolution, pushName, {
-                isCurrent: () => runtimeId === router.getRuntimeId() && whatsappService.isSessionContextCurrent(msg.sessionContext) && admissionCurrent()
-            })
-            : await incomingMediaService.process(mediaResolution, pushName);
-        if (isGroup && resolved.kind === 'audio' && runtimeId === router.getRuntimeId()
-            && whatsappService.isSessionContextCurrent(msg.sessionContext) && admissionCurrent()) {
+            ? await incomingMediaService.process(mediaResolution, pushName, { isCurrent: mediaCurrent })
+            : await incomingMediaService.process(mediaResolution, pushName, undefined, { limits: mediaLimits, isCurrent: mediaCurrent, quoted: Boolean(quotedImage) });
+        if (isGroup && resolved.kind === 'audio' && mediaCurrent()) {
             const image = whatsappService.getIncomingQuotedImage?.(msg);
-            if (image) processed = await incomingMediaService.process({ kind: 'image', text: processed.text, imageMessage: image }, pushName);
+            if (image) processed = await incomingMediaService.process({ kind: 'image', text: processed.text, imageMessage: image }, pushName,
+                undefined, { limits: mediaLimits, isCurrent: mediaCurrent, quoted: true });
         }
         const { text, imageBuffer, imageMimeType } = processed;
         if (runtimeId !== router.getRuntimeId() || !whatsappService.isSessionContextCurrent(msg.sessionContext)) {
@@ -854,7 +859,8 @@ export default function (pi: ExtensionAPI) {
             return;
         }
 
-        if (!admissionCurrent()) { whatsappService.markIncomingProcessing?.(msg.key, 'consumed'); return; }
+        // A file published before authority ended stays on disk unreported (FR-031).
+        if (!admissionCurrent() || deliberatelyOff) { whatsappService.markIncomingProcessing?.(msg.key, 'consumed'); return; }
 
         // Format message header with group context when applicable
         const messageHeader = isGroup
@@ -969,7 +975,7 @@ export default function (pi: ExtensionAPI) {
         name: 'send_wa_media',
         label: t('media.toolLabel'),
         description: t('media.toolDescription'),
-        promptSnippet: 'send_wa_media({path,type,jid?,caption?,voiceNote?,quote?}) - Explicit local attachment upload only. Mentioned paths are not upload instructions. Do not resend a delivery-unknown outcome; it may still arrive. By default, attachments do not suppress the automatic final explanation: provide it normally without another send tool. The terminal Reply delivery setting can select legacy caption/tool-only suppression; follow the current WhatsApp reply-delivery instructions.',
+        promptSnippet: 'send_wa_media({path,type,jid?,caption?,voiceNote?,quote?}) - Explicit local attachment upload only. Mentioned paths are not upload instructions. Documents/images/videos up to the configured outbound limit (default 25 MiB, max 512 MiB); audio up to 25 MiB. Do not resend a delivery-unknown outcome; it may still arrive. By default, attachments do not suppress the automatic final explanation: provide it normally without another send tool. The terminal Reply delivery setting can select legacy caption/tool-only suppression; follow the current WhatsApp reply-delivery instructions.',
         parameters: Type.Object({
             path: Type.String({ minLength: 1, description: 'Local file under the current workspace or WhatsApp media directory. No URLs or base64.' }),
             type: Type.Union([Type.Literal('document'), Type.Literal('image'), Type.Literal('audio'), Type.Literal('video')]),
@@ -999,7 +1005,15 @@ export default function (pi: ExtensionAPI) {
                 result = await trackOwnedSend(target, snapshot, async () => {
                     let prepared: Awaited<ReturnType<OutgoingMediaService['prepare']>> | undefined;
                     try {
-                        prepared = await new OutgoingMediaService({ workspaceRoot: ctx.cwd }).prepare({ path: mediaPath, type: mediaType, caption: typeof params.caption === 'string' ? formatWhatsAppText(params.caption, { tables: false }) : params.caption, voiceNote: params.voiceNote }, signal);
+                        // Capture the outbound limit at admission; malformed/unreadable limits refuse non-audio sends only.
+                        let limits: MediaLimits | undefined;
+                        try { limits = sessionManager.getMediaLimits(); } catch { limits = undefined; }
+                        if (!limits && mediaType !== 'audio') return failed(t('mediaLimits.unavailable'));
+                        const maxBytes = mediaType === 'audio' ? AUDIO_TRANSFER_MAX_BYTES : limits!.outboundBytes;
+                        // Large-transfer admission happens inside preparation from the opened file; dispose releases it.
+                        prepared = await new OutgoingMediaService({ workspaceRoot: ctx.cwd, maxBytes }).prepare({ path: mediaPath, type: mediaType, caption: typeof params.caption === 'string' ? formatWhatsAppText(params.caption, { tables: false }) : params.caption, voiceNote: params.voiceNote }, signal)
+                            .catch(error => { throw error instanceof Error && mediaType !== 'audio' && error.message === t('media.tooLarge', { maxMiB: maxBytes / 1024 / 1024 })
+                                ? new Error(t('mediaLimits.outboundTooLarge', { maxMiB: maxBytes / 1024 / 1024 })) : error; });
                         metadata = prepared.metadata;
                         if (!whatsappService.isSessionContextCurrent(sessionContext)) {
                             await prepared.dispose();
@@ -1008,7 +1022,8 @@ export default function (pi: ExtensionAPI) {
                         const upload = prepared;
                         return await whatsappService.sendContent({
                             recipientJid: target, text: params.caption ?? '', content: upload.content,
-                            sessionContext, signal, quote, sendTimeoutMs: 60_000,
+                            // Caller wait only; a delivery-unknown timeout keeps the slot and snapshot until settlement.
+                            sessionContext, signal, quote, sendTimeoutMs: upload.metadata.size > PROCESSING_CEILING_BYTES ? 600_000 : 60_000,
                             options: { brand: false, maxRetries: 1 }, sendOptions: { mediaUploadTimeoutMs: 60_000 },
                             onSettled: async outcome => {
                                 try {

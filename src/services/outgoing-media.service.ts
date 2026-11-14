@@ -7,6 +7,8 @@ import { getFfmpegCommands } from './ffmpeg-path.js';
 import type { AnyMessageContent } from 'baileys';
 import { createStoragePaths } from './storage-path.js';
 import { t } from '../i18n.js';
+import { AUDIO_TRANSFER_MAX_BYTES, PROCESSING_CEILING_BYTES } from './media-limits.js';
+import { sharedTransferSlots, type TransferSlots } from './transfer-slots.js';
 
 export type OutgoingMediaType = 'document' | 'image' | 'audio' | 'video';
 export interface OutgoingMediaRequest {
@@ -31,9 +33,14 @@ export interface PreparedOutgoingMedia {
 interface MediaOptions {
     workspaceRoot: string;
     mediaRoot?: string;
+    /** Captured per-file limit for non-audio; audio is additionally capped at 25 MiB. */
     maxBytes?: number;
     ffmpegCommands?: readonly string[];
     conversionTimeoutMs?: number;
+    /** Snapshot copy budget, separate from the conversion/thumbnail budget. */
+    prepareTimeoutMs?: number;
+    /** Large-transfer admission; defaults to the process-wide pool. */
+    slots?: TransferSlots;
 }
 
 const documentMimes: Record<string, string> = {
@@ -81,6 +88,9 @@ export class OutgoingMediaService {
         }
         if (!['document', 'image', 'audio', 'video'].includes(request.type)) throw new Error(t('media.unsupported'));
         if ((request.voiceNote && request.type !== 'audio') || (request.type === 'audio' && request.caption)) throw new Error(t('media.unsupported'));
+        let limit = this.limitFor(request.type);
+        let release: (() => void) | undefined;
+        let unadmittedCap = false;
         const source = await realpath(resolve(this.options.workspaceRoot, request.path));
         const workspace = await realpath(this.options.workspaceRoot);
         const media = await realpath(this.mediaRoot).catch(() => undefined);
@@ -98,7 +108,15 @@ export class OutgoingMediaService {
             const stats = await input.stat();
             await this.verifyOpenedFile(source, expected, input, ancestors);
             if (!stats.isFile() || stats.size === 0) throw new Error(t('media.invalidFile'));
-            if (stats.size > this.maxBytes) throw new Error(t('media.tooLarge', { maxMiB: this.maxBytes / 1024 / 1024 }));
+            if (stats.size > limit) throw this.tooLarge(limit);
+            // Admit large non-audio work from the opened file before any snapshot exists; unadmitted work
+            // is capped at 25 MiB for the source, snapshot and converted output, so growth cannot bypass admission.
+            if (request.type !== 'audio' && limit > PROCESSING_CEILING_BYTES) {
+                if (stats.size > PROCESSING_CEILING_BYTES) {
+                    release = (this.options.slots ?? sharedTransferSlots).tryAcquire('outbound');
+                    if (!release) throw new Error(t('mediaLimits.busy'));
+                } else { limit = PROCESSING_CEILING_BYTES; unadmittedCap = true; }
+            }
             const header = Buffer.alloc(4096);
             const { bytesRead } = await input.read(header, 0, header.length, 0);
             const prefix = header.subarray(0, bytesRead);
@@ -110,7 +128,7 @@ export class OutgoingMediaService {
             this.checkAbort(signal);
             directory = await mkdtemp(join(tmpdir(), 'whatsapp-outgoing-'));
             const snapshot = join(directory, 'upload' + extname(source).toLowerCase());
-            let size = await this.copySnapshot(input, snapshot, signal);
+            let size = await this.copySnapshot(input, snapshot, limit, signal);
             await this.verifyOpenedFile(source, expected, input, ancestors);
             this.checkAbort(signal);
             const copiedHeader = await this.readHeader(snapshot);
@@ -124,17 +142,17 @@ export class OutgoingMediaService {
             let mimetype = request.type === 'image' ? this.imageMime(copiedHeader) : documentMimes[extname(source).toLowerCase()] ?? 'application/octet-stream';
             if (!mimetype) throw new Error(t('media.unsupported'));
             if (request.type === 'audio' || request.type === 'video') {
-                const result = await this.prepareAudioVideo(snapshot, directory, request, copiedHeader, deadline, signal);
+                const result = await this.prepareAudioVideo(snapshot, directory, request, copiedHeader, deadline, limit, signal);
                 uploadPath = result.path;
                 mimetype = result.mimetype;
                 converted = result.converted;
                 seconds = result.seconds;
                 command = result.command;
                 size = (await stat(uploadPath)).size;
-                if (!size || size > this.maxBytes) throw new Error(t('media.tooLarge', { maxMiB: this.maxBytes / 1024 / 1024 }));
+                if (!size || size > limit) throw this.tooLarge(limit);
             }
             if (request.type === 'image' || request.type === 'video') {
-                jpegThumbnail = await this.prepareThumbnail(uploadPath, directory, deadline, signal, command);
+                jpegThumbnail = await this.prepareThumbnail(uploadPath, directory, deadline, limit, signal, command);
             }
             this.checkAbort(signal);
             const fileName = converted ? basename(source, extname(source)) + extname(uploadPath) : basename(source);
@@ -149,25 +167,39 @@ export class OutgoingMediaService {
                 : request.type === 'video' ? { video: payload, mimetype, caption: request.caption, jpegThumbnail }
                 : { document: payload, fileName, mimetype, caption: request.caption };
             const ownedDirectory = directory;
-            return { content, metadata, dispose: () => rm(ownedDirectory, { recursive: true, force: true }) };
+            const slot = release;
+            // Capacity is held until the consumer disposes the snapshot at transport settlement.
+            return { content, metadata, dispose: async () => { try { await rm(ownedDirectory, { recursive: true, force: true }); } finally { slot?.(); } } };
         } catch (error) {
-            if (directory) await rm(directory, { recursive: true, force: true });
-            throw error;
+            try { if (directory) await rm(directory, { recursive: true, force: true }); } finally { release?.(); }
+            // Small-admitted work hit its 25 MiB preparation cap, not the configured limit: say so accurately.
+            throw unadmittedCap && error instanceof Error && error.message === this.tooLarge(limit).message ? new Error(t('mediaLimits.unadmittedCap')) : error;
         } finally {
             await input.close();
         }
     }
 
-    private async copySnapshot(input: FileHandle, path: string, signal?: AbortSignal): Promise<number> {
+    private limitFor(type: OutgoingMediaType): number {
+        return type === 'audio' ? Math.min(this.maxBytes, AUDIO_TRANSFER_MAX_BYTES) : this.maxBytes;
+    }
+
+    private tooLarge(limit: number): Error {
+        return new Error(t('media.tooLarge', { maxMiB: limit / 1024 / 1024 }));
+    }
+
+    /** Copies through one 64 KiB buffer with sequential writes, within its own preparation deadline. */
+    private async copySnapshot(input: FileHandle, path: string, limit: number, signal?: AbortSignal): Promise<number> {
         const output = await open(path, 'wx', 0o600);
         const buffer = Buffer.alloc(64 * 1024);
+        const deadline = Date.now() + (this.options.prepareTimeoutMs ?? 300_000);
         let total = 0;
         try {
             while (true) {
                 this.checkAbort(signal);
+                if (Date.now() > deadline) throw new Error(t('mediaLimits.prepareTimeout'));
                 const { bytesRead } = await input.read(buffer, 0, buffer.length, total);
                 if (!bytesRead) break;
-                if (total + bytesRead > this.maxBytes) throw new Error(t('media.tooLarge', { maxMiB: this.maxBytes / 1024 / 1024 }));
+                if (total + bytesRead > limit) throw this.tooLarge(limit);
                 let written = 0;
                 while (written < bytesRead) {
                     const result = await output.write(buffer, written, bytesRead - written, total + written);
@@ -233,14 +265,14 @@ export class OutgoingMediaService {
         return undefined;
     }
 
-    private async prepareAudioVideo(path: string, directory: string, request: OutgoingMediaRequest, header: Buffer, deadline: number, signal?: AbortSignal): Promise<{ path: string; mimetype: string; converted: boolean; command: string; seconds?: number }> {
+    private async prepareAudioVideo(path: string, directory: string, request: OutgoingMediaRequest, header: Buffer, deadline: number, limit: number, signal?: AbortSignal): Promise<{ path: string; mimetype: string; converted: boolean; command: string; seconds?: number }> {
         const container = this.mediaContainer(header);
         if (!container) throw new Error(t('media.unsupported'));
         let command: string | undefined;
         let info = '';
         for (const candidate of this.options.ffmpegCommands ?? getFfmpegCommands()) {
             try {
-                const probe = await this.runFfmpeg(candidate, ['-nostdin', '-hide_banner', '-protocol_whitelist', 'file,pipe', '-i', path], deadline, signal);
+                const probe = await this.runFfmpeg(candidate, ['-nostdin', '-hide_banner', '-protocol_whitelist', 'file,pipe', '-i', path], deadline, limit, signal);
                 if (!/Input #0,/.test(probe.stderr)) throw new Error(t('media.conversionFailed'));
                 command = candidate;
                 info = probe.stderr;
@@ -270,17 +302,17 @@ export class OutgoingMediaService {
             ? ['-map', '0:v:0', '-map', '0:a:0?', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ac', '2', '-movflags', '+faststart']
             : request.voiceNote ? ['-map', '0:a:0', '-vn', '-c:a', 'libopus', '-ar', '48000', '-ac', '1', '-b:a', '32k']
                 : ['-map', '0:a:0', '-vn', '-c:a', 'aac', '-ac', '2', '-movflags', '+faststart'];
-        const result = await this.runFfmpeg(command, ['-nostdin', '-hide_banner', '-v', 'error', '-y', '-protocol_whitelist', 'file,pipe', '-i', path, ...encoding, output], deadline, signal, output);
+        const result = await this.runFfmpeg(command, ['-nostdin', '-hide_banner', '-v', 'error', '-y', '-protocol_whitelist', 'file,pipe', '-i', path, ...encoding, output], deadline, limit, signal, output);
         if (result.code !== 0) throw new Error(t('media.conversionFailed'));
         await chmod(output, 0o600);
         return { ...details, path: output, mimetype: request.type === 'video' ? 'video/mp4' : request.voiceNote ? 'audio/ogg; codecs=opus' : 'audio/mp4', converted: true };
     }
 
-    private async prepareThumbnail(path: string, directory: string, deadline: number, signal?: AbortSignal, selected?: string): Promise<string> {
+    private async prepareThumbnail(path: string, directory: string, deadline: number, limit: number, signal?: AbortSignal, selected?: string): Promise<string> {
         const output = join(directory, 'thumbnail.jpg');
         for (const command of selected ? [selected] : this.options.ffmpegCommands ?? getFfmpegCommands()) {
             try {
-                const result = await this.runFfmpeg(command, ['-nostdin', '-hide_banner', '-v', 'error', '-y', '-protocol_whitelist', 'file,pipe', '-i', path, '-frames:v', '1', '-vf', 'scale=32:32:force_original_aspect_ratio=decrease', '-f', 'image2', output], deadline, signal, output);
+                const result = await this.runFfmpeg(command, ['-nostdin', '-hide_banner', '-v', 'error', '-y', '-protocol_whitelist', 'file,pipe', '-i', path, '-frames:v', '1', '-vf', 'scale=32:32:force_original_aspect_ratio=decrease', '-f', 'image2', output], deadline, limit, signal, output);
                 if (result.code !== 0) throw new Error(t('media.conversionFailed'));
                 await chmod(output, 0o600);
                 const file = await stat(output);
@@ -293,7 +325,7 @@ export class OutgoingMediaService {
         throw new Error(t('media.ffmpegMissing'));
     }
 
-    private runFfmpeg(command: string, args: string[], deadline: number, signal?: AbortSignal, output?: string): Promise<{ code: number | null; stderr: string }> {
+    private runFfmpeg(command: string, args: string[], deadline: number, limit: number, signal?: AbortSignal, output?: string): Promise<{ code: number | null; stderr: string }> {
         this.checkAbort(signal);
         const remaining = deadline - Date.now();
         if (remaining <= 0) return Promise.reject(new Error(t('media.conversionTimeout')));
@@ -313,7 +345,7 @@ export class OutgoingMediaService {
             const timer = setTimeout(() => stop(new Error(t('media.conversionTimeout'))), remaining);
             const sizeCheck = output ? setInterval(() => {
                 void stat(output).then(file => {
-                    if (!closed && file.size > this.maxBytes) stop(new Error(t('media.tooLarge', { maxMiB: this.maxBytes / 1024 / 1024 })));
+                    if (!closed && file.size > limit) stop(this.tooLarge(limit));
                 }, () => {});
             }, 100) : undefined;
             child.stderr?.on('data', (chunk: Buffer) => {

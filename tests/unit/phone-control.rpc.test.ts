@@ -119,6 +119,14 @@ describe('production phone-control Pi RPC gateway', () => {
                 await phone('2');
                 expect(JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).finalAfterAttachments).toBe(false);
                 expect((await metrics()).messages.at(-1)).toBe(t('phone.attachment.saved', { policy: t('phone.status.captionOnly') }));
+                // Production-entry Advanced → Media limits (047): inbound raise needs confirmation, value persists.
+                const limits = prompt('/whatsapp'); await select(t('menu.category.advanced')); await select(t('menu.advanced.mediaLimits'));
+                await select(t('menu.mediaLimits.inbound'));
+                let limitInput: any;
+                await expect.poll(() => { limitInput = records.find(r => r.type === 'extension_ui_request' && r.method === 'input' && !answered.has(r.id)); return !!limitInput; }, { timeout: 10_000 }).toBe(true);
+                answered.add(limitInput.id); child.stdin.write(JSON.stringify({ type: 'extension_ui_response', id: limitInput.id, value: '300' }) + '\n');
+                await confirm(); await limits;
+                expect(JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).mediaLimits).toEqual({ inboundMiB: 300 });
                 const final = await metrics();
                 expect(final.socketStarts).toBe(1); expect(final.modelStarts).toBe(0); expect(final.pollCreations).toBe(0);
                 expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
