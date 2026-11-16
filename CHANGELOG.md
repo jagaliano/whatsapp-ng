@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.13 — 2026-11-16
 
 - Add terminal-only saved `localSttLanguage` and `locale` preferences for environments where services do not inherit terminal variables. Local language keeps nonblank `CRISPASR_LANGUAGE` → `WHISPER_LANGUAGE` → saved value → `auto`; locale keeps `WHATSAPP_NG_LOCALE` → `--whatsapp-ng-locale` → saved value → English, with existing invalid/blank override behavior. Voice and Advanced settings show effective values/sources and provide separate Set/Clear actions; locale changes require restarting Pi and do not localize static English flag descriptions. Local backends receive per-operation language/model snapshots and selection-time CLI/library environments without rereading environment variables during execution; Set/Clear retries cached unavailable local selection without disturbing working transcribers, native contexts or FFmpeg. Paths, managed-server commands and plain-HTTP authorization remain environment-only. Includes four-locale strings, persistence/precedence/snapshot/bootstrap regressions and isolated production-entry coverage; native-model and live WhatsApp qualification are not claimed. See [048](specs/048-persisted-local-preferences/tasks.md).
 
