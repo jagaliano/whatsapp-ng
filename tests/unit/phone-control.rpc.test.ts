@@ -14,7 +14,7 @@ afterEach(() => { vi.unstubAllEnvs(); resetI18n(); });
 
 /** Real Pi command context/lifecycle; WhatsApp transport and fixture model streams are synthetic. */
 describe('production phone-control Pi RPC gateway', () => {
-    it.each(['phone-polish:en', 'phone-polish:pt-BR', 'phone-polish:es', 'phone-polish:fr', 'menu-polish:en', 'menu-polish:pt-BR', 'menu-polish:es', 'menu-polish:fr', 'direct', 'owner-guidance', 'menu-ui', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard', 'tables', 'autoconnect', 'classify', 'classify-terminal', 'reload', 'reload-auto', 'reload-retry', 'reload-invalid', 'reload-fail', 'reload-off', 'reload-account', 'reload-account-auto', 'reload-offrace', 'reload-busy', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async scenario => {
+    it.each(['phone-polish:en', 'phone-polish:pt-BR', 'phone-polish:es', 'phone-polish:fr', 'menu-polish:en', 'menu-polish:pt-BR', 'menu-polish:es', 'menu-polish:fr', 'direct', 'owner-guidance', 'menu-ui', 'self-lid', 'stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard', 'tables', 'autoconnect', 'classify', 'classify-terminal', 'reload', 'reload-auto', 'reload-retry', 'reload-invalid', 'reload-fail', 'reload-off', 'reload-account', 'reload-account-auto', 'reload-offrace', 'reload-busy', 'local-preferences:fr', 'local-preferences-override:fr', 'local-preferences-blank:fr', ...(['darwin', 'linux'].includes(process.platform) ? ['managed-manual', 'managed-auto'] : [])])('exercises production phone controls and lifecycle fences (%s)', async scenario => {
         const [mode, locale = 'en'] = scenario.split(':');
         vi.stubEnv('WHATSAPP_NG_LOCALE', locale); initI18n(undefined);
         const root = await mkdtemp(join(tmpdir(), 'wa-phone-rpc-')); const home = join(root, 'home'); const workspace = join(root, 'workspace');
@@ -30,7 +30,7 @@ describe('production phone-control Pi RPC gateway', () => {
         const classify = mode === 'classify' || mode === 'classify-terminal';
         const selfChat = mode === 'self-lid' || mode === 'self-auto'; const modelFixture = classify || mode === 'reload-busy' || ['stats', 'groups', 'self-auto', 'images', 'terminal', 'settings', 'reporting', 'models', 'server-voice', 'spoken-guard', 'tables'].includes(mode) || managed;
         const owner = selfChat ? '15550000009@s.whatsapp.net' : '15550000001@s.whatsapp.net';
-        await writeFile(join(data, 'config.json'), JSON.stringify({ operatorJid: mode === 'owner-guidance' ? '' : owner, allowList: [{ number: '+' + owner.split('@')[0] }],
+        await writeFile(join(data, 'config.json'), JSON.stringify({ ...(mode.startsWith('local-preferences') ? { locale: 'fr' } : {}), operatorJid: mode === 'owner-guidance' ? '' : owner, allowList: [{ number: '+' + owner.split('@')[0] }],
             ...(automatic ? { autoConnect: true } : {}),
             ...(classify ? { optionalOutputs: { imageTools: [], terminal: { ownerJid: owner, accountScope: JSON.stringify([join(data, 'auth'), '15550000009@s.whatsapp.net']) },
                 ...(mode === 'classify' ? { autonomous: { kind: 'owner', jid: owner, ownerJid: owner, accountScope: JSON.stringify([join(data, 'auth'), '15550000009@s.whatsapp.net']) } } : {}) } } : {}),
@@ -49,7 +49,7 @@ describe('production phone-control Pi RPC gateway', () => {
         const repo = fileURLToPath(new URL('../..', import.meta.url));
         const cli = fileURLToPath(new URL('./cli.js', import.meta.resolve('@mariozechner/pi-coding-agent')));
         const env = Object.fromEntries(['PATH', 'TMPDIR', 'LANG'].flatMap(key => process.env[key] ? [[key, process.env[key]!]] : []));
-        Object.assign(env, { HOME: home, PI_CODING_AGENT_DIR: join(root, 'agent'), PI_OFFLINE: '1', WHATSAPP_NG_LOCALE: locale,
+        Object.assign(env, { HOME: home, PI_CODING_AGENT_DIR: join(root, 'agent'), PI_OFFLINE: '1', WHATSAPP_NG_LOCALE: mode === 'local-preferences-override' ? 'es' : mode.startsWith('local-preferences') ? '' : locale,
             WA_PHONE_RPC_POLISH: mode === 'phone-polish' ? '1' : '0', WA_PHONE_RPC_RELOAD_RACE: mode === 'reload-offrace' ? 'off' : mode === 'reload-busy' ? 'busy' : '', WA_PHONE_RPC_ACCOUNT_STARTS: mode.startsWith('reload-account') ? '2' : '', WA_PHONE_RPC_SLOW_STARTS: ['reload-off', 'reload-offrace'].includes(mode) ? '2' : '', WA_PHONE_RPC_FAIL_STARTS: mode === 'reload-fail' ? '2,3' : ['reload-retry', 'reload-invalid'].includes(mode) ? '2' : '', WA_PHONE_RPC_METRICS: metricsPath, WA_PHONE_RPC_CONFIG: join(data, 'config.json'), WA_PHONE_RPC_SELF_LID: selfChat ? '1' : '0', WA_PHONE_RPC_STATS: mode === 'stats' ? '1' : '0',
             WA_PHONE_RPC_GROUPS: ['groups', 'settings'].includes(mode) ? '1' : '0', WA_PHONE_RPC_SELF_AUTO: mode === 'self-auto' ? '1' : '0', WA_PHONE_RPC_CLASSIFY: classify ? '1' : '0', WA_PHONE_RPC_MODELS: mode === 'models' ? '1' : '0',
             WA_PHONE_RPC_OPTIONAL: ['images', 'terminal', 'tables'].includes(mode) ? mode : '', WA_PHONE_RPC_REPORTING: mode === 'reporting' ? '1' : '0', WA_PHONE_RPC_SERVER_VOICE: mode === 'server-voice' ? '1' : '0', WA_PHONE_RPC_SPOKEN_GUARD: mode === 'spoken-guard' ? '1' : '0',
@@ -61,7 +61,8 @@ describe('production phone-control Pi RPC gateway', () => {
             '--provider', modelFixture ? 'fixture-phone' : 'openai', '--model', modelFixture ? 'model-01' : 'gpt-4o-mini',
             ...(modelFixture ? ['-e', join(repo, 'whatsapp-ng.ts'), '-e', join(repo, 'tests/fixtures/phone-control-rpc.extension.ts')]
                 : ['-e', join(repo, 'tests/fixtures/phone-control-rpc.extension.ts'), '-e', join(repo, 'whatsapp-ng.ts')]),
-            ...(automatic || managed || reload || mode === 'menu-polish' ? [] : ['--whatsapp-ng-online']), ...(mode === 'self-lid' ? ['--whatsapp-ng-native-polls'] : [])],
+            ...(automatic || managed || reload || mode === 'menu-polish' ? [] : ['--whatsapp-ng-online']), ...(mode === 'self-lid' ? ['--whatsapp-ng-native-polls'] : []),
+            ...(mode === 'local-preferences-blank' ? ['--', '--whatsapp-ng-locale='] : [])],
             { cwd: workspace, env, stdio: ['pipe', 'pipe', 'pipe'] });
         const waiters = new Map<string, (record: any) => void>(); const records: any[] = []; let buffer = ''; let stderr = ''; let serial = 0;
         child.stderr.on('data', value => { stderr = (stderr + value).slice(-4000); });
@@ -97,6 +98,41 @@ describe('production phone-control Pi RPC gateway', () => {
         };
         try {
             const initial = await request('get_state');
+            if (mode.startsWith('local-preferences')) {
+                const registration = async (expectedCommand: string, expectedMedia: string) => {
+                    const commands = await request('get_commands');
+                    expect(commands.commands.find((command: { name: string }) => command.name === 'whatsapp').description).toBe(expectedCommand);
+                    await prompt('/phone-fixture registration');
+                    expect((await metrics()).registration.mediaDescription).toBe(expectedMedia);
+                };
+                const expected = mode === 'local-preferences-blank'
+                    ? { command: 'Manage WhatsApp integration', media: 'Explicitly send a validated local document, image, audio, voice note or video. No URLs or implicit uploads. Documents, images and videos may be up to the configured outbound limit (default 25 MiB, maximum 512 MiB); audio and voice notes up to 25 MiB. Files must be under the current workspace or WhatsApp media directory. Acceptance is not proof of delivery.' }
+                    : mode === 'local-preferences-override'
+                        ? { command: 'Administrar integración de WhatsApp', media: 'Envíe un documento, imagen, audio, nota de voz o vídeo local validado, sin URLs ni cargas implícitas. Documentos, imágenes y vídeos hasta el límite de salida configurado (25 MiB por defecto, máximo 512 MiB); audio y notas de voz hasta 25 MiB. La aceptación no prueba la entrega.' }
+                        : { command: 'Gérer l’intégration WhatsApp', media: 'Envoyez un document, une image, un audio, une note vocale ou une vidéo locale validée, sans URL ni envoi implicite. Documents, images et vidéos jusqu’à la limite de sortie configurée (25 Mio par défaut, 512 Mio au maximum) ; audio et notes vocales jusqu’à 25 Mio. L’acceptation ne prouve pas la livraison.' };
+                await registration(expected.command, expected.media);
+                if (mode === 'local-preferences') {
+                    const languageMenu = prompt('/whatsapp');
+                    await select(t('voice.menu')); await select(t('voice.advanced')); await select(t('voice.localSttLanguage')); await select(t('voice.localSttSet'));
+                    let languageInput: any;
+                    await expect.poll(() => { languageInput = records.find(record => record.type === 'extension_ui_request' && record.method === 'input' && !answered.has(record.id)); return !!languageInput; }, { timeout: 10_000 }).toBe(true);
+                    answered.add(languageInput.id); child.stdin.write(JSON.stringify({ type: 'extension_ui_response', id: languageInput.id, value: 'pt' }) + '\n');
+                    await select(t('menu.back.voiceAdvanced')); await select(t('menu.back.voice')); await select(t('menu.back.main')); await select(t('menu.close')); await languageMenu;
+                    expect(JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).localSttLanguage).toBe('pt');
+                    const clearMenu = prompt('/whatsapp');
+                    await select(t('voice.menu')); await select(t('voice.advanced')); await select(t('voice.localSttLanguage')); await select(t('voice.localSttClear'));
+                    await select(t('menu.back.voiceAdvanced')); await select(t('menu.back.voice')); await select(t('menu.back.main')); await select(t('menu.close')); await clearMenu;
+                    expect(JSON.parse(await readFile(join(data, 'config.json'), 'utf8'))).not.toHaveProperty('localSttLanguage');
+                    const localeMenu = prompt('/whatsapp');
+                    await select(t('menu.category.advanced')); await select(t('settings.locale.menu')); await select(t('settings.locale.set')); await select('es'); await localeMenu;
+                    expect(JSON.parse(await readFile(join(data, 'config.json'), 'utf8')).locale).toBe('es');
+                    expected.command = 'Administrar integración de WhatsApp'; expected.media = 'Envíe un documento, imagen, audio, nota de voz o vídeo local validado, sin URLs ni cargas implícitas. Documentos, imágenes y vídeos hasta el límite de salida configurado (25 MiB por defecto, máximo 512 MiB); audio y notas de voz hasta 25 MiB. La aceptación no prueba la entrega.';
+                }
+                await prompt('/phone-fixture reload');
+                await registration(expected.command, expected.media);
+                expect(JSON.parse(await readFile(networkPath, 'utf8')).networkAttempts).toBe(0);
+                return;
+            }
             if (mode === 'phone-polish') {
                 const phone = (text: string) => prompt('/phone-fixture polish ' + text);
                 await phone('/help');

@@ -2,6 +2,7 @@ import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import type { AudioTranscriber, AudioTranscriptionOptions, SttConfig } from './audio-transcriber.js';
 import { allowsPlainHttp } from './endpoint-policy.js';
+import { isSttLanguageSyntax } from './local-stt-options.js';
 
 export const REMOTE_STT_MAX_BYTES = 25 * 1024 * 1024;
 const RESPONSE_MAX_BYTES = 1024 * 1024;
@@ -13,8 +14,7 @@ class RemoteSttError extends Error {}
 export function createRemoteAudioTranscriber(config: SttConfig): RemoteAudioTranscriber | null {
     const { sttEndpoint, sttModel, sttEnv, sttLanguage } = config;
     const invalid = () => new RemoteSttError('Remote STT configuration requires HTTPS, or HTTP on loopback / with WHATSAPP_NG_ALLOW_PLAIN_HTTP=1, a model, sttEnv name and optional language code or auto');
-    if (sttLanguage !== undefined && sttLanguage !== '' && (typeof sttLanguage !== 'string'
-        || (sttLanguage !== 'auto' && !/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/.test(sttLanguage)))) throw invalid();
+    if (sttLanguage !== undefined && sttLanguage !== '' && !isSttLanguageSyntax(sttLanguage)) throw invalid();
     if ([sttEndpoint, sttModel, sttEnv].every(value => value === undefined || value === '')) return null;
     if (typeof sttEndpoint !== 'string' || typeof sttModel !== 'string' || typeof sttEnv !== 'string'
         || !sttModel.trim() || sttModel.length > 256 || /[\r\n\0]/.test(sttModel)

@@ -16,8 +16,10 @@ vi.mock('node:child_process', async () => {
 });
 vi.mock('../../src/services/storage-path.js', () => ({ createStoragePaths: () => ({ root: mocks.root }) }));
 import { tryCreateWhisperCliAudioTranscriber } from '../../src/services/whisper-cli-audio.transcriber.js';
+import { resolveLocalSttOptions } from '../../src/services/local-stt-options.ts';
 
 const logger = { log: vi.fn(), error: vi.fn() };
+const operation = (options: { signal?: AbortSignal } = {}) => ({ ...options, local: resolveLocalSttOptions(process.env) });
 let root: string;
 const target = () => join(root, 'whisper', 'models', 'ggml-base.bin');
 beforeEach(async () => {
@@ -45,11 +47,11 @@ describe('bounded atomic local model preparation', () => {
     it('publishes only a complete private model and reuses it without another download', async () => {
         mocks.get.mockImplementation(respond(Readable.from([Buffer.from('synthetic-model')])));
         const transcriber = tryCreateWhisperCliAudioTranscriber(logger)!;
-        await expect(transcriber.transcribe('input.wav')).resolves.toBe('fixture text');
+        await expect(transcriber.transcribe('input.wav', operation())).resolves.toBe('fixture text');
         expect(await readFile(target(), 'utf8')).toBe('synthetic-model');
         expect((await stat(target())).mode & 0o777).toBe(0o600);
         expect(await readdir(join(root, 'whisper/models'))).toEqual(['ggml-base.bin']);
-        await transcriber.transcribe('another.wav');
+        await transcriber.transcribe('another.wav', operation());
         expect(mocks.get).toHaveBeenCalledOnce();
     });
 
@@ -59,7 +61,7 @@ describe('bounded atomic local model preparation', () => {
         const response = respond(body);
         mocks.get.mockImplementation((...args) => { connected(); return response(...args as Parameters<typeof response>); });
         const controller = new AbortController();
-        const pending = tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', { signal: controller.signal });
+        const pending = tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation({ signal: controller.signal }));
         const rejected = expect(pending).rejects.toThrow(/cancelled/);
         await ready; body.write('partial');
         await expect(stat(target())).rejects.toThrow();
@@ -77,7 +79,7 @@ describe('bounded atomic local model preparation', () => {
             connected(); return request;
         });
         const controller = new AbortController();
-        const pending = tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', { signal: controller.signal });
+        const pending = tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation({ signal: controller.signal }));
         const rejected = expect(pending).rejects.toThrow(/cancelled/);
         await ready; controller.abort(); await rejected;
         expect(await readdir(join(root, 'whisper/models'))).toEqual([]);
@@ -87,7 +89,7 @@ describe('bounded atomic local model preparation', () => {
     it.each(['empty', 'http redirect', 'redirect loop'])('does not cache an invalid download: %s', async kind => {
         mocks.get.mockImplementation((...args) => respond(Readable.from([]), kind === 'empty' ? 200 : 302,
             kind === 'http redirect' ? 'http://fixture.invalid/model' : 'https://fixture.invalid/model')(...args as Parameters<ReturnType<typeof respond>>));
-        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav')).rejects.toThrow(/empty|redirect rejected/);
+        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation())).rejects.toThrow(/empty|redirect rejected/);
         expect(await readdir(join(root, 'whisper/models'))).toEqual([]);
         expect(mocks.execute).not.toHaveBeenCalled();
         expect(mocks.get.mock.calls.length).toBeLessThanOrEqual(6);
@@ -96,7 +98,7 @@ describe('bounded atomic local model preparation', () => {
     it('keeps concurrent model downloads separate until atomic publication', async () => {
         mocks.get.mockImplementation((...args) => respond(Readable.from([Buffer.from('synthetic-model')]))(...args as Parameters<ReturnType<typeof respond>>));
         const transcriber = tryCreateWhisperCliAudioTranscriber(logger)!;
-        await expect(Promise.all([transcriber.transcribe('one.wav'), transcriber.transcribe('two.wav')])).resolves.toEqual(['fixture text', 'fixture text']);
+        await expect(Promise.all([transcriber.transcribe('one.wav', operation()), transcriber.transcribe('two.wav', operation())])).resolves.toEqual(['fixture text', 'fixture text']);
         expect(await readFile(target(), 'utf8')).toBe('synthetic-model');
         expect(await readdir(join(root, 'whisper/models'))).toEqual(['ggml-base.bin']);
     });

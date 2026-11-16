@@ -3,7 +3,7 @@ import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { Type } from '@sinclair/typebox';
 import { createAssistantMessageEventStream, type Api, type AssistantMessage, type Model, type SimpleStreamOptions } from '@earendil-works/pi-ai';
 interface Observation { event: string; messageType?: string; role?: string; source?: string; whatsappRequest?: boolean; customType?: string }
-interface Fixture { metrics: { modelStarts: number; cancelled: number; activeTools: string[]; statsConsumed?: number; statsSettled?: number; providerRequests?: number; observations?: Observation[] }; save(): void; deliver(text: string, responses?: number): Promise<void>; deliverGroup(text: string, reply?: boolean): Promise<void>; voteNext(): Promise<void> }
+interface Fixture { metrics: { modelStarts: number; cancelled: number; activeTools: string[]; statsConsumed?: number; statsSettled?: number; providerRequests?: number; observations?: Observation[]; registration?: { mediaDescription?: string } }; save(): void; deliver(text: string, responses?: number): Promise<void>; deliverGroup(text: string, reply?: boolean): Promise<void>; voteNext(): Promise<void> }
 export default function (pi: ExtensionAPI) {
     const stats = process.env.WA_PHONE_RPC_STATS === '1'; const groups = process.env.WA_PHONE_RPC_GROUPS === '1';
     const optional = process.env.WA_PHONE_RPC_OPTIONAL; const images = optional === 'images'; const terminal = optional === 'terminal'; const tables = optional === 'tables';
@@ -151,6 +151,7 @@ export default function (pi: ExtensionAPI) {
             releaseHold?.();
         }
         else if (args === 'reload') await ctx.reload();
+        else if (args === 'registration') { state.metrics.registration = { mediaDescription: pi.getAllTools().find(tool => tool.name === 'send_wa_media')?.description }; state.save(); }
         else if (args === 'tools') { state.metrics.activeTools = pi.getActiveTools(); state.save(); }
         else if (modelFixture && args === 'stats-start') await state.deliver(selfAuto ? 'Explain π' : 'Fixture stats task', 0);
         else if ((stats || groups || terminal || reporting) && args === 'stats-release') releaseStats();

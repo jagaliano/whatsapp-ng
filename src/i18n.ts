@@ -1,8 +1,15 @@
-type Locale = "pt-BR" | "es" | "fr";
+export const SUPPORTED_LOCALES = ["en", "pt-BR", "es", "fr"] as const;
+export type Locale = typeof SUPPORTED_LOCALES[number];
+type TranslationLocale = Exclude<Locale, "en">;
+
+export function isSupportedLocale(value: unknown): value is Locale {
+    return typeof value === 'string' && (SUPPORTED_LOCALES as readonly string[]).includes(value);
+}
 type Key = keyof typeof fallback;
 type Params = Record<string, string | number | undefined>;
 
 let currentLocale: string | undefined;
+let currentLocaleSource: LocaleSource = 'default';
 
 const fallback = {
     "phone.stats.enabled": "enabled",
@@ -285,6 +292,29 @@ const fallback = {
     "speech.automaticReplyRequired": "Automatic speech is reserved for this conversation. Provide your normal final answer instead of calling send_wa_message. Nothing was sent.",
     "speech.voiceHistory": "[Voice reply]",
     "voice.menu": "Voice",
+    "voice.localSttLanguage": "Local transcription language",
+    "voice.localSttSet": "Set local transcription language",
+    "voice.localSttClear": "Clear saved local transcription language",
+    "voice.localSttPrompt": "Language code or auto",
+    "voice.localSttEffective": "Local transcription language: {value} ({source})",
+    "voice.localSttOverridden": "Saved: {value} (overridden by {source})",
+    "voice.localSttSavedInvalid": "Saved local transcription language is invalid; Set or Clear it explicitly.",
+    "voice.localSttInvalid": "Enter auto or a language code such as en or pt-BR; blank and option-like values are not allowed.",
+    "voice.localSttSourceSaved": "saved",
+    "voice.localSttSourceDefault": "default",
+    "voice.localSttSaved": "Local transcription language saved.",
+    "voice.localSttCleared": "Saved local transcription language cleared.",
+    "settings.locale.menu": "Extension language",
+    "settings.locale.set": "Set extension language",
+    "settings.locale.clear": "Clear saved extension language",
+    "settings.locale.prompt": "Extension language",
+    "settings.locale.effective": "Effective extension language: {value} ({source})",
+    "settings.locale.overridden": "Saved: {value} (overridden by {source})",
+    "settings.locale.invalid": "Saved extension language is invalid; Set or Clear it explicitly.",
+    "settings.locale.sourceSaved": "saved",
+    "settings.locale.sourceDefault": "default",
+    "settings.locale.restart": "Saved. Restart Pi to apply the extension language.",
+    "settings.locale.failed": "Could not save the extension language. Reopen settings and try again.",
     "voice.setupChat": "Set up replies for a chat",
     "voice.sharedSummary": "Shared default: {mode}. Retained spoken chat overrides: {overrides}; opted-in groups: {groups}. These become eligible again when speech is enabled.",
     "voice.changed": "Voice settings changed elsewhere; nothing saved. Choose again.",
@@ -641,7 +671,7 @@ const fallback = {
     "mediaLimits.reason.oversize": "the file exceeds the inbound limit",
 } as const;
 
-const translations: Record<Locale, Partial<Record<Key, string>>> = {
+const translations: Record<TranslationLocale, Partial<Record<Key, string>>> = {
     "pt-BR": {
         "menu.advanced.mediaLimits": "Limites de mídia",
         "menu.mediaLimits.title": "Limites de mídia — entrada {inbound} MiB, saída {outbound} MiB",
@@ -963,6 +993,29 @@ const translations: Record<Locale, Partial<Record<Key, string>>> = {
         "speech.textOnly": "Voz indisponível; a resposta contém apenas texto.",
         "speech.voiceHistory": "[Resposta de voz]",
         "voice.menu": "Voz",
+        "voice.localSttLanguage": "Idioma da transcrição local",
+        "voice.localSttSet": "Definir idioma da transcrição local",
+        "voice.localSttClear": "Limpar idioma salvo da transcrição local",
+        "voice.localSttPrompt": "Código do idioma ou auto",
+        "voice.localSttEffective": "Idioma da transcrição local: {value} ({source})",
+        "voice.localSttOverridden": "Salvo: {value} (substituído por {source})",
+        "voice.localSttSavedInvalid": "O idioma salvo da transcrição local é inválido; use Definir ou Limpar explicitamente.",
+        "voice.localSttInvalid": "Digite auto ou um código de idioma como en ou pt-BR; valores em branco ou semelhantes a opções não são permitidos.",
+        "voice.localSttSourceSaved": "salvo",
+        "voice.localSttSourceDefault": "padrão",
+        "voice.localSttSaved": "Idioma da transcrição local salvo.",
+        "voice.localSttCleared": "Idioma salvo da transcrição local limpo.",
+        "settings.locale.menu": "Idioma da extensão",
+        "settings.locale.set": "Definir idioma da extensão",
+        "settings.locale.clear": "Limpar idioma salvo da extensão",
+        "settings.locale.prompt": "Idioma da extensão",
+        "settings.locale.effective": "Idioma efetivo da extensão: {value} ({source})",
+        "settings.locale.overridden": "Salvo: {value} (substituído por {source})",
+        "settings.locale.invalid": "O idioma salvo da extensão é inválido; use Definir ou Limpar explicitamente.",
+        "settings.locale.sourceSaved": "salvo",
+        "settings.locale.sourceDefault": "padrão",
+        "settings.locale.restart": "Salvo. Reinicie o Pi para aplicar o idioma da extensão.",
+        "settings.locale.failed": "Não foi possível salvar o idioma da extensão. Reabra as configurações e tente novamente.",
         "voice.setupChat": "Configurar respostas para uma conversa",
         "voice.sharedSummary": "Padrão compartilhado: {mode}. Preferências de voz retidas: {overrides}; grupos autorizados: {groups}. Voltam a ser elegíveis ao ativar a voz.",
         "voice.changed": "As configurações de voz mudaram em outro lugar; nada foi salvo. Escolha novamente.",
@@ -1562,6 +1615,29 @@ const translations: Record<Locale, Partial<Record<Key, string>>> = {
         "speech.textOnly": "Voz no disponible; la respuesta es solo texto.",
         "speech.voiceHistory": "[Respuesta de voz]",
         "voice.menu": "Voz", "voice.owner": "Propietario",
+        "voice.localSttLanguage": "Idioma de transcripción local",
+        "voice.localSttSet": "Establecer idioma de transcripción local",
+        "voice.localSttClear": "Borrar idioma guardado de transcripción local",
+        "voice.localSttPrompt": "Código de idioma o auto",
+        "voice.localSttEffective": "Idioma de transcripción local: {value} ({source})",
+        "voice.localSttOverridden": "Guardado: {value} (anulado por {source})",
+        "voice.localSttSavedInvalid": "El idioma guardado de transcripción local no es válido; usa Establecer o Borrar explícitamente.",
+        "voice.localSttInvalid": "Introduce auto o un código de idioma como en o pt-BR; no se permiten valores en blanco ni similares a opciones.",
+        "voice.localSttSourceSaved": "guardado",
+        "voice.localSttSourceDefault": "predeterminado",
+        "voice.localSttSaved": "Idioma de transcripción local guardado.",
+        "voice.localSttCleared": "Idioma guardado de transcripción local borrado.",
+        "settings.locale.menu": "Idioma de la extensión",
+        "settings.locale.set": "Establecer idioma de la extensión",
+        "settings.locale.clear": "Borrar idioma guardado de la extensión",
+        "settings.locale.prompt": "Idioma de la extensión",
+        "settings.locale.effective": "Idioma efectivo de la extensión: {value} ({source})",
+        "settings.locale.overridden": "Guardado: {value} (anulado por {source})",
+        "settings.locale.invalid": "El idioma guardado de la extensión no es válido; usa Establecer o Borrar explícitamente.",
+        "settings.locale.sourceSaved": "guardado",
+        "settings.locale.sourceDefault": "predeterminado",
+        "settings.locale.restart": "Guardado. Reinicia Pi para aplicar el idioma de la extensión.",
+        "settings.locale.failed": "No se pudo guardar el idioma de la extensión. Vuelve a abrir la configuración e inténtalo de nuevo.",
         "voice.setupChat": "Configurar respuestas para un chat",
         "voice.sharedSummary": "Valor compartido: {mode}. Preferencias de voz conservadas: {overrides}; grupos autorizados: {groups}. Vuelven a ser elegibles al activar la voz.",
         "voice.changed": "Los ajustes de voz cambiaron en otro lugar; no se guardó nada. Elige de nuevo.",
@@ -2097,6 +2173,29 @@ const translations: Record<Locale, Partial<Record<Key, string>>> = {
         "speech.textOnly": "Voix indisponible ; la réponse est uniquement textuelle.",
         "speech.voiceHistory": "[Réponse vocale]",
         "voice.menu": "Voix", "voice.owner": "Propriétaire",
+        "voice.localSttLanguage": "Langue de transcription locale",
+        "voice.localSttSet": "Définir la langue de transcription locale",
+        "voice.localSttClear": "Effacer la langue de transcription locale enregistrée",
+        "voice.localSttPrompt": "Code de langue ou auto",
+        "voice.localSttEffective": "Langue de transcription locale : {value} ({source})",
+        "voice.localSttOverridden": "Enregistrée : {value} (remplacée par {source})",
+        "voice.localSttSavedInvalid": "La langue de transcription locale enregistrée est invalide ; utilisez explicitement Définir ou Effacer.",
+        "voice.localSttInvalid": "Saisissez auto ou un code de langue comme en ou pt-BR ; les valeurs vides ou ressemblant à des options sont interdites.",
+        "voice.localSttSourceSaved": "enregistrée",
+        "voice.localSttSourceDefault": "par défaut",
+        "voice.localSttSaved": "Langue de transcription locale enregistrée.",
+        "voice.localSttCleared": "Langue de transcription locale enregistrée effacée.",
+        "settings.locale.menu": "Langue de l’extension",
+        "settings.locale.set": "Définir la langue de l’extension",
+        "settings.locale.clear": "Effacer la langue enregistrée de l’extension",
+        "settings.locale.prompt": "Langue de l’extension",
+        "settings.locale.effective": "Langue effective de l’extension : {value} ({source})",
+        "settings.locale.overridden": "Enregistrée : {value} (remplacée par {source})",
+        "settings.locale.invalid": "La langue enregistrée de l’extension est invalide ; utilisez explicitement Définir ou Effacer.",
+        "settings.locale.sourceSaved": "enregistrée",
+        "settings.locale.sourceDefault": "par défaut",
+        "settings.locale.restart": "Enregistré. Redémarrez Pi pour appliquer la langue de l’extension.",
+        "settings.locale.failed": "Impossible d’enregistrer la langue de l’extension. Rouvrez les paramètres et réessayez.",
         "voice.setupChat": "Configurer les réponses d’une discussion",
         "voice.sharedSummary": "Défaut partagé : {mode}. Préférences vocales conservées : {overrides} ; groupes autorisés : {groups}. Elles redeviennent éligibles lorsque la voix est activée.",
         "voice.changed": "Les réglages vocaux ont changé ailleurs ; rien n’a été enregistré. Choisissez à nouveau.",
@@ -2268,24 +2367,30 @@ const translations: Record<Locale, Partial<Record<Key, string>>> = {
 };
 
 
-function getLocaleOverride(): string | undefined {
-    const envLocale = process.env.WHATSAPP_NG_LOCALE?.trim();
-    if (envLocale) {
-        return envLocale;
-    }
+export type LocaleSource = 'WHATSAPP_NG_LOCALE' | '--whatsapp-ng-locale' | 'saved' | 'default';
+export interface LocaleResolution { locale?: string; source: LocaleSource }
+
+export function resolveLocale({ env, argv, saved }: {
+    env: Readonly<Record<string, string | undefined>>;
+    argv: readonly string[];
+    saved?: Locale;
+}): LocaleResolution {
+    const envLocale = env.WHATSAPP_NG_LOCALE?.trim();
+    if (envLocale) return { locale: envLocale, source: 'WHATSAPP_NG_LOCALE' };
 
     const argPrefix = '--whatsapp-ng-locale=';
-    const explicitArg = process.argv.find(arg => arg.startsWith(argPrefix));
+    const explicitArg = argv.find(arg => arg.startsWith(argPrefix));
     if (explicitArg) {
-        return explicitArg.slice(argPrefix.length).trim() || undefined;
+        return { locale: explicitArg.slice(argPrefix.length).trim() || undefined, source: '--whatsapp-ng-locale' };
     }
 
-    const argIndex = process.argv.indexOf('--whatsapp-ng-locale');
+    const argIndex = argv.indexOf('--whatsapp-ng-locale');
     if (argIndex >= 0) {
-        return process.argv[argIndex + 1]?.trim() || undefined;
+        return { locale: argv[argIndex + 1]?.trim() || undefined, source: '--whatsapp-ng-locale' };
     }
 
-    return undefined;
+    if (isSupportedLocale(saved)) return { locale: saved, source: 'saved' };
+    return { source: 'default' };
 }
 
 function format(template: string | undefined, params: Params = {}): string {
@@ -2294,18 +2399,22 @@ function format(template: string | undefined, params: Params = {}): string {
 }
 
 export function t(key: Key, params?: Params): string {
-    const locale = currentLocale as Locale | undefined;
+    const locale = currentLocale as TranslationLocale | undefined;
     const template = locale ? translations[locale]?.[key] : undefined;
     return format(template ?? fallback[key], params);
 }
 
 export function resetI18n(): void {
     currentLocale = undefined;
+    currentLocaleSource = 'default';
 }
 
-export function initI18n(_pi: unknown): void {
-    const forcedLocale = getLocaleOverride();
-    if (forcedLocale) {
-        currentLocale = forcedLocale;
-    }
+export function getEffectiveLocale(): LocaleResolution {
+    return { locale: currentLocale, source: currentLocaleSource };
+}
+
+export function initI18n(_pi: unknown, saved?: Locale): void {
+    const resolved = resolveLocale({ env: process.env, argv: process.argv, saved });
+    currentLocale = resolved.locale;
+    currentLocaleSource = resolved.source;
 }

@@ -581,3 +581,156 @@ describe('SessionManager', () => {
         ]);
     });
 });
+
+describe('SessionManager local preferences', () => {
+    let dataDir: string;
+    let path: string;
+    let manager: SessionManager;
+
+    beforeEach(async () => {
+        dataDir = await mkdtemp(join(tmpdir(), 'whatsapp-ng-local-preferences-'));
+        path = join(dataDir, 'config.json');
+        manager = new SessionManager(dataDir);
+    });
+
+    afterEach(async () => {
+        vi.restoreAllMocks();
+        await rm(dataDir, { recursive: true, force: true });
+    });
+
+    const saved = async () => JSON.parse(await readFile(path, 'utf8'));
+    const load = async () => { await manager.ensureInitialized(); return manager; };
+
+    it('sets, reloads and clears both preferences independently', async () => {
+        await load();
+        expect(manager.getSavedLocalSttLanguage()).toEqual({ invalid: false });
+        expect(manager.getSavedLocale()).toEqual({ invalid: false });
+        await manager.setLocalSttLanguage('pt-BR', 0);
+        await manager.setLocale('fr', 0);
+        expect(await saved()).toMatchObject({ localSttLanguage: 'pt-BR', locale: 'fr' });
+        const restored = new SessionManager(dataDir); await restored.ensureInitialized();
+        expect(restored.getSavedLocalSttLanguage()).toEqual({ value: 'pt-BR', invalid: false });
+        expect(restored.getSavedLocale()).toEqual({ value: 'fr', invalid: false });
+        await restored.clearLocalSttLanguage(0);
+        await restored.clearLocale(0);
+        expect(await saved()).not.toHaveProperty('localSttLanguage');
+        expect(await saved()).not.toHaveProperty('locale');
+    });
+
+    it('preserves valid and invalid saved JSON values across unrelated saves', async () => {
+        await writeFile(path, JSON.stringify({ localSttLanguage: { unexpected: ['raw'] }, locale: 42 }));
+        await load();
+        expect(manager.getSavedLocalSttLanguage()).toEqual({ invalid: true });
+        expect(manager.getSavedLocale()).toEqual({ invalid: true });
+        await manager.setFinalAfterAttachments(false);
+        await manager.setMediaLimit('inbound', 50, 0);
+        await manager.setStatus('disconnected');
+        expect(await saved()).toMatchObject({ localSttLanguage: { unexpected: ['raw'] }, locale: 42 });
+        await manager.clearLocalSttLanguage(0);
+        await manager.clearLocale(0);
+        expect(await saved()).not.toHaveProperty('localSttLanguage');
+        expect(await saved()).not.toHaveProperty('locale');
+    });
+
+    it.each(['', ' ', '--foo', '-l', 'EN', 'en_US'])('rejects invalid local language %j without touching disk', async value => {
+        await manager.setFinalAfterAttachments(true);
+        const before = await readFile(path, 'utf8');
+        await expect(manager.setLocalSttLanguage(value, 0)).rejects.toThrow('Invalid local transcription language');
+        expect(await readFile(path, 'utf8')).toBe(before);
+        expect(manager.getLocalSttLanguageRevision()).toBe(0);
+    });
+
+    it.each(['', ' ', 'en-US', 'de', '--foo'])('rejects invalid locale %j without touching disk', async value => {
+        await manager.setFinalAfterAttachments(true);
+        const before = await readFile(path, 'utf8');
+        await expect(manager.setLocale(value as any, 0)).rejects.toThrow('Invalid extension locale');
+        expect(await readFile(path, 'utf8')).toBe(before);
+        expect(manager.getLocaleRevision()).toBe(0);
+    });
+
+    it('rejects stale and expired changes without changing memory or disk', async () => {
+        await manager.setLocalSttLanguage('pt', 0);
+        await manager.setLocale('es', 0);
+        const before = await readFile(path, 'utf8');
+        await expect(manager.setLocalSttLanguage('fr', 0)).rejects.toThrow('expired');
+        await expect(manager.clearLocalSttLanguage(1, () => false)).rejects.toThrow('expired');
+        await expect(manager.setLocale('fr', 0)).rejects.toThrow('expired');
+        await expect(manager.clearLocale(1, () => false)).rejects.toThrow('expired');
+        expect(await readFile(path, 'utf8')).toBe(before);
+        expect(manager.getSavedLocalSttLanguage().value).toBe('pt');
+        expect(manager.getSavedLocale().value).toBe('es');
+        expect(manager.getLocalSttLanguageRevision()).toBe(1);
+        expect(manager.getLocaleRevision()).toBe(1);
+    });
+
+    it('does not update memory or disk when publication fails', async () => {
+        await manager.setFinalAfterAttachments(true);
+        const before = await readFile(path, 'utf8');
+        vi.spyOn(manager as any, 'writeConfig').mockRejectedValue(new Error('Synthetic publication failure'));
+        await expect(manager.setLocalSttLanguage('pt', 0)).rejects.toThrow('publication failure');
+        await expect(manager.setLocale('fr', 0)).rejects.toThrow('publication failure');
+        expect(await readFile(path, 'utf8')).toBe(before);
+        expect(manager.getSavedLocalSttLanguage()).toEqual({ invalid: false });
+        expect(manager.getSavedLocale()).toEqual({ invalid: false });
+        expect(manager.getLocalSttLanguageRevision()).toBe(0);
+        expect(manager.getLocaleRevision()).toBe(0);
+    });
+
+    it('refuses changes when configuration is unreadable', async () => {
+        await writeFile(path, 'broken-original');
+        await expect(manager.setLocalSttLanguage('pt', 0)).rejects.toThrow('unreadable');
+        await expect(manager.setLocale('fr', 0)).rejects.toThrow('unreadable');
+        expect(await readFile(path, 'utf8')).toBe('broken-original');
+    });
+
+    it('reads only a validated saved locale without writing or taking the writer lock', async () => {
+        await writeFile(path, JSON.stringify({ locale: 'pt-BR', localSttLanguage: 'es' }));
+        await writeFile(`${path}.lock`, 'SYNTHETIC-OTHER-WRITER');
+        const before = await readFile(path, 'utf8');
+        await expect(manager.readSavedLocale()).resolves.toBe('pt-BR');
+        expect(await readFile(path, 'utf8')).toBe(before);
+        expect(await readFile(`${path}.lock`, 'utf8')).toBe('SYNTHETIC-OTHER-WRITER');
+        expect(manager.getSavedLocale()).toEqual({ invalid: false });
+    });
+
+    it.each([{ locale: 'de' }, { locale: '' }, { locale: 42 }, {}, { locale: 'en' }])('bootstrap locale read is validated and read-only: %j', async config => {
+        await writeFile(path, JSON.stringify(config));
+        const before = await readFile(path, 'utf8');
+        await expect(manager.readSavedLocale()).resolves.toBe(config.locale === 'en' ? 'en' : undefined);
+        expect(await readFile(path, 'utf8')).toBe(before);
+    });
+
+    it('returns no bootstrap locale for absent or corrupt config without creating it', async () => {
+        await expect(manager.readSavedLocale()).resolves.toBeUndefined();
+        await expect(readFile(path, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+        await writeFile(path, 'not-json');
+        await expect(manager.readSavedLocale()).resolves.toBeUndefined();
+        expect(await readFile(path, 'utf8')).toBe('not-json');
+    });
+});
+
+describe('SessionManager environment-only security boundary', () => {
+    it('never persists environment-only commands, paths or transport authorization', async () => {
+        const dataDir = await mkdtemp(join(tmpdir(), 'whatsapp-ng-env-only-'));
+        const path = join(dataDir, 'config.json');
+        const variables = ['FFMPEG_PATH', 'WHISPER_CLI_PATH', 'CRISPASR_CLI_PATH', 'CRISPASR_STT_CMD', 'CRISPASR_TTS_CMD', 'WHATSAPP_NG_ALLOW_PLAIN_HTTP', 'WHISPER_MODEL_PATH', 'CRISPASR_MODEL_PATH'];
+        try {
+            for (const name of variables) vi.stubEnv(name, `SYNTHETIC_ENV_ONLY_${name}`);
+            const manager = new SessionManager(dataDir);
+            await manager.setLocalSttLanguage('pt', 0);
+            await manager.setLocale('fr', 0);
+            await manager.setFinalAfterAttachments(false);
+            await manager.clearLocalSttLanguage(1);
+            await manager.clearLocale(1);
+            const serialized = await readFile(path, 'utf8');
+            const config = JSON.parse(serialized);
+            for (const name of variables) {
+                expect(config).not.toHaveProperty(name);
+                expect(serialized).not.toContain(`SYNTHETIC_ENV_ONLY_${name}`);
+            }
+        } finally {
+            vi.unstubAllEnvs();
+            await rm(dataDir, { recursive: true, force: true });
+        }
+    });
+});

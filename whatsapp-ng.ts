@@ -33,6 +33,7 @@ import { GroupMessagePolicy } from './src/services/group-message.policy.js';
 import { OptionalOutputService } from './src/services/optional-output.service.js';
 import { showOptionalOutputSettings } from './src/ui/optional-output-settings.view.js';
 import { ManagedSpeechService } from './src/services/managed-speech.service.js';
+import { resolveLocalSttLanguage } from './src/services/local-stt-options.js';
 
 const shutdownState = globalThis as typeof globalThis & {
     __whatsappNgRetiredInputs?: Set<string>;
@@ -44,8 +45,9 @@ const shutdownState = globalThis as typeof globalThis & {
     };
 };
 
-export default function (pi: ExtensionAPI) {
-    initI18n(pi);
+export default async function (pi: ExtensionAPI) {
+    const sessionManager = new SessionManager();
+    initI18n(pi, await sessionManager.readSavedLocale());
 
     // Register verbose flag
     pi.registerFlag("verbose", {
@@ -94,7 +96,6 @@ export default function (pi: ExtensionAPI) {
     const retiredInputs = shutdownState.__whatsappNgRetiredInputs ??= new Set<string>();
     const phoneOffProfiles = shutdownState.__whatsappNgPhoneOffProfiles ??= new Set<string>();
     const suspendedOutboundTools = shutdownState.__whatsappNgSuspendedOutboundTools ??= new Map<string, Set<string>>();
-    const sessionManager = new SessionManager();
     const whatsappService = new WhatsAppService(sessionManager);
     const recentsService = new RecentsService(sessionManager);
     whatsappService.setRecentsService(recentsService);
@@ -105,7 +106,7 @@ export default function (pi: ExtensionAPI) {
     const audioService = new AudioService(logger, undefined, () => sessionManager.getSttConfig(), async (config, options) => {
         syncManagedSpeech();
         return managedSpeech.gate('stt', config, options);
-    });
+    }, () => process.env, () => sessionManager.getSavedLocalSttLanguage().value);
     const incomingMediaService = new IncomingMediaService(audioService, logger);
     const groupPolicy = new GroupMessagePolicy();
     const menuHandler = new MenuHandler(whatsappService, sessionManager, recentsService, {
@@ -489,7 +490,9 @@ export default function (pi: ExtensionAPI) {
         };
         return { current, canonical: canonicalConversation, chats: voiceChats,
             preview: (chat, config, key, revision, workspace) => settingsSend(ctx, current, chat, revision, { config, key, workspace }),
-            disclose: (chat, text, revision) => settingsSend(ctx, current, chat, revision, { text }) };
+            disclose: (chat, text, revision) => settingsSend(ctx, current, chat, revision, { text }),
+            localSttLanguage: () => resolveLocalSttLanguage(process.env, sessionManager.getSavedLocalSttLanguage().value),
+            refreshLocalTranscription: () => audioService.refreshLocalSelection() };
     }
     async function settingsSend(ctx: Parameters<typeof showVoiceSettings>[0], scopeCurrent: () => boolean, chat: VoiceChat, revision: number,
         payload: { config: TtsConfig; key: string; workspace: string } | { text: string }): Promise<MessageResult> {

@@ -7,9 +7,13 @@ export interface SttConfig {
     sttLanguage?: string;
 }
 
+import type { LocalSttOptions } from './local-stt-options.js';
+
 export interface AudioTranscriptionOptions {
     signal?: AbortSignal;
     isCurrent?: () => boolean;
+    /** Resolved once by AudioService for local execution; ignored by remote STT. */
+    local?: Readonly<LocalSttOptions>;
 }
 
 export interface AudioTranscriber {

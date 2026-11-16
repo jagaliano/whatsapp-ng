@@ -13,6 +13,7 @@ type ReactionCall = [string, { react: { text: string; key: WAMessageKey } }];
 const mocks = vi.hoisted(() => {
     const createSessionManager = () => ({
         ensureInitialized: vi.fn().mockResolvedValue(undefined),
+        readSavedLocale: vi.fn().mockResolvedValue(undefined),
         getAuthStateDir: vi.fn().mockReturnValue('/synthetic-profile'),
         isRegistered: vi.fn().mockResolvedValue(false),
         setStatus: vi.fn().mockResolvedValue(undefined),
@@ -247,7 +248,7 @@ const setup = async () => {
     const registerExtension = await loadExtension();
     const pi = createMockPi();
     const ctx = createMockContext();
-    registerExtension(pi as any);
+    await registerExtension(pi as any);
     await pi.handlers.get('session_start')!({}, ctx);
     return { pi, ctx };
 };

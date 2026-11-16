@@ -1,5 +1,6 @@
 import { WhatsAppService } from '../services/whatsapp.service.js';
 import { showMediaLimitsSettings } from './media-limits-settings.view.js';
+import { showLocaleSettings } from './locale-settings.view.js';
 import { SessionManager, type Contact } from '../services/session.manager.js';
 import { validatePhoneNumber, type RecentConversationMessage, type RecentConversationSummary } from '../models/whatsapp.types.js';
 import { RecentsService } from '../services/recents.service.js';
@@ -78,6 +79,9 @@ export class MenuHandler {
                 break;
             case t('menu.advanced.mediaLimits'):
                 if (await showMediaLimitsSettings(ctx, this.sessionManager, settingsCurrent) === 'back') return this.handleCommand(ctx, 'Advanced');
+                break;
+            case t('settings.locale.menu'):
+                if (await showLocaleSettings(ctx, this.sessionManager, settingsCurrent) === 'back') return this.handleCommand(ctx, 'Advanced');
                 break;
             case t('menu.optional.title'):
                 if (await this.settings?.optional?.(ctx, settingsCurrent) === 'back') return this.handleCommand(ctx, 'Replies');

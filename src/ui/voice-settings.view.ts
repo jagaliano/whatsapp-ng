@@ -4,6 +4,7 @@ import type { SessionManager } from '../services/session.manager.js';
 import { describeSpeechDestination, setChatReplyPreferences, chatReplyPolicy, speechDefaults, settingsJid, type SpeechSettings } from '../services/speech-settings.js';
 import { resolveTtsConfig, updateTtsConfig, EDGE_TTS_ENDPOINT, type TtsConfig, type TtsUpdates } from '../services/tts-config.js';
 import type { ReplyOutputMode } from '../services/final-output.service.js';
+import { isSttLanguageSyntax, type LocalSttLanguageResolution } from '../services/local-stt-options.js';
 import { t } from '../i18n.js';
 import { expireSettingsRequest, isSettingsClosed, type SettingsNavigation } from './whatsapp-settings.view.js';
 
@@ -15,6 +16,8 @@ export interface VoiceSettingsActions {
     chats(): VoiceChat[];
     preview(chat: VoiceChat, config: TtsConfig, approvedDestinationKey: string, revision: number, workspace: string): Promise<MessageResult>;
     disclose(chat: VoiceChat, text: string, revision: number): Promise<MessageResult>;
+    localSttLanguage(): LocalSttLanguageResolution;
+    refreshLocalTranscription(): void;
 }
 const modeKeys: Record<ReplyOutputMode, string> = { text: 'voice.modeText', voice: 'voice.modeVoice', both: 'voice.modeBoth', mirror: 'voice.modeMirror' };
 const modeLabel = (mode: ReplyOutputMode) => t(modeKeys[mode] as Parameters<typeof t>[0]);
@@ -172,6 +175,38 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
             } else return;
         }
     };
+    const editLocalSttLanguage = async () => {
+        const set = t('voice.localSttSet'); const clear = t('voice.localSttClear');
+        while (actions.current()) {
+            const saved = session.getSavedLocalSttLanguage();
+            const effective = actions.localSttLanguage();
+            const source = effective.source === 'saved' ? t('voice.localSttSourceSaved') : effective.source === 'default' ? t('voice.localSttSourceDefault') : effective.source;
+            const lines = [t('voice.localSttEffective', { value: effective.language, source })];
+            if (saved.invalid) lines.push(t('voice.localSttSavedInvalid'));
+            else if (saved.value && effective.source !== 'saved') lines.push(t('voice.localSttOverridden', { value: saved.value, source: effective.source }));
+            const selected = await ctx.ui.select(lines.join('\n'), [set, ...(saved.value || saved.invalid ? [clear] : []), advancedBack]);
+            if (selected === advancedBack) return;
+            const revision = session.getLocalSttLanguageRevision();
+            try {
+                if (selected === set) {
+                    const input = await ctx.ui.input(t('voice.localSttPrompt'), saved.value ?? '');
+                    if (input === undefined) return;
+                    const language = input.trim();
+                    if (!isSttLanguageSyntax(language)) { ctx.ui.notify(t('voice.localSttInvalid'), 'error'); continue; }
+                    await session.setLocalSttLanguage(language, revision, actions.current);
+                    ctx.ui.notify(t('voice.localSttSaved'), 'info');
+                } else if (selected === clear) {
+                    await session.clearLocalSttLanguage(revision, actions.current);
+                    ctx.ui.notify(t('voice.localSttCleared'), 'info');
+                } else return;
+                actions.refreshLocalTranscription();
+            } catch (error) {
+                if (!actions.current()) expireSettingsRequest();
+                if (revision !== session.getLocalSttLanguageRevision()) { ctx.ui.notify(t('voice.changed'), 'warning'); return; }
+                throw error;
+            }
+        }
+    };
     let advanced = false;
     while (actions.current()) {
         let settings: SpeechSettings;
@@ -189,7 +224,7 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
         const resolved = resolveTtsConfig(settings.config);
         const back = advanced ? t('menu.back.voice') : t('menu.back.main');
         const labels = advanced
-            ? [t('voice.backend'), t(resolved.provider === 'edge' ? 'voice.edgeVoice' : 'voice.providerVoice'), t('voice.speed'), ...(resolved.provider === 'edge' ? [] : [t('voice.format')]), t('voice.defaultMode'), t('voice.preview'), back]
+            ? [t('voice.localSttLanguage'), t('voice.backend'), t(resolved.provider === 'edge' ? 'voice.edgeVoice' : 'voice.providerVoice'), t('voice.speed'), ...(resolved.provider === 'edge' ? [] : [t('voice.format')]), t('voice.defaultMode'), t('voice.preview'), back]
             : [t('voice.setupChat'), t('voice.chats'), t('voice.advanced'), t('voice.disable'), back];
         const destination = describeSpeechDestination(settings.config);
         const selected = await ctx.ui.select(advanced ? t('voice.advanced') : t('voice.title', { destination: `${resolved.provider === 'edge' ? t('voice.edge') : destination.service} (${destination.host})`, mode: modeLabel(settings.mode), enabled: settings.enabled ? t('voice.on') : t('voice.off'), approved: settings.approvedDestinationKey ? t('voice.yes') : t('voice.no') }), labels);
@@ -197,6 +232,7 @@ export async function showVoiceSettings(ctx: ExtensionCommandContext, session: S
             if (selected === back) { if (advanced) { advanced = false; continue; } return 'back'; }
             if (selected === t('voice.setupChat')) await setupChat();
             else if (selected === t('voice.advanced')) advanced = true;
+            else if (selected === t('voice.localSttLanguage')) await editLocalSttLanguage();
             else if (selected === t('voice.backend')) await updateBackend();
             else if (selected === t('voice.providerVoice')) await editVoice(resolveTtsConfig(settings.config).provider === 'edge');
             else if (selected === t('voice.edgeVoice')) await editVoice(true);

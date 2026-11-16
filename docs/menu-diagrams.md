@@ -1,6 +1,6 @@
 # WhatsApp menu diagrams
 
-Initially source-reviewed against `1.1.4` at `4cb09ae`; terminal labels and return edges aligned with the 041 menu-polish working tree based on `8f32898`. This is a map of the implemented menus, not a proposed redesign or live-client acceptance report. English labels are used; chat names, account scopes and status values are abbreviated. Terminal categories, labels, headings and hints are localized in English, pt-BR, Spanish and French.
+Source-reviewed against the current post-`1.1.12` working tree. This is a map of the implemented menus, not a proposed redesign or live-client acceptance report. English labels are used; chat names, account scopes and status values are abbreviated. Terminal categories, labels, headings and hints are localized in English, pt-BR, Spanish and French.
 
 ## Reading the diagrams
 
@@ -49,6 +49,22 @@ flowchart TB
 
     A["Advanced"]
     A --> Privacy["Privacy and logs: show policy notice"]
+    A --> Limits["Media limits"]
+    Limits --> Inbound["Inbound MiB"]
+    Limits --> Outbound["Outbound MiB"]
+    Inbound --> InboundValue["Enter a whole MiB value from 1 to 512"]
+    Outbound --> OutboundValue["Enter a whole MiB value from 1 to 512"]
+    InboundValue -->|"inbound increase above 25 MiB"| InboundConfirm["Confirm larger inbound files for every allowed chat"]
+    InboundValue -->|"other valid changes"| LimitSave["Save one direction; close settings"]
+    OutboundValue --> LimitSave
+    InboundConfirm -->|"confirmed"| LimitSave
+    Limits -. "Back to Advanced" .-> A
+    A --> Locale["Extension language"]
+    Locale --> LocaleSet["Set en / pt-BR / es / fr"]
+    Locale --> LocaleClear["Clear saved locale, when present"]
+    LocaleSet --> LocaleSaved["Save; restart Pi to apply translated metadata/UI"]
+    LocaleClear --> LocaleSaved
+    Locale -. "Back to Advanced" .-> A
     A -->|"archive is enabled"| Scope["Local history scope"]
     Scope --> Current["Current verified account (or unassigned legacy)"]
     Scope --> Stored["Stored profile/account scope"]
@@ -64,6 +80,8 @@ flowchart TB
 - Off retains login, history and preferences. It is different from **Log out and delete saved login**.
 - Auto-connect changes future TUI/RPC startups/session loads, not the current connection. Enabled/Off and connected/disconnected are different states: **Turn WhatsApp off** can appear while the transport is disconnected.
 - Local history scope changes the reader's view, not the account used for live ingestion. Recents opened this way returns to **Advanced**, including when it is empty.
+- Media limits are independent inbound/outbound whole-MiB values from 1 to 512. Each change affects one direction and closes settings. An inbound increase above 25 MiB requires confirmation; audio and voice notes retain their fixed 25 MiB limit. See [media size limits](reference.md#media-size-limits).
+- Extension language shows its effective value/source and any overridden saved value. Set/Clear requires restarting Pi; phone `/reload` is not the restart mechanism. See [Extension locale](reference.md#extension-locale).
 
 ## 3. Allowed contacts and groups
 
@@ -237,6 +255,12 @@ The chat-controls panel stays open after a successful edit or an introduction ou
 
 ```mermaid
 flowchart TB
+    Advanced["Advanced speech settings"] --> LocalLanguage["Local transcription language"]
+    LocalLanguage --> LanguageSet["Set language code or auto"]
+    LocalLanguage --> LanguageClear["Clear saved language, when present"]
+    LanguageSet --> LanguageSaved["Save; refresh cached unavailable local selection"]
+    LanguageClear --> LanguageSaved
+    LocalLanguage -. "Back to Advanced speech settings" .-> Advanced
     Advanced["Advanced speech settings"] --> Backend["Speech service (Edge or remote)"]
     Backend --> Edge["Microsoft / Edge (online, unofficial)"]
     Backend --> Remote["Remote speech service (HTTP API)"]
@@ -262,6 +286,7 @@ flowchart TB
     Advanced -. "Back to Voice" .-> Voice["Voice"]
 ```
 
+- Local transcription language is independent of remote `sttLanguage`. It shows the effective language/source and any overridden saved value. Blank Set input is rejected; Clear is separate. Set/Clear does not restart Pi, free a working native model or re-probe FFmpeg.
 - For Edge, the voice editor is **Edge voice** followed by locale input. For remote providers it is **Remote voice or reference ID**, with named/server-default choices as above. Server-default is never offered for Fish. Back from that standalone remote voice editor returns to Advanced, whereas Back during backend setup returns to the protocol picker.
 - Remote setup values are staged and saved together. Blank endpoint/model/key-variable fields retain existing values; incomplete/invalid configurations are refused. Store the environment-variable name, never an API key value.
 - Here “Remote speech service (HTTP API)” means an HTTP API backend; permitted loopback local servers can use this path too. This is the TTS menu, not an STT provider configuration screen.
@@ -289,7 +314,7 @@ Saving a policy ends the settings request; paused chats remain paused. Trigger p
 
 ## 10. WhatsApp phone menus: a separate surface
 
-Phone presentation aligned on 2026-11-08 with the 042 working tree based on `4f5388a`; this remains a source-coherence map, not live-client evidence. Phone slash commands do not open the terminal `/whatsapp` hierarchy. State-changing commands require the configured, verified owner in an allowed chat; `/help` and `/status` are available to admitted non-owner actors too.
+Phone slash commands do not open the terminal `/whatsapp` hierarchy. State-changing commands require the configured, verified owner in an allowed chat; `/help` and `/status` are available to admitted non-owner actors too.
 
 ```mermaid
 flowchart TB
@@ -303,6 +328,8 @@ flowchart TB
     Owner --> Voice["/voice: Text only / Voice / Voice + text / Mirror audio input"]
     Owner --> Replies["/replies: shared attachment policy, stats and reporting"]
     Owner --> Confirm["/new, /off, /quit: Cancel / Confirm menu"]
+    Owner --> Reload["/reload: private chat; connected and idle; Cancel / Confirm"]
+    Reload --> Choice
     Owner --> Direct["/stop or /abort; /compact with optional focus"]
     Models --> Choice["Choose using a valid numbered reply or enabled native poll"]
     Think --> Choice
@@ -319,6 +346,7 @@ flowchart TB
 - `/help` groups Information, Shared Pi session (including `/replies`), This chat (`/voice`), and WhatsApp and process. `/status` retains every field under the two shown sections. Known exclusive choices carry a localized `(current)` suffix; independent reporting toggles show their state. Shared-session guidance is in the message body, with a short title used by the optional poll.
 - The same existing locale override selects English, pt-BR, Spanish or French for all phone presentation. Commands/arguments and model IDs are not translated; no per-chat language setting is added.
 - State-changing selections normally require idle shared Pi work; model pagination is navigation, not selection. `/stop` explicitly cancels work, and confirmed `/off`/`/quit` are separate lifecycle actions. `/off` requires the terminal to turn WhatsApp on again. `/quit` shuts down Pi, not just WhatsApp.
+- `/reload` is refused in every group and unless WhatsApp is fully connected on the same account. Its confirmation expires after 15 seconds. It uses Pi's standard resource reload, then reconnects WhatsApp once with a bounded, one-use handoff; its acknowledgement confirms WhatsApp recovery, not that every extension loaded. See [phone reload](reference.md#phone-reload).
 
 ## Coherence review
 
@@ -344,9 +372,10 @@ This is a static source-coherence review, not proof of terminal rendering, provi
 - [Menu actions, contacts, groups, Recents and History](../src/ui/menu.handler.ts)
 - [Voice, backend, per-chat and Owner views](../src/ui/voice-settings.view.ts)
 - [Optional-output settings](../src/ui/optional-output-settings.view.ts)
+- [Media-limit settings](../src/ui/media-limits-settings.view.ts)
 - [Message detail](../src/ui/message-detail.view.ts) and [quoted reply editor](../src/ui/message-reply.view.ts)
 - [Composition and command registration](../whatsapp-ng.ts), [English/localized labels](../src/i18n.ts)
 - [Phone command router](../src/services/whatsapp-command.router.ts) and [ephemeral phone-menu service](../src/services/command-menu.service.ts)
 - [Scoped-navigation tests](../tests/unit/settings-navigation.test.ts), [menu-handler tests](../tests/unit/menu.handler.test.ts), [Voice tests](../tests/unit/voice-settings.view.test.ts), [optional-output tests](../tests/unit/optional-output-settings.view.test.ts)
 
-Keep labels, conditions and return edges aligned with these owners when menus change. Linking this document from README is a separate editorial decision.
+Keep labels, conditions and return edges aligned with these owners when menus change.

@@ -40,11 +40,7 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- [ ] **I. OOP**: Does the design use appropriate classes/interfaces?
-- [ ] **II. Clean Code**: Are names meaningful and functions focused?
-- [ ] **III. SOLID**: Does the design respect SOLID principles?
-- [ ] **IV. TypeScript**: Is the typing strict and appropriate?
-- [ ] **V. Simplicity**: Is this the simplest possible implementation?
+[Gates determined based on constitution file]
 
 ## Project Structure
 

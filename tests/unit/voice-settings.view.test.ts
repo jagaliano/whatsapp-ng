@@ -9,13 +9,19 @@ const A = '15550000001@s.whatsapp.net'; const G = '120363000000001@g.us';
 const chat = { jid: A, recipientJid: A, label: `Fixture (${A})` }; const group = { jid: G, recipientJid: G, label: `Group (${G})` };
 const remote = { ttsEndpoint: 'https://speech.example.test/v1/audio/speech', ttsModel: 'fixture-model', ttsEnv: 'FIXTURE_TTS_KEY', ttsVoice: 'fixture-voice' };
 const labels = { backend: 'Speech service (Edge or remote)', mode: 'Default reply mode (per-chat modes kept)', chats: 'Chat settings: mode, automatic replies, introduction', preview: 'Send fixed-phrase voice preview (review first)', introduce: 'Send AI-assistant introduction (review first)' };
-function setup(selects: string[], inputs: Array<string | undefined> = [], confirms: Array<boolean | (() => boolean)> = [], initial = speechDefaults()) {
+function setup(selects: string[], inputs: Array<string | undefined> = [], confirms: Array<boolean | (() => boolean)> = [], initial = speechDefaults(), initialLocal: { value?: string; invalid?: boolean } = {}) {
     let settings = structuredClone(initial); let revision = 0; let owner = ''; let current = true;
+    let local = structuredClone(initialLocal); let localRevision = 0;
     const session = { getSpeechSettings: () => structuredClone(settings), getSpeechRevision: () => revision,
         setSpeechSettings: vi.fn(async (next: SpeechSettings, expected: number, guard: () => boolean) => { if (expected !== revision || !guard()) throw new Error('fixture stale'); settings = validateSpeechSettings(next); revision++; }),
-        getOperatorJid: () => owner, setOperatorJid: vi.fn(async (jid: string, guard: () => boolean) => { if (!guard()) throw new Error('fixture stale'); owner = jid; revision++; }) };
+        getOperatorJid: () => owner, setOperatorJid: vi.fn(async (jid: string, guard: () => boolean) => { if (!guard()) throw new Error('fixture stale'); owner = jid; revision++; }),
+        getSavedLocalSttLanguage: () => structuredClone(local), getLocalSttLanguageRevision: () => localRevision,
+        setLocalSttLanguage: vi.fn(async (value: string, expected: number, guard: () => boolean) => { if (expected !== localRevision || !guard()) throw new Error('fixture stale'); local = { value, invalid: false }; localRevision++; }),
+        clearLocalSttLanguage: vi.fn(async (expected: number, guard: () => boolean) => { if (expected !== localRevision || !guard()) throw new Error('fixture stale'); local = { invalid: false }; localRevision++; }) };
     const actions = { current: () => current, canonical: (jid: string) => jid, chats: () => [chat, group],
-        preview: vi.fn().mockResolvedValue({ success: true, attempts: 1 }), disclose: vi.fn().mockResolvedValue({ success: true, attempts: 1 }) };
+        preview: vi.fn().mockResolvedValue({ success: true, attempts: 1 }), disclose: vi.fn().mockResolvedValue({ success: true, attempts: 1 }),
+        localSttLanguage: vi.fn(() => local.value ? { language: local.value, source: 'saved' } : { language: 'auto', source: 'default' }),
+        refreshLocalTranscription: vi.fn() };
     const ctx = { cwd: '/fixture/workspace', isIdle: () => true, ui: {
         select: vi.fn(async (title: string, _options: string[]) => {
             const choice = selects.shift() ?? 'Back';
@@ -24,7 +30,7 @@ function setup(selects: string[], inputs: Array<string | undefined> = [], confir
         }), input: vi.fn(async () => inputs.shift()),
         confirm: vi.fn(async (_title: string, _message: string) => { const answer = confirms.shift(); return typeof answer === 'function' ? answer() : answer ?? false; }), notify: vi.fn()
     } };
-    return { session, actions, ctx, settings: () => settings, expire: () => { current = false; }, change: () => { revision++; } };
+    return { session, actions, ctx, settings: () => settings, expire: () => { current = false; }, change: () => { revision++; }, changeLocal: () => { localRevision++; }, local: () => local };
 }
 beforeEach(() => { resetI18n(); vi.unstubAllEnvs(); });
 
@@ -205,5 +211,50 @@ describe('terminal Voice/Owner settings', () => {
         expect(h.session.setOperatorJid).toHaveBeenCalledWith(A, h.actions.current);
         const cancelled = setup(['Enter phone number or person JID'], ['+15550000001'], [false]); await showOwnerSettings(cancelled.ctx as any, cancelled.session as any, cancelled.actions);
         expect(cancelled.session.setOperatorJid).not.toHaveBeenCalled();
+    });
+});
+
+describe('terminal local transcription language', () => {
+    const enter = ['Advanced speech settings', 'Local transcription language'];
+    const leave = ['Back to Advanced speech settings', 'Back', 'Back'];
+
+    it('sets a saved language and refreshes cached unavailable local selection', async () => {
+        const h = setup([...enter, 'Set local transcription language', ...leave], ['pt-BR']);
+        await showVoiceSettings(h.ctx as any, h.session as any, h.actions);
+        expect(h.session.setLocalSttLanguage).toHaveBeenCalledWith('pt-BR', 0, h.actions.current);
+        expect(h.actions.refreshLocalTranscription).toHaveBeenCalledOnce();
+        expect(h.ctx.ui.notify).toHaveBeenCalledWith('Local transcription language saved.', 'info');
+    });
+
+    it.each(['', '   ', '--foo', '-l'])('rejects blank or option-like Set input %j without saving or refreshing', async value => {
+        const h = setup([...enter, 'Set local transcription language', ...leave], [value]);
+        await showVoiceSettings(h.ctx as any, h.session as any, h.actions);
+        expect(h.session.setLocalSttLanguage).not.toHaveBeenCalled();
+        expect(h.actions.refreshLocalTranscription).not.toHaveBeenCalled();
+        expect(h.ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining('blank and option-like'), 'error');
+    });
+
+    it('clears only through the explicit Clear action and refreshes local selection', async () => {
+        const h = setup([...enter, 'Clear saved local transcription language', ...leave], [], [], speechDefaults(), { value: 'pt' });
+        await showVoiceSettings(h.ctx as any, h.session as any, h.actions);
+        expect(h.session.clearLocalSttLanguage).toHaveBeenCalledWith(0, h.actions.current);
+        expect(h.actions.refreshLocalTranscription).toHaveBeenCalledOnce();
+        expect(h.local()).toEqual({ invalid: false });
+    });
+
+    it('shows the winning environment alias and marks the saved value overridden', async () => {
+        const h = setup([...enter, ...leave], [], [], speechDefaults(), { value: 'pt' });
+        h.actions.localSttLanguage.mockReturnValue({ language: 'es', source: 'WHISPER_LANGUAGE' });
+        await showVoiceSettings(h.ctx as any, h.session as any, h.actions);
+        expect(h.ctx.ui.select).toHaveBeenCalledWith(expect.stringContaining('es (WHISPER_LANGUAGE)'), expect.any(Array));
+        expect(h.ctx.ui.select).toHaveBeenCalledWith(expect.stringContaining('Saved: pt (overridden by WHISPER_LANGUAGE)'), expect.any(Array));
+    });
+
+    it('does not refresh after a stale failed save', async () => {
+        const h = setup([...enter, 'Set local transcription language', ...leave], ['pt']);
+        h.session.setLocalSttLanguage.mockImplementationOnce(async () => { h.changeLocal(); throw new Error('fixture stale'); });
+        await showVoiceSettings(h.ctx as any, h.session as any, h.actions);
+        expect(h.actions.refreshLocalTranscription).not.toHaveBeenCalled();
+        expect(h.ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining('nothing saved'), 'warning');
     });
 });

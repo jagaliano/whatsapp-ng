@@ -10,6 +10,7 @@ import { resolveTtsConfig } from '../../src/services/tts-config.ts';
 const mocks = vi.hoisted(() => {
     const createSessionManager = () => ({
         ensureInitialized: vi.fn().mockResolvedValue(undefined),
+        readSavedLocale: vi.fn().mockResolvedValue(undefined),
         getMediaLimits: vi.fn<() => { inboundBytes: number; outboundBytes: number }>(() => ({ inboundBytes: 25 * 1024 * 1024, outboundBytes: 25 * 1024 * 1024 })),
         getMediaLimitsRevision: vi.fn().mockReturnValue(0),
         setMediaLimit: vi.fn().mockResolvedValue(undefined),
@@ -210,7 +211,7 @@ describe('whatsapp-ng extension', () => {
     });
 
     it.each(['/compact', '/abort'])('B control denies a non-owner %s before media or Pi work', async command => {
-        const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); register(pi as any);
+        const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); await register(pi as any);
         await pi.handlers.get('session_start')!({}, ctx);
         const actor = '5511000000000@s.whatsapp.net';
         mocks.sessionManager.getAllowList.mockReturnValue([{ number: actor }]);
@@ -222,7 +223,7 @@ describe('whatsapp-ng extension', () => {
     });
 
     it('B control does not interpret /compactSomething as /compact', async () => {
-        const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); register(pi as any);
+        const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); await register(pi as any);
         await pi.handlers.get('session_start')!({}, ctx);
         const actor = '5511999998888@s.whatsapp.net'; mocks.sessionManager.getAllowList.mockReturnValue([{ number: actor }]);
         mocks.extractIncomingText.mockReturnValue({ kind: 'text', text: '/compactSomething' });
@@ -231,11 +232,45 @@ describe('whatsapp-ng extension', () => {
         expect(ctx.compact).not.toHaveBeenCalled(); expect(pi.sendUserMessage).toHaveBeenCalledOnce();
     });
 
+    it('loads the saved locale before translated registration metadata and keeps static flags English', async () => {
+        mocks.sessionManager.readSavedLocale.mockResolvedValue('fr');
+        const registerExtension = await loadExtension(); const pi = createMockPi();
+        await registerExtension(pi as any);
+        expect(mocks.sessionManager.readSavedLocale).toHaveBeenCalledOnce();
+        expect(pi.tools.get('send_wa_media').label).toBe('Envoyer un fichier WhatsApp');
+        expect(pi.commands.get('whatsapp').description).toBe('Gérer l’intégration WhatsApp');
+        expect((pi.flags.get('verbose') as { description: string }).description).toBe('Show extension metadata diagnostics (no protocol traces or message bodies)');
+    });
+
+    it('re-resolves locale overrides and saved values on every factory invocation', async () => {
+        mocks.sessionManager.readSavedLocale.mockResolvedValue('fr');
+        vi.stubEnv('WHATSAPP_NG_LOCALE', 'es');
+        const registerExtension = await loadExtension();
+        await registerExtension(createMockPi() as any);
+        const overridden = createMockPi(); await registerExtension(overridden as any);
+        expect(overridden.tools.get('send_wa_media').label).toBe('Enviar archivo por WhatsApp');
+        vi.stubEnv('WHATSAPP_NG_LOCALE', '');
+        const saved = createMockPi(); await registerExtension(saved as any);
+        expect(saved.tools.get('send_wa_media').label).toBe('Envoyer un fichier WhatsApp');
+    });
+
+    it('does not expose terminal-only local preferences through any model tool schema', async () => {
+        const registerExtension = await loadExtension(); const pi = createMockPi();
+        await registerExtension(pi as any);
+        for (const [name, tool] of pi.tools) {
+            const properties = (tool.parameters as { properties?: Record<string, unknown> }).properties ?? {};
+            expect(Object.keys(properties), name).not.toContain('localSttLanguage');
+            expect(Object.keys(properties), name).not.toContain('locale');
+        }
+        expect(pi.commands.has('locale')).toBe(false);
+        expect(pi.commands.has('localSttLanguage')).toBe(false);
+    });
+
     it('registers flags, command, tool, and lifecycle handlers', async () => {
         const registerExtension = await loadExtension();
         const pi = createMockPi();
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
 
         expect(pi.flags.has('verbose')).toBe(true);
         expect(pi.flags.has('whatsapp-ng-online')).toBe(true);
@@ -251,7 +286,7 @@ describe('whatsapp-ng extension', () => {
     });
 
     const speechFixture = async (source = 'interactive', actor = '5511999998888@s.whatsapp.net', group = false) => {
-        const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); register(pi as any);
+        const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); await register(pi as any);
         await pi.handlers.get('session_start')!({}, ctx);
         let settings = speechDefaults(); let revision = 0;
         mocks.sessionManager.getSpeechSettings.mockImplementation(() => structuredClone(settings));
@@ -332,7 +367,7 @@ describe('whatsapp-ng extension', () => {
             await writeFile(path, 'FIXTURE-BYTES-NOT-FOR-TRANSCRIPT');
             const registerExtension = await loadExtension();
             const pi = createMockPi();
-            registerExtension(pi as any);
+            await registerExtension(pi as any);
             const result = await pi.tools.get('send_wa_media').execute('media-call', { path, type: 'document', jid: '15550000001@s.whatsapp.net' }, new AbortController().signal, undefined, { ...createMockContext(), cwd: root });
             expect(result.isError).toBe(false);
             expect(JSON.parse(result.content[0].text)).toMatchObject({ success: true, media: { fileName: 'test.md', mimetype: 'text/markdown' } });
@@ -361,7 +396,7 @@ describe('whatsapp-ng extension', () => {
 
         it('uses a 10-minute caller wait above 25 MiB and keeps 60 seconds otherwise', async () => {
             mocks.sessionManager.getMediaLimits.mockReturnValue({ inboundBytes: 25 * MiB, outboundBytes: 512 * MiB });
-            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            const register = await loadExtension(); const pi = createMockPi(); await register(pi as any);
             await withFile(30 * MiB, async (path, root) => { expect((await send(pi, path, root)).isError).toBe(false); });
             expect(mocks.whatsappService.sendContent.mock.calls.at(-1)?.[0]).toMatchObject({ sendTimeoutMs: 600_000, sendOptions: { mediaUploadTimeoutMs: 60_000 } });
             await withFile(MiB, async (path, root) => { expect((await send(pi, path, root)).isError).toBe(false); });
@@ -370,7 +405,7 @@ describe('whatsapp-ng extension', () => {
 
         it('refuses above the configured outbound limit with menu guidance, before any send', async () => {
             mocks.sessionManager.getMediaLimits.mockReturnValue({ inboundBytes: 25 * MiB, outboundBytes: 2 * MiB });
-            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            const register = await loadExtension(); const pi = createMockPi(); await register(pi as any);
             await withFile(2 * MiB + 1, async (path, root) => {
                 const result = await send(pi, path, root);
                 expect(result.isError).toBe(true);
@@ -388,7 +423,7 @@ describe('whatsapp-ng extension', () => {
                 settle = async () => { await request.onSettled?.({ success: false, delivery: 'unknown', messageId: 'M', attempts: 1 }); };
                 return { success: false, delivery: 'unknown', messageId: 'M', attempts: 1 };
             });
-            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            const register = await loadExtension(); const pi = createMockPi(); await register(pi as any);
             await withFile(30 * MiB, async (path, root) => {
                 const first = JSON.parse((await send(pi, path, root)).content[0].text);
                 expect(first).toMatchObject({ success: false, delivery: 'unknown' });
@@ -405,7 +440,7 @@ describe('whatsapp-ng extension', () => {
 
         it('passes the admission-cap error through without claiming the configured limit was exceeded', async () => {
             mocks.sessionManager.getMediaLimits.mockReturnValue({ inboundBytes: 25 * MiB, outboundBytes: 512 * MiB });
-            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            const register = await loadExtension(); const pi = createMockPi(); await register(pi as any);
             const { OutgoingMediaService } = await import('../../src/services/outgoing-media.service.ts');
             vi.spyOn(OutgoingMediaService.prototype, 'prepare').mockRejectedValueOnce(new Error(t('mediaLimits.unadmittedCap')));
             await withFile(MiB, async (path, root) => {
@@ -418,7 +453,7 @@ describe('whatsapp-ng extension', () => {
 
         it('names the actual configured outbound limit value when it is exceeded', async () => {
             mocks.sessionManager.getMediaLimits.mockReturnValue({ inboundBytes: 25 * MiB, outboundBytes: 30 * MiB });
-            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            const register = await loadExtension(); const pi = createMockPi(); await register(pi as any);
             await withFile(30 * MiB + 1, async (path, root) => {
                 const { error } = JSON.parse((await send(pi, path, root)).content[0].text);
                 expect(error).toBe(t('mediaLimits.outboundTooLarge', { maxMiB: 30 }));
@@ -427,7 +462,7 @@ describe('whatsapp-ng extension', () => {
 
         it('keeps the unchanged 25 MiB audio message even with a 512 MiB outbound limit', async () => {
             mocks.sessionManager.getMediaLimits.mockReturnValue({ inboundBytes: 25 * MiB, outboundBytes: 512 * MiB });
-            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            const register = await loadExtension(); const pi = createMockPi(); await register(pi as any);
             await withFile(25 * MiB + 1, async (path, root) => {
                 const { error } = JSON.parse((await send(pi, path, root, 'audio')).content[0].text);
                 expect(error).toBe(t('media.tooLarge', { maxMiB: 25 }));
@@ -437,7 +472,7 @@ describe('whatsapp-ng extension', () => {
 
         it('releases the slot when preparation fails before transmission', async () => {
             mocks.sessionManager.getMediaLimits.mockReturnValue({ inboundBytes: 25 * MiB, outboundBytes: 512 * MiB });
-            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            const register = await loadExtension(); const pi = createMockPi(); await register(pi as any);
             await withFile(30 * MiB, async (path, root) => {
                 const cancelled = new AbortController(); cancelled.abort();
                 const aborted = await pi.tools.get('send_wa_media').execute('limit', { path, type: 'document', jid }, cancelled.signal, undefined, { ...createMockContext(), cwd: root });
@@ -449,7 +484,7 @@ describe('whatsapp-ng extension', () => {
 
         it('refuses non-audio when saved limits are unavailable but still prepares audio', async () => {
             mocks.sessionManager.getMediaLimits.mockImplementation(() => { throw new Error('Invalid saved media limits'); });
-            const register = await loadExtension(); const pi = createMockPi(); register(pi as any);
+            const register = await loadExtension(); const pi = createMockPi(); await register(pi as any);
             await withFile(1024, async (path, root) => {
                 const result = JSON.parse((await send(pi, path, root)).content[0].text);
                 expect(result.error).toContain('Media limits are unavailable');
@@ -465,7 +500,7 @@ describe('whatsapp-ng extension', () => {
         const root = await mkdtemp(join(tmpdir(), 'wa-tool-table-'));
         try {
             const path = join(root, 'table.txt'); await writeFile(path, 'synthetic');
-            const registerExtension = await loadExtension(); const pi = createMockPi(); registerExtension(pi as any);
+            const registerExtension = await loadExtension(); const pi = createMockPi(); await registerExtension(pi as any);
             const jid = '15550000001@s.whatsapp.net';
             expect((await pi.tools.get('send_wa_message').execute('table-text', { jid, message: table })).isError).toBe(false);
             expect(mocks.whatsappService.sendMessage.mock.calls.at(-1)?.[1]).toBe('*T*\n```\n---\n┌───┬───┐\n│ A │ B │\n├───┼───┤\n│ x │ y │\n└───┴───┘\n```');
@@ -480,7 +515,7 @@ describe('whatsapp-ng extension', () => {
     it('adds the selected native quote to a text tool send and records its relationship', async () => {
         const registerExtension = await loadExtension();
         const pi = createMockPi();
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         const jid = '15550000001@s.whatsapp.net';
         mocks.whatsappService.getQuotedMessage.mockReturnValue({ key: { remoteJid: jid, id: 'original', fromMe: false }, message: { conversation: 'Retained' } });
         mocks.whatsappService.sendMessage.mockImplementationOnce(async (_jid, _text, _preserve, options) => {
@@ -498,7 +533,7 @@ describe('whatsapp-ng extension', () => {
     it.each(['send_wa_message', 'send_wa_media'])('does not silently drop an unavailable quote in %s', async tool => {
         const registerExtension = await loadExtension();
         const pi = createMockPi();
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         const result = await pi.tools.get(tool).execute('missing-quote', { jid: '15550000001@s.whatsapp.net', message: 'No fallback', path: 'irrelevant.pdf', type: 'document', quote: { messageId: 'missing' } });
         expect(result.isError).toBe(true);
         expect(result.content[0].text).toContain('Native quote unavailable');
@@ -542,7 +577,7 @@ describe('whatsapp-ng extension', () => {
         expect(mocks.sessionManager.setSttConfig).not.toHaveBeenCalled();
     });
     it('denies idle or unknown STT provenance instead of assuming a local request', async () => {
-        const pi = createMockPi(); (await loadExtension())(pi as any);
+        const pi = createMockPi(); await (await loadExtension())(pi as any);
         expect((await pi.tools.get('configure_wa_stt').execute('idle-stt', {})).isError).toBe(true);
         const h = await sttFixture('extension'); expect((await h.tool.execute('unknown-stt', sttConfig)).isError).toBe(true);
         expect(mocks.sessionManager.setSttConfig).not.toHaveBeenCalled();
@@ -631,7 +666,7 @@ describe('whatsapp-ng extension', () => {
             }
         };
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
 
         expect(pi.events.emit).not.toHaveBeenCalled();
         expect(pi.events.on).not.toHaveBeenCalled();
@@ -652,7 +687,7 @@ describe('whatsapp-ng extension', () => {
             }
         ]);
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         await pi.handlers.get('session_start')!({ reason: 'manual' }, ctx);
 
         expect(mocks.whatsappService.setVerboseMode).toHaveBeenCalledWith(false);
@@ -668,7 +703,7 @@ describe('whatsapp-ng extension', () => {
     it('does not import legacy session entries into the independent namespace', async () => {
         const registerExtension = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext();
         ctx.sessionManager.getEntries.mockReturnValue([{ type: 'custom', customType: 'whatsapp-state', data: { status: 'connected', allowList: [{ number: '+15550000009' }] } }]);
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         await pi.handlers.get('session_start')!({ reason: 'manual' }, ctx);
         expect(mocks.sessionManager.addNumber).not.toHaveBeenCalled();
         expect(mocks.sessionManager.setStatus).not.toHaveBeenCalled();
@@ -681,7 +716,7 @@ describe('whatsapp-ng extension', () => {
         const queue = vi.spyOn(first, 'queue').mockResolvedValueOnce(undefined).mockRejectedValue(new Error('source no longer exists'));
         const run = vi.spyOn(first, 'runPending').mockResolvedValue(true);
         try {
-            register(pi as any);
+            await register(pi as any);
             await pi.handlers.get('session_start')!({ reason: 'startup' }, createMockContext());
             await pi.handlers.get('session_start')!({ reason: 'new' }, createMockContext());
             expect(queue).toHaveBeenCalledOnce(); expect(run).toHaveBeenCalledOnce();
@@ -692,7 +727,7 @@ describe('whatsapp-ng extension', () => {
         const queueAgain = vi.spyOn(fresh, 'queue').mockRejectedValue(new Error('must not queue after recreation'));
         const runAgain = vi.spyOn(fresh, 'runPending').mockRejectedValue(new Error('must not migrate after recreation'));
         try {
-            registerAgain(next as any);
+            await registerAgain(next as any);
             await next.handlers.get('session_start')!({ reason: 'resume' }, createMockContext());
             expect(queueAgain).not.toHaveBeenCalled(); expect(runAgain).not.toHaveBeenCalled();
         } finally { queueAgain.mockRestore(); runAgain.mockRestore(); }
@@ -703,7 +738,7 @@ describe('whatsapp-ng extension', () => {
         const { StateMigrationService } = await import('../../src/services/state-migration.service.ts');
         const run = vi.spyOn(StateMigrationService, 'runPending').mockRejectedValue(new Error('fixture migration blocked'));
         try {
-            registerExtension(pi as any);
+            await registerExtension(pi as any);
             await expect(pi.handlers.get('session_start')!({ reason: 'manual' }, ctx)).rejects.toThrow('fixture migration blocked');
             expect(mocks.sessionManager.ensureInitialized).not.toHaveBeenCalled();
             expect(mocks.whatsappService.start).not.toHaveBeenCalled();
@@ -729,7 +764,7 @@ describe('whatsapp-ng extension', () => {
             }
         ]);
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
 
         expect(mocks.sessionManager.setStatus).toHaveBeenCalledWith('connected');
@@ -739,13 +774,13 @@ describe('whatsapp-ng extension', () => {
     it.each([[false, false, false], [true, false, true], [false, true, true], [true, true, true]])('combines saved startup preference %s with online flag %s', async (saved, flag, expected) => {
         const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext();
         pi.getFlag.mockImplementation(name => name === 'whatsapp-ng-online' && flag); mocks.sessionManager.getAutoConnect.mockReturnValue(saved);
-        mocks.sessionManager.isRegistered.mockResolvedValue(true); register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
+        mocks.sessionManager.isRegistered.mockResolvedValue(true); await register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
         expect(mocks.whatsappService.start).toHaveBeenCalledTimes(expected ? 1 : 0);
         if (expected) expect(mocks.whatsappService.start).toHaveBeenCalledWith({ allowPairingOnAuthFailure: false });
     });
     it.each(['json', 'print'] as const)('does not implicitly auto-connect a %s process but honors its explicit flag', async mode => {
         const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); ctx.mode = mode;
-        mocks.sessionManager.getAutoConnect.mockReturnValue(true); mocks.sessionManager.isRegistered.mockResolvedValue(true); register(pi as any);
+        mocks.sessionManager.getAutoConnect.mockReturnValue(true); mocks.sessionManager.isRegistered.mockResolvedValue(true); await register(pi as any);
         await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx); expect(mocks.whatsappService.start).not.toHaveBeenCalled();
         pi.getFlag.mockImplementation(name => name === 'whatsapp-ng-online');
         await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx); expect(mocks.whatsappService.start).toHaveBeenCalledExactlyOnceWith({ allowPairingOnAuthFailure: false });
@@ -755,7 +790,7 @@ describe('whatsapp-ng extension', () => {
         try {
             const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext();
             mocks.sessionManager.getAutoConnect.mockReturnValue(true); mocks.sessionManager.isRegistered.mockResolvedValue(true);
-            mocks.whatsappService.start.mockRejectedValue(Object.assign(new Error('Synthetic occupied profile'), { code: 'WHATSAPP_NG_PROFILE_IN_USE' })); register(pi as any);
+            mocks.whatsappService.start.mockRejectedValue(Object.assign(new Error('Synthetic occupied profile'), { code: 'WHATSAPP_NG_PROFILE_IN_USE' })); await register(pi as any);
             await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx); await vi.advanceTimersByTimeAsync(15_000);
             expect(mocks.whatsappService.start).toHaveBeenCalledOnce(); expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining('already in use'), 'info');
             expect(ctx.ui.notify.mock.calls.filter(([message]) => String(message).includes('Retrying'))).toHaveLength(0);
@@ -765,31 +800,31 @@ describe('whatsapp-ng extension', () => {
     it('loads the saved auto-connect preference before deciding whether to connect', async () => {
         const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext();
         mocks.sessionManager.ensureInitialized.mockImplementationOnce(async () => { mocks.sessionManager.getAutoConnect.mockReturnValue(true); });
-        mocks.sessionManager.isRegistered.mockResolvedValue(true); register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
+        mocks.sessionManager.isRegistered.mockResolvedValue(true); await register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
         expect(mocks.whatsappService.start).toHaveBeenCalledExactlyOnceWith({ allowPairingOnAuthFailure: false });
     });
     it('never starts pairing when saved auto-connect is enabled without credentials', async () => {
         const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext();
-        mocks.sessionManager.getAutoConnect.mockReturnValue(true); register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
+        mocks.sessionManager.getAutoConnect.mockReturnValue(true); await register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
         expect(mocks.whatsappService.start).not.toHaveBeenCalled(); expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining('no saved WhatsApp credentials'), 'warning');
     });
     it('does not restore an auto-connect preference from an old Pi session entry', async () => {
         const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); mocks.sessionManager.isRegistered.mockResolvedValue(true);
         ctx.sessionManager.getEntries.mockReturnValue([{ type: 'custom', customType: 'whatsapp-ng-state', data: { status: 'connected', autoConnect: true } }]);
-        register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
+        await register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
         expect(mocks.whatsappService.start).not.toHaveBeenCalled(); expect(mocks.sessionManager.setStatus).toHaveBeenCalledWith('disconnected');
     });
     it('keeps saved connected status when the preference requests startup without an online flag', async () => {
         const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); mocks.sessionManager.isRegistered.mockResolvedValue(true);
         mocks.sessionManager.getAutoConnect.mockReturnValue(true); ctx.sessionManager.getEntries.mockReturnValue([{ type: 'custom', customType: 'whatsapp-ng-state', data: { status: 'connected' } }]);
-        register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
+        await register(pi as any); await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
         expect(mocks.sessionManager.setStatus).toHaveBeenCalledWith('connected'); expect(mocks.whatsappService.start).toHaveBeenCalledOnce();
     });
     it('keeps deliberate Off above saved auto-connect through session reload and extension recreation', async () => {
         (globalThis as any).__whatsappNgPhoneOffProfiles = new Set(['/synthetic-profile']);
         mocks.sessionManager.getAutoConnect.mockReturnValue(true); mocks.sessionManager.isRegistered.mockResolvedValue(true);
         for (const reason of ['startup', 'new', 'reload']) {
-            const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); register(pi as any);
+            const register = await loadExtension(); const pi = createMockPi(); const ctx = createMockContext(); await register(pi as any);
             await pi.handlers.get('session_start')!({ reason }, ctx);
             expect(ctx.ui.setStatus).toHaveBeenCalledWith('whatsapp', '| WhatsApp: Off');
         }
@@ -803,7 +838,7 @@ describe('whatsapp-ng extension', () => {
         pi.getFlag.mockReturnValue(true);
         mocks.sessionManager.isRegistered.mockResolvedValue(true);
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         await pi.handlers.get('session_start')!({ reason: 'manual' }, ctx);
 
         expect(ctx.ui.setStatus).toHaveBeenCalledWith('whatsapp', '| WhatsApp: Auto-connecting...');
@@ -817,7 +852,7 @@ describe('whatsapp-ng extension', () => {
         mocks.sessionManager.getAllowList.mockReturnValue([]);
         mocks.sessionManager.getAllowedGroups.mockReturnValue([]);
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         await pi.handlers.get('session_start')!({ reason: 'manual' }, ctx);
         const statusCallback = mocks.whatsappService.setStatusCallback.mock.calls[0][0];
 
@@ -833,7 +868,7 @@ describe('whatsapp-ng extension', () => {
         mocks.sessionManager.getAllowList.mockReturnValue([{ number: '+5511999998888' }]);
         mocks.sessionManager.getAllowedGroups.mockReturnValue([{ number: '120363012345@g.us' }]);
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         await pi.handlers.get('session_start')!({ reason: 'manual' }, ctx);
         const statusCallback = mocks.whatsappService.setStatusCallback.mock.calls[0][0];
 
@@ -859,7 +894,7 @@ describe('whatsapp-ng extension', () => {
             }
         ]);
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         await pi.handlers.get('session_start')!({ reason: 'startup' }, ctx);
 
         expect(mocks.sessionManager.setStatus).toHaveBeenCalledWith('disconnected');
@@ -874,7 +909,7 @@ describe('whatsapp-ng extension', () => {
         const registerExtension = await loadExtension();
         const pi = createMockPi();
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         const messageCallback = mocks.whatsappService.setMessageCallback.mock.calls[0][0];
 
         await messageCallback({
@@ -914,7 +949,7 @@ describe('whatsapp-ng extension', () => {
         const registerExtension = await loadExtension();
         const pi = createMockPi();
         const ctx = createMockContext();
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         mocks.extractIncomingText.mockReturnValue({ kind: 'audio', text: '[Audio Message]', audioMessage: {} } as any);
         let captured: { isCurrent: () => boolean } | undefined;
         let finish!: () => void;
@@ -940,7 +975,7 @@ describe('whatsapp-ng extension', () => {
         mocks.extractIncomingText.mockReturnValue({ kind: 'text', text: '/compact' });
         mocks.sessionManager.getAllowList.mockReturnValue([{ number: '5511999998888@s.whatsapp.net' }]);
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         await pi.handlers.get('session_start')!({ reason: 'manual' }, ctx);
         const messageCallback = mocks.whatsappService.setMessageCallback.mock.calls[0][0];
 
@@ -968,7 +1003,7 @@ describe('whatsapp-ng extension', () => {
         const pi = createMockPi();
         mocks.whatsappService.getStatus.mockReturnValue('disconnected');
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         const result = await pi.tools.get('send_wa_message').execute(
             'tool-call-id',
             { jid: '5511999998888@s.whatsapp.net', message: 'hello' }
@@ -989,7 +1024,7 @@ describe('whatsapp-ng extension', () => {
         mocks.whatsappService.getLastRemoteJid.mockReturnValue('5511999998888@lid');
         mocks.whatsappService.canonicalConversation.mockImplementation(jid => jid.replace(/@lid$/, '@s.whatsapp.net'));
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         const result = await pi.tools.get('send_wa_message').execute(
             'tool-call-id',
             { jid: '5511999998888@s.whatsapp.net', message: 'hello' }
@@ -1009,7 +1044,7 @@ describe('whatsapp-ng extension', () => {
             return false;
         });
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         await pi.handlers.get('session_start')!({ reason: 'manual' }, ctx);
 
         expect(mocks.whatsappService.setGroupBinding).toHaveBeenCalledWith('120363012345@g.us');
@@ -1022,7 +1057,7 @@ describe('whatsapp-ng extension', () => {
         const ctx = createMockContext();
         pi.getFlag.mockReturnValue(false);
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         await pi.handlers.get('session_start')!({ reason: 'manual' }, ctx);
 
         expect(mocks.whatsappService.setGroupBinding).not.toHaveBeenCalled();
@@ -1032,7 +1067,7 @@ describe('whatsapp-ng extension', () => {
         const registerExtension = await loadExtension();
         const pi = createMockPi();
 
-        registerExtension(pi as any);
+        await registerExtension(pi as any);
         const messageCallback = mocks.whatsappService.setMessageCallback.mock.calls[0][0];
 
         mocks.sessionManager.getAllowedGroups.mockReturnValue([{ number: '120363012345@g.us' }]);

@@ -12,12 +12,17 @@ FFmpeg converts incoming audio to 16 kHz mono WAV before transcription. Remote S
 | --- | --- |
 | `WHISPER_CLI_PATH` | Explicit Whisper.cpp-compatible executable. Otherwise discovery searches `PATH`. |
 | `WHISPER_MODEL_PATH` | Existing GGML model file. An invalid explicit path fails without downloading a substitute. |
-| `WHISPER_LANGUAGE` | Local recognition language; defaults to `auto`. |
+| `WHISPER_LANGUAGE` | Nonblank local recognition-language override. |
+| `localSttLanguage` | Optional terminal-saved local language in `config.json`; used after environment aliases and before `auto`. |
 | `CRISPASR_CLI_PATH` | Takes precedence over `WHISPER_CLI_PATH` when nonempty. |
 | `CRISPASR_MODEL_PATH`, `CRISPASR_LANGUAGE` | Take precedence over the corresponding `WHISPER_*` settings for local backends. |
 | `FFMPEG_PATH` | Explicit FFmpeg executable; otherwise uses `PATH`. |
 
 Without an explicit CLI path, discovery searches all `PATH` directories for `whisper-cli` before `crispasr`. An explicit path is authoritative even if invalid. Set variables in the environment that launches Pi and restart it; `/reload` cannot import changed shell exports.
+
+Local language resolution is nonblank `CRISPASR_LANGUAGE` → nonblank `WHISPER_LANGUAGE` → valid saved `localSttLanguage` → `auto`. A winning environment value keeps its existing behavior, including when invalid; it is never replaced by the other alias or the saved preference. Terminal **Voice → Advanced speech settings → Local transcription language** shows the effective value/source and any overridden saved value. Set and Clear are separate actions; blank or option-like Set input is rejected. Saved values accept `auto` or the same syntax as remote `sttLanguage`, without asserting backend language support. This field is independent of remote `sttLanguage` and is not exposed through `configure_wa_stt`, model tools or phone commands. Environment values are never imported into config.
+
+Each local transcription resolves one options snapshot: language/source and model path/winning override source. CLI selection and its child `LD_LIBRARY_PATH` are captured when the local backend is selected. Backends do not reread these environment values during execution, so mid-operation environment changes affect only later operations (or a later CLI re-selection). Set and Clear retry a cached unavailable local selection without replacing a working transcriber, freeing a native context during inference or re-probing FFmpeg. Remote STT still initializes no local backend or model.
 
 Without a model override, missing `ggml-base.bin` downloads into `whisper/models/` under the extension data root. The **CLI path** uses private temporary files and atomic publication for downloads. Local CLI preparation and transcription share a 10-minute budget; cancellation/session changes abort preparation and terminate the child before scratch cleanup. Both local backends run CPU-only.
 
@@ -55,7 +60,7 @@ Use terminal `/whatsapp` → **Voice → Set up replies for a chat**: select a k
 
 Enabling shared speech requires destination-specific confirmation, including when an approved destination is still disabled. The review shows the shared default and retained spoken-override/group counts that become eligible again. Groups require their own opt-in. STT/backend configuration grants no TTS consent. Changing endpoint/protocol invalidates approval and keeps spoken modes text-only until approved through setup. **Turn speech off everywhere (revoke consent)** disables speech and revokes approval but retains per-chat overrides/group opt-ins; re-enabling can reactivate them, not the previous shared default.
 
-**Advanced speech settings** contains the backend, the active provider's voice control, speed/format, shared default (chat overrides remain) and a separately confirmed fixed-phrase preview. Remote setup stages an explicit protocol, endpoint/model/key-variable name and a named voice/reference or compatible server-default choice before saving atomically. Cancelling discards that staged action. Saving a matching trusted managed-server configuration can still start its declared local process; it is not a synthesis/preview request.
+**Advanced speech settings** contains the independent local transcription language, the TTS backend, the active provider's voice control, speed/format, shared default (chat overrides remain) and a separately confirmed fixed-phrase preview. Remote setup stages an explicit protocol, endpoint/model/key-variable name and a named voice/reference or compatible server-default choice before saving atomically. Cancelling discards that staged action. Saving a matching trusted managed-server configuration can still start its declared local process; it is not a synthesis/preview request.
 
 Child **Back to …** options name the destination and return there with refreshed options and the original request authority; the root exit is **Close settings**. Selection/input/editor titles state **Esc closes settings**. Cancelling select/input/editor closes the settings request without a validation error/retry; confirmations cannot distinguish Esc from No and retain no-change behavior. Message-detail overlays retain their local close gesture. Connect/Off/logout end with their outcome rather than renewing expired menu authority.
 
@@ -225,6 +230,22 @@ Cooperating writers and startup temp cleanup use private `config.json.lock`, wai
 - Failed preference re-reads disable auto-connect without dropping loaded reply settings or overwriting invalid data. A successful later read restores the preference. Release errors neither hide the original failure nor misreport a completed commit.
 - After a crash, inspect ownership before explicit recovery; never remove another process's lock or active temp files.
 
+## Extension locale
+
+Terminal **Advanced → Extension language** saves `en`, `pt-BR`, `es` or `fr` as `locale` in `config.json`, with separate Set and Clear actions. It shows the effective value/source and any saved value overridden by an environment/flag source. **Restart Pi after Set or Clear.** This applies the saved locale to existing `t()`-built tool/command/UI metadata and terminal/phone presentation; static English `registerFlag` descriptions remain unchanged. Do not rely on phone `/reload` to apply it.
+
+Resolution is nonblank `WHATSAPP_NG_LOCALE` → `--whatsapp-ng-locale` → valid saved `locale` → English. A present but blank flag keeps its existing English result without selecting the saved locale. An unsupported winning override also keeps English fallback rather than selecting the saved value. Initialization re-resolves on every extension-factory invocation, so removing an override cannot retain its stale value.
+
+These preferences are terminal-only. Phone presentation uses the startup locale, has no locale/local-language controls and shows no restart notice. `configure_wa_stt`, `configure_wa_tts`, other model tools and phone commands expose neither field. UI shows only the effective language/locale and source names, not credentials, arbitrary environment contents or private model paths.
+
+### Preference persistence and environment-only boundary
+
+Only `localSttLanguage` and `locale` are added by this feature. Both persist through SessionManager's existing load, explicit serializer, revision checks, cooperative writer queue, atomic replacement and currentness callbacks. Input and loaded values are validated. Invalid saved JSON values are ignored for resolution but preserved semantically by unrelated saves, never automatically repaired; explicit Set replaces them and Clear removes them. Blank Set is not Clear. Failed commits and stale requests change neither memory nor disk.
+
+Like other fields outside the specially refreshed auto-connect preference, these values inherit the existing multi-process **last-writer** limitation: the writer lock prevents torn writes but does not merge concurrent edits. Downgrading to an older version ignores the fields on load and drops them on that version's next config serialization. No migration, recovery or re-import is provided.
+
+Program/command selection, model paths and transport-security authorization remain environment-only: `FFMPEG_PATH`, `WHISPER_CLI_PATH`, `CRISPASR_CLI_PATH`, `WHISPER_MODEL_PATH`, `CRISPASR_MODEL_PATH`, `CRISPASR_STT_CMD`, `CRISPASR_TTS_CMD` and `WHATSAPP_NG_ALLOW_PLAIN_HTTP` are never persisted by these settings and have no new settings path. `PATH`/`LD_LIBRARY_PATH` selection also remains environmental. This preserves ROADMAP R2's no-persisted-command-writer boundary; the feature does not install, download or launch any CLI, model or server.
+
 ## Phone menus
 
 `/help` groups commands under **Information**, **Shared Pi session**, **This chat**, and **WhatsApp and process**, with an explanation and the existing argument form for each command. `/replies` is shared, whereas `/voice` changes only this chat’s mode within existing speech approvals. `/status` separates **Shared Pi and WhatsApp** (connection, busy/idle, model, thinking, context, reply delivery, final stats) from **This chat** (automatic replies, voice mode). These headings do not provide per-chat session isolation.
@@ -237,7 +258,7 @@ Owner-only and private-chat-only (every group, including the bound group in grou
 
 Short menu titles and optional poll names are limited to 120 characters. Explanatory/shared-session guidance and the complete `/replies` disclosure are in the same numbered text message’s body, not the truncated title. The body is limited to 1,000 characters and never silently shortened; shipped translations including the invalid-settings note fit this limit. Optional polls still mirror the numbered option labels and require `--whatsapp-ng-native-polls`.
 
-The existing `WHATSAPP_NG_LOCALE` override (or `--whatsapp-ng-locale`) selects `en`, `pt-BR`, `es` or `fr`; missing/unsupported values use English. This is process-wide presentation, not automatic language detection or a per-chat setting. Command names, accepted argument tokens and model identifiers are unchanged; private model identifiers stay hidden and long model labels retain the existing display cap. Selection still uses the complete identifier.
+The startup locale selects `en`, `pt-BR`, `es` or `fr` through the override/saved-value order in [Extension locale](#extension-locale); missing/unsupported values use English. Phone `/reload` is not a substitute for restarting Pi after a locale save. This is process-wide presentation, not automatic language detection or a per-chat setting. Command names, accepted argument tokens and model identifiers are unchanged; private model identifiers stay hidden and long model labels retain the existing display cap. Selection still uses the complete identifier.
 
 ## Off and diagnostics
 

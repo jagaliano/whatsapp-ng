@@ -5,7 +5,8 @@ import { loadSpeechSettings, speechDefaults, storedSpeechFields, validateSpeechS
 import { readFile, writeFile, mkdir, rm, rename, readdir, chmod, open, lstat } from 'fs/promises';
 import { SessionStatus } from '../models/whatsapp.types.js';
 import type { SttConfig } from './audio-transcriber.js';
-import { t } from '../i18n.js';
+import { isSupportedLocale, t, type Locale } from '../i18n.js';
+import { isSttLanguageSyntax } from './local-stt-options.js';
 import { TransportLease } from './transport-lease.service.js';
 import { AuthProfileService } from './auth-profile.service.js';
 import { StateMigrationService } from './state-migration.service.js';
@@ -73,6 +74,10 @@ export class SessionManager {
     private optionalOutputsRevision = 0;
     private storedMediaLimits: unknown;
     private mediaLimitsRevision = 0;
+    private storedLocalSttLanguage: unknown;
+    private localSttLanguageRevision = 0;
+    private storedLocale: unknown;
+    private localeRevision = 0;
     private speechSettings = speechDefaults();
     private storedSpeechState: Record<string, unknown> = {};
     private speechConfigInvalid = false;
@@ -188,6 +193,8 @@ export class SessionManager {
             this.storedGroupReplies = config.groupReplies;
             this.storedOptionalOutputs = config.optionalOutputs;
             this.storedMediaLimits = config.mediaLimits;
+            this.storedLocalSttLanguage = config.localSttLanguage;
+            this.storedLocale = config.locale;
             this.storedSpeechState = Object.fromEntries([...TTS_CONFIG_FIELDS, 'voicePreferences'].flatMap(key => config[key] === undefined ? [] : [[key, config[key]]]));
             try { this.speechSettings = loadSpeechSettings(config); this.speechConfigInvalid = false; }
             catch { this.speechSettings = speechDefaults(); this.speechConfigInvalid = true; }
@@ -441,7 +448,7 @@ export class SessionManager {
         }
     }
 
-    private async writeConfig(speech = this.storedSpeechState, owner = this.operatorJid, current: () => boolean = () => true, commit: 'ordinary' | 'atomic' = 'ordinary', finalAfterAttachments = this.finalAfterAttachments, replyStats = this.storedReplyStats, groupReplies = this.storedGroupReplies, optionalOutputs = this.storedOptionalOutputs, replyReporting = this.storedReplyReporting, sttConfig = this.sttConfig, autoConnect?: boolean, mediaLimits = this.storedMediaLimits): Promise<void> {
+    private async writeConfig(speech = this.storedSpeechState, owner = this.operatorJid, current: () => boolean = () => true, commit: 'ordinary' | 'atomic' = 'ordinary', finalAfterAttachments = this.finalAfterAttachments, replyStats = this.storedReplyStats, groupReplies = this.storedGroupReplies, optionalOutputs = this.storedOptionalOutputs, replyReporting = this.storedReplyReporting, sttConfig = this.sttConfig, autoConnect?: boolean, mediaLimits = this.storedMediaLimits, preferences: { localSttLanguage: unknown; locale: unknown } = { localSttLanguage: this.storedLocalSttLanguage, locale: this.storedLocale }): Promise<void> {
         this.assertStorageReady();
         await mkdir(this.storagePaths.root, { recursive: true, mode: 0o700 });
         await chmod(this.storagePaths.root, 0o700);
@@ -456,7 +463,9 @@ export class SessionManager {
                     status: this.status, hasAuthState: this.hasAuthState, openaiKey: this.openaiKey,
                     ...(savedAutoConnect === undefined ? {} : { autoConnect: savedAutoConnect }),
                     visionModel: this.visionModel, ...sttConfig, operatorJid: owner,
-                    finalAfterAttachments, ...(replyStats === undefined ? {} : { replyStats }), ...(groupReplies === undefined ? {} : { groupReplies }), ...(optionalOutputs === undefined ? {} : { optionalOutputs }), ...(replyReporting === undefined ? {} : { replyReporting }), ...(mediaLimits === undefined ? {} : { mediaLimits }), ...speech
+                    finalAfterAttachments, ...(replyStats === undefined ? {} : { replyStats }), ...(groupReplies === undefined ? {} : { groupReplies }), ...(optionalOutputs === undefined ? {} : { optionalOutputs }), ...(replyReporting === undefined ? {} : { replyReporting }), ...(mediaLimits === undefined ? {} : { mediaLimits }),
+                    ...(preferences.localSttLanguage === undefined ? {} : { localSttLanguage: preferences.localSttLanguage }),
+                    ...(preferences.locale === undefined ? {} : { locale: preferences.locale }), ...speech
                 }, null, 2);
                 if (!current()) throw new Error('Settings request expired');
                 await writeFile(tempPath, serialized, { mode: 0o600, flag: 'wx' });
@@ -840,6 +849,69 @@ export class SessionManager {
 
     getSttConfig(): SttConfig {
         return { ...this.sttConfig };
+    }
+
+    getSavedLocalSttLanguage(): { value?: string; invalid: boolean } {
+        return isSttLanguageSyntax(this.storedLocalSttLanguage)
+            ? { value: this.storedLocalSttLanguage, invalid: false }
+            : { invalid: this.storedLocalSttLanguage !== undefined };
+    }
+
+    getLocalSttLanguageRevision(): number { return this.localSttLanguageRevision; }
+
+    getSavedLocale(): { value?: Locale; invalid: boolean } {
+        return isSupportedLocale(this.storedLocale)
+            ? { value: this.storedLocale, invalid: false }
+            : { invalid: this.storedLocale !== undefined };
+    }
+
+    getLocaleRevision(): number { return this.localeRevision; }
+
+    /** Read-only bootstrap access; never initializes, repairs or locks configuration. */
+    async readSavedLocale(): Promise<Locale | undefined> {
+        try {
+            this.assertStorageReady();
+            const { config } = this.parseConfig(await readFile(this.configPath, 'utf8'));
+            return isSupportedLocale(config.locale) ? config.locale : undefined;
+        } catch {
+            return undefined;
+        }
+    }
+
+    async setLocalSttLanguage(value: string, expectedRevision: number, current: () => boolean = () => true): Promise<void> {
+        if (!isSttLanguageSyntax(value)) throw new Error('Invalid local transcription language');
+        return this.saveLocalPreference('localSttLanguage', value, expectedRevision, current);
+    }
+
+    async clearLocalSttLanguage(expectedRevision: number, current: () => boolean = () => true): Promise<void> {
+        return this.saveLocalPreference('localSttLanguage', undefined, expectedRevision, current);
+    }
+
+    async setLocale(value: Locale, expectedRevision: number, current: () => boolean = () => true): Promise<void> {
+        if (!isSupportedLocale(value)) throw new Error('Invalid extension locale');
+        return this.saveLocalPreference('locale', value, expectedRevision, current);
+    }
+
+    async clearLocale(expectedRevision: number, current: () => boolean = () => true): Promise<void> {
+        return this.saveLocalPreference('locale', undefined, expectedRevision, current);
+    }
+
+    private async saveLocalPreference(field: 'localSttLanguage' | 'locale', value: string | undefined, expectedRevision: number, current: () => boolean): Promise<void> {
+        await this.ensureInitialized();
+        if (!this.configLoaded || this.configReadFailure) throw new Error('Configuration is unreadable; originals preserved');
+        return this.queueConfig(async () => {
+            const valid = () => expectedRevision === (field === 'locale' ? this.localeRevision : this.localSttLanguageRevision) && current();
+            if (!valid()) throw new Error('Settings request expired');
+            const preferences = {
+                localSttLanguage: field === 'localSttLanguage' ? value : this.storedLocalSttLanguage,
+                locale: field === 'locale' ? value : this.storedLocale
+            };
+            await this.writeConfig(this.storedSpeechState, this.operatorJid, valid, 'atomic', this.finalAfterAttachments,
+                this.storedReplyStats, this.storedGroupReplies, this.storedOptionalOutputs, this.storedReplyReporting,
+                this.sttConfig, undefined, this.storedMediaLimits, preferences);
+            if (field === 'locale') { this.storedLocale = value; this.localeRevision++; }
+            else { this.storedLocalSttLanguage = value; this.localSttLanguageRevision++; }
+        });
     }
 
     async setSttConfig(config: SttConfig, current: () => boolean = () => true): Promise<void> {

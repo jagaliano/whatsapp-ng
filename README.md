@@ -81,7 +81,9 @@ Choose local transcription or a compatible remote API. FFmpeg is required for bo
 
 ### Local
 
-Install `whisper-cli` and point `WHISPER_MODEL_PATH` to your existing GGML model. Set `WHISPER_LANGUAGE` to `auto` or a language code such as `en` or `es` in the environment that launches Pi.
+Install `whisper-cli` and point `WHISPER_MODEL_PATH` to your existing GGML model. Choose the local recognition language in terminal **Voice → Advanced speech settings → Local transcription language**, or keep using `WHISPER_LANGUAGE`/`CRISPASR_LANGUAGE`. Nonblank `CRISPASR_LANGUAGE` wins over nonblank `WHISPER_LANGUAGE`, then the saved `localSttLanguage`, then `auto`. This local preference is separate from remote `sttLanguage`; environment values are not imported into config.
+
+The terminal language editor shows the effective value and its source, with separate **Set** and **Clear** actions. Blank Set input is rejected. Saved values use the remote language-code syntax (including explicit `auto`), but this does not guarantee that every backend supports every accepted language.
 
 Local transcription runs on CPU. Without a model override, the base model downloads on first use. When neither CLI is available and no explicit CLI path is set, compatible macOS/Windows builds can use the included native addon instead; Linux requires a CLI.
 
@@ -115,7 +117,7 @@ Updates preserve omitted settings. Call `configure_wa_stt({})` to return to loca
 
 ## Speech replies (opt-in)
 
-Open `/whatsapp` → **Voice → Set up replies for a chat**, select a known chat and choose a reply mode. Review the required speech/group consent; the saved status shows whether automatic replies are paused. Backend, voice, speed, format and shared defaults live under **Advanced speech settings**:
+Open `/whatsapp` → **Voice → Set up replies for a chat**, select a known chat and choose a reply mode. Review the required speech/group consent; the saved status shows whether automatic replies are paused. Backend, voice, speed, format, shared defaults and the independent local transcription language live under **Advanced speech settings**:
 
 | Mode | Output |
 | --- | --- |
@@ -136,7 +138,7 @@ Voice settings include per-chat pause controls and a confirmed preview. Speech u
 
 ## Chats and replies
 
-The `/whatsapp` menu groups settings into **Connection**, **Chats / Owner**, **Replies**, **Voice**, **Groups** and **Advanced**. Child **Back to …** options name their destination; the root has **Close settings**. **Esc closes settings** appears on selection/input/editor titles; cancelling a selection/input/editor closes the settings request without saving that action. Declining a confirmation changes nothing; message-detail overlays retain their own close gesture. See [Off behavior and diagnostic privacy](docs/reference.md#off-and-diagnostics) for shutdown and log retention.
+The `/whatsapp` menu groups settings into **Connection**, **Chats / Owner**, **Replies**, **Voice**, **Groups** and **Advanced**. Child **Back to …** options name their destination; the root has **Close settings**. **Esc closes settings** appears on selection/input/editor titles; cancelling a selection/input/editor closes the settings request without saving that action. Declining a confirmation changes nothing; message-detail overlays retain their own close gesture. See the [terminal and phone menu diagrams](docs/menu-diagrams.md), and [Off behavior and diagnostic privacy](docs/reference.md#off-and-diagnostics) for shutdown and log retention.
 
 - **Contacts:** add phone numbers in `+E164` format; use aliases to identify them.
 - **Groups:** add the group JID. By default, the agent responds to actual WhatsApp mentions of its account or replies to that account's messages. Change this under **Groups → Group replies**.
@@ -144,8 +146,11 @@ The `/whatsapp` menu groups settings into **Connection**, **Chats / Owner**, **R
 - **Replies:** choose whether attachments are followed by a final explanation. Optional elapsed/tool-count stats, file-path summaries, interim text and live activity are off by default.
 - **Optional outputs:** separately approve individual tools’ inline images, forward future terminal answers to the private owner, or enable **Background answers** to the owner (default destination) or one allowed group after disclosure. All are off by default. Background forwarding is text-only, requires custom-message or exact host-reported extension-input provenance (including live-session cron), and never grants control authority; see [eligibility and limits](docs/reference.md#background-answers).
 - **Owner:** explicitly choose the person authorized to use phone controls. An allowed contact or paired device is not automatically an owner.
+- **Advanced → Extension language:** save `en`, `pt-BR`, `es` or `fr`, see the effective source, and restart Pi to apply it to existing translated tool/command/UI metadata. `WHATSAPP_NG_LOCALE` and `--whatsapp-ng-locale` retain priority; static English `registerFlag` descriptions are unchanged. Phone presentation uses the startup locale and cannot change these terminal-only preferences.
 
-WhatsApp `@lid` identifiers are not phone numbers. Select known conversations in the menu rather than constructing a recipient from displayed digits.
+CLI/model paths, managed-server commands and plain-HTTP authorization remain environment-only: `FFMPEG_PATH`, `WHISPER_CLI_PATH`, `CRISPASR_CLI_PATH`, `WHISPER_MODEL_PATH`, `CRISPASR_MODEL_PATH`, `CRISPASR_STT_CMD`, `CRISPASR_TTS_CMD` and `WHATSAPP_NG_ALLOW_PLAIN_HTTP` have no persisted settings path. See [preference storage and the security boundary](docs/reference.md#preference-persistence-and-environment-only-boundary).
+
+WhatsApp `@lid` identifiers are not phone numbers. Select known conversations in the menu rather than constructing a recipient from displayed digits. See the [WhatsApp ID guide](docs/whatsapp-ids.md) for person, LID, group and other JID types, how to find them and where to use them.
 
 ## Phone controls
 
@@ -166,7 +171,7 @@ Allowed people can use `/help` and `/status`. State-changing commands require th
 
 `/model` browses authenticated models; `/model anthropic` or `/model anthropic/opus` searches case-insensitively with fuzzy matching. Search results require numbered confirmation, even for one match; exact `provider/model` selects directly. Pagination preserves the search, and no match leaves the current model unchanged. Private filesystem identifiers are available through browsing, not fuzzy search.
 
-`/help` groups commands with short explanations; `/status` separates shared Pi/WhatsApp settings from this chat’s automatic replies and voice mode. Menus show friendly labels and the current choice; reporting toggles show their state. Reply with a number within five minutes, quoting the menu in groups. Ordinary text cancels the menu. The complete `/replies` reporting disclosure is in the numbered text menu, not the shortened poll title. Phone presentation uses the existing locale override (English, pt-BR, Spanish or French); command arguments and model identifiers stay unchanged. See [phone menus](docs/reference.md#phone-menus). Native polls are experimental and require `--whatsapp-ng-native-polls`. Configuration changes require idle Pi; stop active work explicitly rather than interrupting it through a settings change.
+`/help` groups commands with short explanations; `/status` separates shared Pi/WhatsApp settings from this chat’s automatic replies and voice mode. Menus show friendly labels and the current choice; reporting toggles show their state. Reply with a number within five minutes, quoting the menu in groups. Ordinary text cancels the menu. The complete `/replies` reporting disclosure is in the numbered text menu, not the shortened poll title. Phone presentation uses the startup locale (English, pt-BR, Spanish or French), whether from an override or the saved terminal preference after restarting Pi; command arguments and model identifiers stay unchanged. See [phone menus](docs/reference.md#phone-menus). Native polls are experimental and require `--whatsapp-ng-native-polls`. Configuration changes require idle Pi; stop active work explicitly rather than interrupting it through a settings change.
 
 ## LLM-Callable Tools
 

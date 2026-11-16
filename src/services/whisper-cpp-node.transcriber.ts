@@ -1,11 +1,11 @@
 import { createRequire } from 'node:module';
-import { dirname, join, resolve } from 'node:path';
+import { dirname } from 'node:path';
 import { createWriteStream } from 'node:fs';
 import { mkdir, stat, unlink } from 'node:fs/promises';
 import https from 'node:https';
-import { createStoragePaths } from './storage-path.js';
 import type { WhatsAppNgLogger } from './whatsapp-ng.logger.js';
-import type { AudioTranscriber } from './audio-transcriber.js';
+import type { AudioTranscriber, AudioTranscriptionOptions } from './audio-transcriber.js';
+import type { LocalSttOptions } from './local-stt-options.js';
 
 type WhisperModule = {
     createWhisperContext: (options: { model: string; use_gpu?: boolean; no_prints?: boolean }) => {
@@ -22,7 +22,6 @@ type WhisperContext = ReturnType<WhisperModule['createWhisperContext']>;
 type WhisperResult = Awaited<ReturnType<WhisperModule['transcribeAsync']>>;
 
 const DEFAULT_MODEL_URL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin';
-const MODEL_FILENAME = 'ggml-base.bin';
 
 let whisperModule: WhisperModule | undefined;
 let cachedContext: WhisperContext | undefined;
@@ -40,13 +39,6 @@ function loadWhisperModule(): WhisperModule {
     } catch {
         throw new Error('whisper-cpp-node not installed. Run npm install.');
     }
-}
-
-function getModelPath(): string {
-    const configured = process.env.CRISPASR_MODEL_PATH?.trim() || process.env.WHISPER_MODEL_PATH?.trim();
-    if (configured) return resolve(configured);
-    const { root } = createStoragePaths();
-    return join(root, 'whisper', 'models', MODEL_FILENAME);
 }
 
 async function downloadFile(url: string, targetPath: string): Promise<void> {
@@ -98,25 +90,20 @@ async function downloadFile(url: string, targetPath: string): Promise<void> {
     });
 }
 
-async function ensureWhisperModel(logger: AudioLogger): Promise<string> {
-    const modelPath = getModelPath();
-
+async function ensureWhisperModel(logger: AudioLogger, local: Readonly<LocalSttOptions>): Promise<string> {
     try {
-        const stats = await stat(modelPath);
-        if (stats.isFile() && stats.size > 0) {
-            return modelPath;
-        }
+        const stats = await stat(local.modelPath);
+        if (stats.isFile() && stats.size > 0) return local.modelPath;
     } catch {
-        // download below
+        // Validate an explicit override or download only the default below.
     }
 
-    const override = process.env.CRISPASR_MODEL_PATH?.trim() ? 'CRISPASR_MODEL_PATH' : process.env.WHISPER_MODEL_PATH?.trim() ? 'WHISPER_MODEL_PATH' : undefined;
-    if (override) {
-        throw new Error(`${override} must point to an existing nonempty Whisper.cpp model file; no replacement downloaded`);
+    if (local.modelSource !== 'default') {
+        throw new Error(`${local.modelSource} must point to an existing nonempty Whisper.cpp model file; no replacement downloaded`);
     }
-    logger.log(`[WhatsApp-NG] Whisper.cpp model download: ${modelPath}`);
-    await downloadFile(DEFAULT_MODEL_URL, modelPath);
-    return modelPath;
+    logger.log(`[WhatsApp-NG] Whisper.cpp model download: ${local.modelPath}`);
+    await downloadFile(DEFAULT_MODEL_URL, local.modelPath);
+    return local.modelPath;
 }
 
 async function createContext(modelPath: string, logger: AudioLogger): Promise<WhisperContext> {
@@ -129,8 +116,8 @@ async function createContext(modelPath: string, logger: AudioLogger): Promise<Wh
     });
 }
 
-async function ensureContext(logger: AudioLogger): Promise<WhisperContext> {
-    const modelPath = await ensureWhisperModel(logger);
+async function ensureContext(logger: AudioLogger, local: Readonly<LocalSttOptions>): Promise<WhisperContext> {
+    const modelPath = await ensureWhisperModel(logger, local);
     if (!cachedContext || cachedModelPath !== modelPath) {
         cachedContext?.free?.();
         cachedContext = await createContext(modelPath, logger);
@@ -158,13 +145,14 @@ export function tryCreateWhisperNodeAudioTranscriber(logger: AudioLogger): Audio
     }
 
     return {
-        async transcribe(inputPath: string): Promise<string> {
-            const context = await ensureContext(logger);
+        async transcribe(inputPath: string, options: AudioTranscriptionOptions = {}): Promise<string> {
+            if (!options.local) throw new Error('Local transcription options snapshot required');
+            const context = await ensureContext(logger, options.local);
             const { transcribeAsync } = loadWhisperModule();
             logger.log('[WhatsApp-NG] Whisper.cpp transcribe');
             const result = await transcribeAsync(context, {
                 fname_inp: inputPath,
-                language: process.env.CRISPASR_LANGUAGE?.trim() || process.env.WHISPER_LANGUAGE?.trim() || 'auto',
+                language: options.local.language,
                 no_timestamps: true,
                 no_context: false,
                 detect_language: false

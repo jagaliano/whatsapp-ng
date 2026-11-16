@@ -305,3 +305,20 @@ describe('phone action parity', () => {
         h.router.reset();
     });
 });
+
+describe('terminal-only local preferences', () => {
+    it('uses the startup locale on phone without locale/language controls or a restart notice', async () => {
+        vi.stubEnv('WHATSAPP_NG_LOCALE', 'fr'); initI18n(undefined);
+        const create = vi.spyOn(CommandMenuService.prototype, 'create'); const h = fixture();
+        await h.handle('/voice');
+        const [, title, options, body] = create.mock.calls[0];
+        expect(title).toBe(t('phone.voice.title'));
+        expect(JSON.stringify({ options, body })).not.toContain('transcription locale');
+        expect(JSON.stringify({ options, body })).not.toContain('Redémarrez Pi');
+        await h.handle('/locale');
+        expect(h.sent.at(-1)).not.toContain('Redémarrez Pi');
+        expect((h.ports.session as any).setLocale).toBeUndefined();
+        expect((h.ports.session as any).setLocalSttLanguage).toBeUndefined();
+        h.router.reset();
+    });
+});

@@ -47,8 +47,8 @@ export async function withSettingsRequest(ctx: ExtensionCommandContext, capture:
     const scoped: ExtensionCommandContext = retained ? ctx : Object.create(ctx);
     if (!retained) Object.defineProperty(scoped, 'ui', { value: new Proxy({} as ExtensionCommandContext['ui'], {
         get: (_target, key) => {
-            if (Object.hasOwn(dialogs, key)) return Reflect.get(dialogs, key);
-            const ui = ctx.ui; const value = Reflect.get(ui, key);
+            if (Object.hasOwn(dialogs, key)) return dialogs[key as keyof typeof dialogs];
+            const ui = ctx.ui; const value = ui[key as keyof typeof ui];
             return typeof value === 'function' ? value.bind(ui) : value;
         }
     }) });
@@ -75,7 +75,7 @@ export async function chooseWhatsAppSetting(ctx: ExtensionCommandContext, getSta
         'Chats / Owner': [t('menu.root.recents'), t('menu.root.allowedNumbers'), ...(state.owner ? [t('voice.owner')] : []), back],
         Replies: [t('menu.replyDelivery.title'), ...(state.optional ? [t('menu.optional.title')] : []), back],
         Groups: [t('menu.root.allowedGroups'), t('menu.groups.replies'), back],
-        Advanced: [t('menu.advanced.privacy'), t('menu.advanced.mediaLimits'), ...(state.archive ? [t('archive.menu.scope')] : []), ...(state.registered ? [t('menu.root.logoffDeleteSession')] : []), back]
+        Advanced: [t('menu.advanced.privacy'), t('menu.advanced.mediaLimits'), t('settings.locale.menu'), ...(state.archive ? [t('archive.menu.scope')] : []), ...(state.registered ? [t('menu.root.logoffDeleteSession')] : []), back]
     });
     for (;;) {
         if (!current()) return;

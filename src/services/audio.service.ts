@@ -10,6 +10,7 @@ import { tryCreateWhisperCppAudioTranscriber, type AudioTranscriber } from './wh
 import { t } from '../i18n.js';
 import { createRemoteAudioTranscriber, REMOTE_STT_MAX_BYTES } from './remote-audio.transcriber.js';
 import type { AudioTranscriptionOptions, SttConfig } from './audio-transcriber.js';
+import { resolveLocalSttOptions, type LocalSttEnvironment } from './local-stt-options.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -26,11 +27,18 @@ export class AudioService {
         logger: AudioLogger = new WhatsAppNgLogger(false),
         whisperCppTranscriber?: AudioTranscriber | null,
         private readonly getSttConfig: () => SttConfig = () => ({}),
-        private readonly beforeRemote?: (config: SttConfig, options?: AudioTranscriptionOptions) => Promise<AudioTranscriptionOptions>
+        private readonly beforeRemote?: (config: SttConfig, options?: AudioTranscriptionOptions) => Promise<AudioTranscriptionOptions>,
+        private readonly getEnv: () => LocalSttEnvironment = () => process.env,
+        private readonly getSavedLocalSttLanguage: () => string | undefined = () => undefined
     ) {
         this.logger = logger;
         // Select only after settings load. Remote mode never initializes local Whisper.
         this.whisperCppTranscriber = whisperCppTranscriber;
+    }
+
+    /** Retry unavailable local selection after Set/Clear; keep live backends and models untouched. */
+    refreshLocalSelection(): void {
+        if (this.whisperCppTranscriber === null) this.whisperCppTranscriber = undefined;
     }
 
     async transcribe(audioMessage: any, options?: AudioTranscriptionOptions): Promise<string> {
@@ -44,9 +52,11 @@ export class AudioService {
             checkCurrent();
             const remoteConfig = this.getSttConfig();
             const remote = createRemoteAudioTranscriber(remoteConfig);
-            if (!remote && this.whisperCppTranscriber === undefined) {
-                this.whisperCppTranscriber = tryCreateWhisperCppAudioTranscriber(this.logger);
+            const env = remote ? undefined : { ...this.getEnv() };
+            if (env && this.whisperCppTranscriber === undefined) {
+                this.whisperCppTranscriber = tryCreateWhisperCppAudioTranscriber(this.logger, env);
             }
+            const local = env ? resolveLocalSttOptions(env, this.getSavedLocalSttLanguage()) : undefined;
             const transcriber = remote ?? this.whisperCppTranscriber;
             if (!transcriber) throw new Error('Whisper.cpp unavailable: install whisper-cli on PATH or set WHISPER_CLI_PATH');
             if (remote) this.logger.log(t('audio.remoteNotice', { host: remote.origin }));
@@ -80,7 +90,8 @@ export class AudioService {
             return await this.measurePhase(remote ? 'remote' : 'whisper', async () => {
                 const admission = remote && this.beforeRemote ? await this.beforeRemote(remoteConfig, options) : options;
                 checkCurrent();
-                const transcription = admission ? await transcriber.transcribe(wavPath, admission) : await transcriber.transcribe(wavPath);
+                const transcriptionOptions = local ? { ...admission, local } : admission;
+                const transcription = transcriptionOptions ? await transcriber.transcribe(wavPath, transcriptionOptions) : await transcriber.transcribe(wavPath);
                 checkCurrent();
                 const text = String(transcription ?? '').trim();
                 return text || t('audio.emptyTranscription');

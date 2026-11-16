@@ -13,7 +13,8 @@ const mocks = vi.hoisted(() => ({
     chmod: vi.fn().mockResolvedValue(undefined),
     rm: vi.fn().mockResolvedValue(undefined),
     createRemote: vi.fn(),
-    createLocal: vi.fn()
+    createLocal: vi.fn(),
+    ffmpeg: vi.fn(() => ['ffmpeg'])
 }));
 
 vi.mock('baileys', () => ({
@@ -50,6 +51,10 @@ vi.mock('../../src/services/whisper-cpp-audio.transcriber.ts', () => ({
     tryCreateWhisperCppAudioTranscriber: mocks.createLocal
 }));
 
+vi.mock('../../src/services/ffmpeg-path.ts', () => ({
+    getFfmpegCommands: mocks.ffmpeg
+}));
+
 const createStream = (...chunks: Buffer[]) => (async function* () {
     for (const chunk of chunks) {
         yield chunk;
@@ -67,7 +72,7 @@ const whisperTranscriber = {
 
 let AudioService: typeof import('../../src/services/audio.service.ts').AudioService;
 
-const setupService = () => new AudioService(logger as any, whisperTranscriber as any);
+const setupService = () => new AudioService(logger as any, whisperTranscriber as any, () => ({}), undefined, () => ({}));
 
 describe('AudioService', () => {
     beforeEach(async () => {
@@ -132,7 +137,9 @@ describe('AudioService', () => {
         expect(mocks.execFile).toHaveBeenCalledWith('ffmpeg', ['-y', '-i', inputPath, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wavPath], { windowsHide: true, timeout: 60_000, signal: undefined }, expect.any(Function));
         expect(mocks.chmod).toHaveBeenCalledWith(wavPath, 0o600);
         expect(mocks.rm).toHaveBeenCalledWith(scratchDir, { recursive: true, force: true });
-        expect(whisperTranscriber.transcribe).toHaveBeenCalledWith(wavPath);
+        expect(whisperTranscriber.transcribe).toHaveBeenCalledWith(wavPath, expect.objectContaining({
+            local: expect.objectContaining({ language: 'auto', source: 'default', modelSource: 'default' })
+        }));
         expect(logger.log).toHaveBeenCalledWith('[WhatsApp-NG] Audio download: 0 ms');
         expect(logger.log).toHaveBeenCalledWith('[WhatsApp-NG] Audio write file: 0 ms');
         expect(logger.log).toHaveBeenCalledWith('[WhatsApp-NG] Audio convert: 0 ms');
@@ -218,6 +225,42 @@ describe('AudioService', () => {
         await expect(service.transcribe({ id: 'unavailable' })).resolves.toBe(
             '[Transcription error: Whisper.cpp unavailable: install whisper-cli on PATH or set WHISPER_CLI_PATH]'
         );
+    });
+
+    it('resolves one local snapshot per operation and preserves it across a mid-operation preference change', async () => {
+        let saved = 'pt';
+        const getSaved = vi.fn(() => saved);
+        const service = new AudioService(logger, whisperTranscriber as any, () => ({}), undefined, () => ({ PATH: '/synthetic/bin' }), getSaved);
+        whisperTranscriber.transcribe.mockImplementationOnce(async () => { saved = 'fr'; return 'first'; });
+        await expect(service.transcribe({})).resolves.toBe('first');
+        expect(whisperTranscriber.transcribe.mock.calls[0][1].local).toMatchObject({ language: 'pt', source: 'saved' });
+        await expect(service.transcribe({})).resolves.toBe('transcribed text');
+        expect(whisperTranscriber.transcribe.mock.calls[1][1].local).toMatchObject({ language: 'fr', source: 'saved' });
+        expect(getSaved).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not read the local environment or initialize a local backend for remote STT', async () => {
+        const remote = { hostname: 'speech.example.test', origin: 'https://speech.example.test', transcribe: vi.fn().mockResolvedValue('remote text') };
+        mocks.createRemote.mockReturnValue(remote);
+        const getEnv = vi.fn(() => { throw new Error('local environment must not be read'); });
+        const getSaved = vi.fn(() => 'pt');
+        const service = new AudioService(logger, undefined, () => ({ sttEndpoint: 'https://speech.example.test/v1' }), undefined, getEnv, getSaved);
+        await expect(service.transcribe({})).resolves.toBe('remote text');
+        expect(getEnv).not.toHaveBeenCalled();
+        expect(getSaved).not.toHaveBeenCalled();
+        expect(mocks.createLocal).not.toHaveBeenCalled();
+    });
+
+    it('refreshes only a cached unavailable selection without replacing working backends or probing FFmpeg', async () => {
+        const service = new AudioService(logger, null, () => ({}), undefined, () => ({}), () => undefined);
+        expect(mocks.ffmpeg).toHaveBeenCalledTimes(1);
+        service.refreshLocalSelection();
+        await expect(service.transcribe({})).resolves.toBe('transcribed text');
+        expect(mocks.createLocal).toHaveBeenCalledTimes(1);
+        service.refreshLocalSelection();
+        await expect(service.transcribe({})).resolves.toBe('transcribed text');
+        expect(mocks.createLocal).toHaveBeenCalledTimes(1);
+        expect(mocks.ffmpeg).toHaveBeenCalledTimes(1);
     });
 
     it('never dumps speech from a failed transcriber error into diagnostics', async () => {

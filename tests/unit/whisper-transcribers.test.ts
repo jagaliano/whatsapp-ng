@@ -8,15 +8,20 @@ vi.mock('node:child_process', async () => {
     const { promisify } = await import('node:util');
     const execFile = vi.fn();
     // Never retain inherited credentials in mock arguments or assertion diffs.
-    Object.defineProperty(execFile, promisify.custom, { value: (command: string, args: string[], { env: _env, ...options }: Record<string, unknown>) => mocks.execute(command, args, options) });
+    Object.defineProperty(execFile, promisify.custom, { value: (command: string, args: string[], { env, ...options }: Record<string, unknown>) => mocks.execute(command, args, {
+        ...options,
+        syntheticLdLibraryPath: (env as NodeJS.ProcessEnv | undefined)?.LD_LIBRARY_PATH
+    }) });
     return { execFile };
 });
 vi.mock('node:https', () => ({ default: { get: mocks.download } }));
 vi.mock('../../src/services/whisper-cpp-node.transcriber.js', () => ({ tryCreateWhisperNodeAudioTranscriber: mocks.native }));
 import { tryCreateWhisperCliAudioTranscriber } from '../../src/services/whisper-cli-audio.transcriber.js';
 import { tryCreateWhisperCppAudioTranscriber } from '../../src/services/whisper-cpp-audio.transcriber.js';
+import { resolveLocalSttOptions } from '../../src/services/local-stt-options.ts';
 
 const logger = { log: vi.fn(), error: vi.fn() };
+const operation = (options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}) => ({ ...options, local: resolveLocalSttOptions(process.env) });
 let root: string, bin: string, cli: string, model: string;
 beforeEach(async () => {
     vi.clearAllMocks();
@@ -39,11 +44,16 @@ beforeEach(async () => {
 afterEach(async () => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); });
 
 describe('installed Whisper.cpp CLI', () => {
+    it('requires an explicit operation snapshot instead of reading process.env', async () => {
+        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav')).rejects.toThrow('Local transcription options snapshot required');
+        expect(mocks.execute).not.toHaveBeenCalled();
+        expect(mocks.download).not.toHaveBeenCalled();
+    });
     it('prefers explicit CrispASR binary/model/language over Whisper settings', async () => {
         const crisp = join(bin, process.platform === 'win32' ? 'crispasr.exe' : 'crispasr'); await writeFile(crisp, 'SYNTHETIC'); await chmod(crisp, 0o755);
         const selectedModel = join(root, 'crisp.bin'); await writeFile(selectedModel, 'SYNTHETIC');
         vi.stubEnv('CRISPASR_CLI_PATH', crisp); vi.stubEnv('WHISPER_CLI_PATH', cli); vi.stubEnv('CRISPASR_MODEL_PATH', selectedModel); vi.stubEnv('CRISPASR_LANGUAGE', 'pt'); vi.stubEnv('WHISPER_LANGUAGE', 'es');
-        await tryCreateWhisperCppAudioTranscriber(logger)!.transcribe('input.wav');
+        await tryCreateWhisperCppAudioTranscriber(logger)!.transcribe('input.wav', operation());
         expect(mocks.execute).toHaveBeenCalledWith(crisp, ['--model', selectedModel, '--file', 'input.wav', '--language', 'pt', '--no-timestamps', '--no-prints', '--no-gpu'], expect.anything());
         expect(mocks.native).not.toHaveBeenCalled(); expect(mocks.download).not.toHaveBeenCalled();
     });
@@ -54,26 +64,26 @@ describe('installed Whisper.cpp CLI', () => {
     it('keeps Whisper first across PATH directories and discovers CrispASR if Whisper is absent', async () => {
         const crispBin = join(root, 'crisp-bin'); await mkdir(crispBin); const crisp = join(crispBin, process.platform === 'win32' ? 'crispasr.exe' : 'crispasr'); await writeFile(crisp, 'SYNTHETIC'); await chmod(crisp, 0o755);
         const { delimiter } = await import('node:path'); vi.stubEnv('PATH', [crispBin, bin].join(delimiter));
-        await tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav'); expect(mocks.execute.mock.calls[0][0]).toBe(cli);
-        vi.stubEnv('PATH', crispBin); await tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav'); expect(mocks.execute.mock.calls[1][0]).toBe(crisp);
+        await tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation()); expect(mocks.execute.mock.calls[0][0]).toBe(cli);
+        vi.stubEnv('PATH', crispBin); await tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation()); expect(mocks.execute.mock.calls[1][0]).toBe(crisp);
     });
     it('does not replace an invalid CrispASR model with the valid Whisper model or a download', async () => {
         vi.stubEnv('CRISPASR_MODEL_PATH', join(root, 'absent.bin'));
-        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav')).rejects.toThrow(/CRISPASR_MODEL_PATH/);
+        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation())).rejects.toThrow(/CRISPASR_MODEL_PATH/);
         expect(mocks.download).not.toHaveBeenCalled(); expect(mocks.execute).not.toHaveBeenCalled();
     });
     it('discovers the executable on PATH and uses the configured light model on CPU', async () => {
         const transcriber = tryCreateWhisperCliAudioTranscriber(logger);
         expect(transcriber).not.toBeNull();
-        await expect(transcriber!.transcribe('input.wav')).resolves.toBe('local transcription');
+        await expect(transcriber!.transcribe('input.wav', operation())).resolves.toBe('local transcription');
         expect(mocks.execute).toHaveBeenCalledWith(cli, ['--model', model, '--file', 'input.wav', '--language', 'auto', '--no-timestamps', '--no-prints', '--no-gpu'], expect.objectContaining({ windowsHide: true }));
         expect(mocks.download).not.toHaveBeenCalled();
         expect(Object.hasOwn(mocks.execute.mock.calls[0][2], 'env')).toBe(false);
     });
     it('does not start a CLI for an already cancelled or stale session', async () => {
         const controller = new AbortController(); controller.abort();
-        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', { signal: controller.signal })).rejects.toThrow();
-        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', { isCurrent: () => false })).rejects.toThrow(/cancelled/i);
+        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation({ signal: controller.signal }))).rejects.toThrow();
+        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation({ isCurrent: () => false }))).rejects.toThrow(/cancelled/i);
         expect(mocks.execute).not.toHaveBeenCalled();
     });
     it.each(['abort', 'session', 'timeout'])('terminates a stalled CLI on %s', async reason => {
@@ -87,7 +97,7 @@ describe('installed Whisper.cpp CLI', () => {
                 options.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
             });
         });
-        const pending = tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', { signal: controller.signal, isCurrent: () => current });
+        const pending = tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation({ signal: controller.signal, isCurrent: () => current }));
         const rejected = expect(pending).rejects.toThrow(/cancelled|timed out/i);
         await ready;
         if (reason === 'abort') controller.abort();
@@ -108,7 +118,7 @@ describe('installed Whisper.cpp CLI', () => {
             started(); return Object.assign(pending, { child });
         });
         let settled = false;
-        const pending = tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', { signal: controller.signal });
+        const pending = tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation({ signal: controller.signal }));
         const rejected = expect(pending.finally(() => { settled = true; })).rejects.toThrow(/cancelled/i);
         await ready; controller.abort();
         await new Promise(resolve => setTimeout(resolve, 10));
@@ -124,7 +134,7 @@ describe('installed Whisper.cpp CLI', () => {
     it('honors an explicit CLI even when another executable is on PATH', async () => {
         const explicit = join(root, 'custom CLI'); await writeFile(explicit, 'fixture'); await chmod(explicit, 0o755);
         vi.stubEnv('WHISPER_CLI_PATH', explicit);
-        await tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav');
+        await tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation());
         expect(mocks.execute.mock.calls[0][0]).toBe(explicit);
     });
     it('does not silently substitute another backend for an invalid explicit CLI', () => {
@@ -135,20 +145,45 @@ describe('installed Whisper.cpp CLI', () => {
     });
     it('rejects missing configured models without downloading a replacement', async () => {
         vi.stubEnv('WHISPER_CLI_PATH', cli); vi.stubEnv('WHISPER_MODEL_PATH', join(root, 'missing.bin'));
-        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav')).rejects.toThrow(/WHISPER_MODEL_PATH/);
+        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation())).rejects.toThrow(/WHISPER_MODEL_PATH/);
         expect(mocks.download).not.toHaveBeenCalled(); expect(mocks.execute).not.toHaveBeenCalled();
     });
     it('rejects empty or directory model paths without downloading', async () => {
         vi.stubEnv('WHISPER_CLI_PATH', cli); await writeFile(model, '');
-        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav')).rejects.toThrow(/WHISPER_MODEL_PATH/);
+        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation())).rejects.toThrow(/WHISPER_MODEL_PATH/);
         vi.stubEnv('WHISPER_MODEL_PATH', bin);
-        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav')).rejects.toThrow(/WHISPER_MODEL_PATH/);
+        await expect(tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation())).rejects.toThrow(/WHISPER_MODEL_PATH/);
         expect(mocks.download).not.toHaveBeenCalled();
     });
     it('honors the selected transcription language', async () => {
         vi.stubEnv('WHISPER_CLI_PATH', cli); vi.stubEnv('WHISPER_LANGUAGE', 'es');
-        await tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav');
+        await tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', operation());
         expect(mocks.execute.mock.calls[0][1]).toContain('es');
+    });
+    it('uses a caller snapshot instead of rereading language or model aliases during execution', async () => {
+        const local = resolveLocalSttOptions({ WHISPER_LANGUAGE: 'pt', WHISPER_MODEL_PATH: model });
+        vi.stubEnv('WHISPER_LANGUAGE', 'es'); vi.stubEnv('WHISPER_MODEL_PATH', join(root, 'changed.bin'));
+        await tryCreateWhisperCliAudioTranscriber(logger)!.transcribe('input.wav', { local });
+        expect(mocks.execute).toHaveBeenCalledWith(cli, ['--model', model, '--file', 'input.wav', '--language', 'pt', '--no-timestamps', '--no-prints', '--no-gpu'], expect.anything());
+    });
+    it('keeps snapshot language/model and selection CLI/library paths when the environment changes mid-operation', async () => {
+        vi.stubEnv('LD_LIBRARY_PATH', '/synthetic/original-lib');
+        const transcriber = tryCreateWhisperCliAudioTranscriber(logger)!;
+        let finish!: (value: { stdout: string }) => void;
+        mocks.execute.mockImplementation(() => {
+            vi.stubEnv('WHISPER_CLI_PATH', join(root, 'changed-cli'));
+            vi.stubEnv('WHISPER_LANGUAGE', 'fr');
+            vi.stubEnv('WHISPER_MODEL_PATH', join(root, 'changed-model.bin'));
+            vi.stubEnv('LD_LIBRARY_PATH', '/synthetic/changed-lib');
+            return new Promise(resolve => { finish = resolve; });
+        });
+        const pending = transcriber.transcribe('input.wav', operation());
+        await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalledOnce());
+        expect(mocks.execute.mock.calls[0][0]).toBe(cli);
+        expect(mocks.execute.mock.calls[0][1]).toEqual(['--model', model, '--file', 'input.wav', '--language', 'auto', '--no-timestamps', '--no-prints', '--no-gpu']);
+        expect(mocks.execute.mock.calls[0][2].syntheticLdLibraryPath).toBe(`${bin}:/synthetic/original-lib`);
+        finish({ stdout: 'snapshot text' });
+        await expect(pending).resolves.toBe('snapshot text');
     });
     it('does not accept a directory as the CLI', () => {
         vi.stubEnv('WHISPER_CLI_PATH', bin);

@@ -122,7 +122,11 @@ Selection order:
 2. Otherwise search all PATH directories for `whisper-cli` before `crispasr` (`.exe` on Windows).
 3. If neither CLI exists and neither override is set, retain the native Whisper addon on compatible macOS/Windows builds; no Linux addon support.
 4. Model: `CRISPASR_MODEL_PATH`, then `WHISPER_MODEL_PATH`, then the existing Whisper default downloader. Invalid explicit files fail without replacement downloads.
-5. Language: `CRISPASR_LANGUAGE`, then `WHISPER_LANGUAGE`, then `auto`.
+5. Language: nonblank `CRISPASR_LANGUAGE`, then nonblank `WHISPER_LANGUAGE`, then terminal-saved `localSttLanguage`, then `auto`.
+
+Set the saved local language in terminal **Voice → Advanced speech settings → Local transcription language**; it is separate from remote `sttLanguage`. The panel shows the effective value/source and uses separate Set/Clear actions. Existing environment aliases keep priority and are not imported into config. A winning invalid alias keeps its existing behavior rather than falling through to saved configuration.
+
+CLI/model paths remain environment-only and are captured without rereading `process.env` throughout transcription. Each operation snapshots the language and model path/source; CLI and child `LD_LIBRARY_PATH` selection is captured at backend selection. No CLI/model/server installation, download or launch is added by this preference.
 
 The CLI must accept `--model`, `--file`, `--language`, `--no-timestamps`, `--no-prints` and `--no-gpu`. Native addon aliases still require a compatible Whisper GGML model; they do not load arbitrary CrispASR backends.
 

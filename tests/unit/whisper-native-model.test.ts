@@ -2,12 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { resolveLocalSttOptions } from '../../src/services/local-stt-options.ts';
 
 const mocks = vi.hoisted(() => ({ create: vi.fn(), transcribe: vi.fn(), download: vi.fn(), free: vi.fn() }));
 vi.mock('node:module', () => ({ createRequire: () => () => ({ createWhisperContext: mocks.create, transcribeAsync: mocks.transcribe }) }));
 vi.mock('node:https', () => ({ default: { get: mocks.download } }));
 let root: string, model: string;
 const logger = { log: vi.fn(), error: vi.fn() };
+const operation = () => ({ local: resolveLocalSttOptions(process.env) });
 beforeEach(async () => {
     vi.resetModules(); vi.clearAllMocks();
     root = await mkdtemp(join(tmpdir(), 'ng-native-whisper-')); model = join(root, 'light.bin');
@@ -20,32 +22,67 @@ beforeEach(async () => {
 });
 afterEach(async () => { vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); });
 describe('optional native Whisper model configuration', () => {
+    it('requires an explicit operation snapshot instead of reading process.env', async () => {
+        const { tryCreateWhisperNodeAudioTranscriber } = await import('../../src/services/whisper-cpp-node.transcriber.js');
+        await expect(tryCreateWhisperNodeAudioTranscriber(logger)!.transcribe('fixture.wav')).rejects.toThrow('Local transcription options snapshot required');
+        expect(mocks.create).not.toHaveBeenCalled();
+        expect(mocks.transcribe).not.toHaveBeenCalled();
+        expect(mocks.download).not.toHaveBeenCalled();
+    });
     it('uses the configured model on CPU without downloading and defaults to automatic language', async () => {
         const { tryCreateWhisperNodeAudioTranscriber } = await import('../../src/services/whisper-cpp-node.transcriber.js');
-        await expect(tryCreateWhisperNodeAudioTranscriber(logger)!.transcribe('fixture.wav')).resolves.toBe('local text');
+        await expect(tryCreateWhisperNodeAudioTranscriber(logger)!.transcribe('fixture.wav', operation())).resolves.toBe('local text');
         expect(mocks.create).toHaveBeenCalledWith({ model, use_gpu: false, no_prints: true });
         expect(mocks.transcribe).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ language: 'auto' }));
         expect(mocks.download).not.toHaveBeenCalled();
     });
     it('uses CrispASR model/language overrides ahead of the Whisper fallbacks', async () => {
         const selected = join(root, 'selected.bin'); await writeFile(selected, 'SYNTHETIC'); vi.stubEnv('CRISPASR_MODEL_PATH', selected); vi.stubEnv('CRISPASR_LANGUAGE', 'pt'); vi.stubEnv('WHISPER_LANGUAGE', 'es');
-        const { tryCreateWhisperNodeAudioTranscriber } = await import('../../src/services/whisper-cpp-node.transcriber.js'); await tryCreateWhisperNodeAudioTranscriber(logger)!.transcribe('fixture.wav');
+        const { tryCreateWhisperNodeAudioTranscriber } = await import('../../src/services/whisper-cpp-node.transcriber.js'); await tryCreateWhisperNodeAudioTranscriber(logger)!.transcribe('fixture.wav', operation());
         expect(mocks.create).toHaveBeenCalledWith({ model: selected, use_gpu: false, no_prints: true }); expect(mocks.transcribe).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ language: 'pt' })); expect(mocks.download).not.toHaveBeenCalled();
     });
     it('refuses an invalid CrispASR model without falling back or downloading', async () => {
         vi.stubEnv('CRISPASR_MODEL_PATH', join(root, 'absent.bin')); const { tryCreateWhisperNodeAudioTranscriber } = await import('../../src/services/whisper-cpp-node.transcriber.js');
-        await expect(tryCreateWhisperNodeAudioTranscriber(logger)!.transcribe('fixture.wav')).rejects.toThrow(/CRISPASR_MODEL_PATH/); expect(mocks.download).not.toHaveBeenCalled(); expect(mocks.create).not.toHaveBeenCalled();
+        await expect(tryCreateWhisperNodeAudioTranscriber(logger)!.transcribe('fixture.wav', operation())).rejects.toThrow(/CRISPASR_MODEL_PATH/); expect(mocks.download).not.toHaveBeenCalled(); expect(mocks.create).not.toHaveBeenCalled();
     });
     it('honors an explicit language', async () => {
         vi.stubEnv('WHISPER_LANGUAGE', 'es');
         const { tryCreateWhisperNodeAudioTranscriber } = await import('../../src/services/whisper-cpp-node.transcriber.js');
-        await tryCreateWhisperNodeAudioTranscriber(logger)!.transcribe('fixture.wav');
+        await tryCreateWhisperNodeAudioTranscriber(logger)!.transcribe('fixture.wav', operation());
         expect(mocks.transcribe).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ language: 'es' }));
+    });
+    it('keeps the operation model/language snapshot when the environment changes while execution is pending', async () => {
+        const local = resolveLocalSttOptions({ CRISPASR_LANGUAGE: 'pt', CRISPASR_MODEL_PATH: model });
+        mocks.create.mockImplementation(() => {
+            vi.stubEnv('CRISPASR_LANGUAGE', 'fr');
+            vi.stubEnv('CRISPASR_MODEL_PATH', join(root, 'changed.bin'));
+            return { free: mocks.free };
+        });
+        const { tryCreateWhisperNodeAudioTranscriber } = await import('../../src/services/whisper-cpp-node.transcriber.js');
+        await tryCreateWhisperNodeAudioTranscriber(logger)!.transcribe('fixture.wav', { local });
+        expect(mocks.create).toHaveBeenCalledWith({ model, use_gpu: false, no_prints: true });
+        expect(mocks.transcribe).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ language: 'pt' }));
+    });
+    it('reuses the native model context for a language-only change between inferences without freeing it', async () => {
+        const context = { free: mocks.free };
+        mocks.create.mockReturnValue(context);
+        const { tryCreateWhisperNodeAudioTranscriber } = await import('../../src/services/whisper-cpp-node.transcriber.js');
+        const transcriber = tryCreateWhisperNodeAudioTranscriber(logger)!;
+        const english = resolveLocalSttOptions({ WHISPER_MODEL_PATH: model, WHISPER_LANGUAGE: 'en' });
+        const spanish = resolveLocalSttOptions({ WHISPER_MODEL_PATH: model, WHISPER_LANGUAGE: 'es' });
+        await transcriber.transcribe('first.wav', { local: english });
+        await transcriber.transcribe('second.wav', { local: spanish });
+        expect(mocks.create).toHaveBeenCalledExactlyOnceWith({ model, use_gpu: false, no_prints: true });
+        expect(mocks.transcribe).toHaveBeenCalledTimes(2);
+        expect(mocks.transcribe.mock.calls[0][0]).toBe(context);
+        expect(mocks.transcribe.mock.calls[1][0]).toBe(context);
+        expect(mocks.transcribe.mock.calls.map(call => call[1].language)).toEqual(['en', 'es']);
+        expect(mocks.free).not.toHaveBeenCalled();
     });
     it('rejects an invalid model override without downloading or initializing a context', async () => {
         vi.stubEnv('WHISPER_MODEL_PATH', join(root, 'absent.bin'));
         const { tryCreateWhisperNodeAudioTranscriber } = await import('../../src/services/whisper-cpp-node.transcriber.js');
-        await expect(tryCreateWhisperNodeAudioTranscriber(logger)!.transcribe('fixture.wav')).rejects.toThrow(/WHISPER_MODEL_PATH/);
+        await expect(tryCreateWhisperNodeAudioTranscriber(logger)!.transcribe('fixture.wav', operation())).rejects.toThrow(/WHISPER_MODEL_PATH/);
         expect(mocks.create).not.toHaveBeenCalled(); expect(mocks.download).not.toHaveBeenCalled();
     });
 });
